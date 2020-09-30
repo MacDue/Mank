@@ -121,7 +121,6 @@ TEST_CASE("Lex keywords", "[Lexer]") {
 }
 
 TEST_CASE("Lex identifiers", "[Lexer]") {
-
   Lexer lexer;
 
   // TODO: Some invalid identifiers
@@ -135,4 +134,45 @@ TEST_CASE("Lex identifiers", "[Lexer]") {
   };
 
   expect_all_single_tokens(lexer, valid_identifiers);
+}
+
+TEST_CASE("Lex string literals", "[Lexer]") {
+  Lexer lexer;
+
+  std::array valid_string_literals {
+    R"("Hello, World!")",
+    R"("You said \"Banana\"")",
+    R"("void main() { return 1 + 2; } ")",
+  };
+
+  for (auto source_literal: valid_string_literals) {
+    lexer.set_input_to_string(source_literal);
+    auto token = lexer.peek_next_token();
+    REQUIRE(token.type == TokenType::LITERAL);
+    REQUIRE(token.literal_type == LiteralType::STRING);
+    REQUIRE(token.raw_token == source_literal);
+    expect_eof(lexer);
+  }
+}
+
+TEST_CASE("Lex numerical literals", "[Lexer]") {
+  Lexer lexer;
+
+  // Note: prefexes +/- are treated as unary expressions
+  std::array valid_numerical_literals_and_expected_type {
+    std::make_pair("42", LiteralType::INTEGER),
+    std::make_pair("10000.", LiteralType::FLOAT64),
+    std::make_pair("3.14", LiteralType::FLOAT64),
+    // Note the literals are not parsed yet (that is done later)
+    std::make_pair("999999999999999999999999", LiteralType::INTEGER),
+  };
+
+  for (auto [numeric_literal, expected_literal_type]: valid_numerical_literals_and_expected_type) {
+    lexer.set_input_to_string(numeric_literal);
+    auto token = lexer.peek_next_token();
+    REQUIRE(token.type == TokenType::LITERAL);
+    REQUIRE(token.literal_type == expected_literal_type);
+    REQUIRE(token.raw_token == numeric_literal);
+    expect_eof(lexer);
+  }
 }

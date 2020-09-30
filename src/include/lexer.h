@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "constants.h"
 #include "literal_type.h"
 #include "source_location.h"
 

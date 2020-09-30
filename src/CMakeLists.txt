@@ -1,9 +1,16 @@
 add_library(MankCore
-  include/lexer.h
-  lexer.cpp)
+  lexer.cpp
+  parser.cpp
+)
 
 include_directories(
-  include)
-  # target_link_libraries(MankCore formatxx)
+  include
+)
+
+target_link_libraries(MankCore
+  formatxx
+  mpark_patterns
+)
+
 add_executable(mankc main.cpp)
 target_link_libraries(mankc MankCore)

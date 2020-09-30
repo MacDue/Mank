@@ -1,0 +1,9 @@
+[submodule "deps/patterns"]
+	path = deps/patterns
+	url = https://github.com/mpark/patterns.git
+[submodule "deps/litexx"]
+	path = deps/litexx
+	url = https://github.com/seanmiddleditch/litexx.git
+[submodule "deps/formatxx"]
+	path = deps/formatxx
+	url = https://github.com/seanmiddleditch/formatxx.git

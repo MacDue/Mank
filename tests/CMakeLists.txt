@@ -1,7 +1,7 @@
 include_directories(
   ${PROJECT_SOURCE_DIR}/test
-  ${PROJECT_SOURCE_DIR}/src)
+  ${PROJECT_SOURCE_DIR}/src/include)
 
-add_executable(UnitTests tests_main.cpp)
+add_executable(UnitTests tests_main.cpp simple_lexing.cpp)
 target_link_libraries(UnitTests MankCore)
 add_test(Name MankTests COMMAND UnitTests)

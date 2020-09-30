@@ -1,0 +1,266 @@
+#include <fstream>
+
+#include "lexer.h"
+
+/* Setup */
+
+static std::string read_entire_file(std::string const & file) {
+  std::ifstream in(file, std::ios::in);
+  std::string file_text;
+  if (in) {
+    in.seekg(0, std::ios::end);
+    file_text.resize(in.tellg());
+    in.read(&file_text[0], file_text.size());
+    in.close();
+  } else {
+    /* TODO: Handle errors */
+  }
+  return file_text;
+}
+
+void Lexer::reset() {
+  this->last_token = Token{};
+  this->current = Position{};
+  this->save_state();
+}
+
+void Lexer::save_state() {
+  this->saved_token = this->last_token;
+  this->saved_position = this->current;
+}
+
+void Lexer::restore_state() {
+  this->last_token = this->saved_token;
+  this->current = this->saved_position;
+}
+
+void Lexer::load_file(std::string const & file_path) {
+  this->reset();
+  this->source = read_entire_file(file_path);
+}
+
+void Lexer::set_input_to_string(std::string source) {
+  this->reset();
+  this->source = source;
+}
+
+/* Token actions */
+
+Token& Lexer::peek_next_token() {
+  if (this->last_token.type == TokenType::EMPTY) {
+    this->next_token();
+  }
+  return this->last_token;
+}
+
+void Lexer::consume_token() {
+  this->last_token.type = TokenType::EMPTY;
+}
+
+SourceLocation Lexer::peek_next_token_location() {
+  (void) this->peek_next_token();
+  return this->get_last_token_location();
+}
+
+SourceLocation Lexer::get_last_token_location() const {
+  return this->last_token.location;
+}
+
+/* Error messages */
+
+std::string_view Lexer::extract_lines(SourceLocation loc) const {
+  // TODO
+}
+
+/* Char actions */
+
+int Lexer::peek_next_char() {
+  if (this->current.char_idx >= this->source.size()) {
+    return EOF;
+  }
+  return this->source.at(this->current.char_idx);
+}
+
+void Lexer::consume_char() {
+  // TODO: Windows line endings?
+  if (this->peek_next_char() == '\n') {
+    this->current.line += 1;
+    this->current.column = -1; // immediately incremented
+  }
+  this->current.char_idx += 1;
+  this->current.column += 1;
+}
+
+void Lexer::skip_spaces() {
+  while (isascii(this->peek_next_char()) && isspace(this->peek_next_char())) {
+    this->consume_char();
+  }
+}
+
+void Lexer::skip_whitespace() {
+  this->skip_spaces();
+  while (this->match("#")) {
+    while (this->peek_next_char() != EOF && this->peek_next_char() != '\n') {
+      this->consume_char();
+    }
+    this->skip_spaces();
+  }
+}
+
+/* Token parsing */
+
+static TokenType ident_to_token(std::string_view ident) {
+  if (ident == "fun") {
+    return TokenType::FUNCTION;
+  } else if (ident == "proc") {
+    return TokenType::PROCEDURE;
+  } else if (ident == "domain") {
+    return TokenType::DOMAIN;
+  } else if (ident == "of") {
+    return TokenType::OF;
+  } else if (ident == "spawn") {
+    return TokenType::SPAWN;
+  } else if (ident == "if") {
+    return TokenType::IF;
+  } else if (ident == "else") {
+    return TokenType::ELSE;
+  } else if (ident == "for") {
+    return TokenType::FOR;
+  } else if (ident == "while") {
+    return TokenType::WHILE;
+  } else if (ident == "until") {
+    return TokenType::UNTIL;
+  } else if (ident == "in") {
+    return TokenType::IN;
+  } else if (ident == "pod") {
+    return TokenType::POD;
+  } else if (ident == "return") {
+    return TokenType::RETURN;
+  } else {
+    return TokenType::IDENT;
+  }
+}
+
+void Lexer::next_token() {
+  this->skip_whitespace();
+  this->set_token_start();
+  int token_start = this->current.char_idx;
+  /*
+    Mutli-char operator tokens must be parsed first!
+    Otherwise '-=' will be parsed as MINUS, ASSIGN rather than MINUS_EQUAL */
+  if (
+    /* Multi-char operators */
+       match("|!", TokenType::BITWISE_XOR)
+    || match("||", TokenType::LOGICAL_OR)
+    || match("<<", TokenType::LEFT_SHIFT)
+    || match(">>", TokenType::RIGHT_SHIFT)
+    || match(">=", TokenType::GREATER_EQUAL)
+    || match("<=", TokenType::LESS_EQUAL)
+    || match("==", TokenType::EQUAL_TO)
+    || match("!=", TokenType::NOT_EQUAL_TO)
+    || match("&&", TokenType::LOGICAL_AND)
+    /* Multi-char assign */
+    || match("+=", TokenType::PLUS_EQUAL)
+    || match("-=", TokenType::MINUS_EQUAL)
+    || match("|=", TokenType::BITWISE_OR_EQUAL)
+    || match("&=", TokenType::BITWISE_AND_EQUAL)
+    || match("/=", TokenType::DIVIDE_EQUAL)
+    || match("*=", TokenType::TIMES_EQUAL)
+    || match("%=", TokenType::MODULO_EQUAL)
+    /* Single-char operators */
+    || match("+", TokenType::PLUS)
+    || match("-", TokenType::MINUS)
+    || match("/", TokenType::DIVIDE)
+    || match("*", TokenType::TIMES)
+    || match("%", TokenType::MODULO)
+    || match("<", TokenType::LESS_THAN)
+    || match(">", TokenType::GREATER_THAN)
+    || match("~", TokenType::BITWISE_NOT)
+    || match("&", TokenType::BITWISE_AND)
+    || match("|", TokenType::BITWISE_OR)
+    || match("!", TokenType::LOGICAL_NOT)
+    || match("¬", TokenType::LOGICAL_NOT)
+    /* Basic elements */
+    || match(";", TokenType::SEMICOLON)
+    || match(":", TokenType::COLON)
+    || match(".", TokenType::DOT)
+    || match("{", TokenType::LEFT_BRACE)
+    || match("}", TokenType::RIGHT_BRACE)
+    || match("(", TokenType::LEFT_PAREN)
+    || match(")", TokenType::RIGHT_PAREN)
+    || match("=", TokenType::ASSIGN)
+  ) {
+    /* Simple token is now matched (last_token updated in match) */
+  } else if (isalpha(this->peek_next_char()) || this->peek_next_char() == '_') {
+    /*
+      IDENT: (_|[A-Za-z])(_|[A-Za-z]|[0-9])+
+    */
+    int ident_start = this->current.char_idx;
+    while (isalnum(this->peek_next_char()) || this->peek_next_char() == '_') {
+      this->consume_char();
+    }
+    auto ident = this->extract_string(ident_start, this->current.char_idx);
+    this->last_token.type = ident_to_token(ident);
+  } else if (this->peek_next_char() == EOF) {
+    this->last_token.type = TokenType::LEX_EOF;
+  } else {
+    this->last_token.type = TokenType::INVALID;
+    this->consume_char();
+  }
+  this->last_token.raw_token = this->extract_string(token_start, this->current.char_idx);
+  this->set_token_end();
+}
+
+/* Matchers */
+
+bool Lexer::match(std::string_view value) {
+  this->save_state();
+  for (char c: value) {
+    if (this->peek_next_char() == c) {
+      this->consume_char();
+    } else {
+      this->restore_state();
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Lexer::match(std::string_view value, TokenType type) {
+  if (match(value)) {
+    this->last_token.type = type;
+    return true;
+  }
+  return false;
+}
+
+bool Lexer::match_digits(int& start, int& end) {
+  start = this->current.char_idx;
+  if (!isdigit(this->peek_next_char())) {
+    return false;
+  }
+  while (isdigit(this->peek_next_char())) {
+    this->consume_char();
+  }
+  end = this->current.char_idx;
+  return true;
+}
+
+/* Helpers */
+
+void Lexer::set_token_start() {
+  this->last_token.location.start_line = this->current.line;
+  this->last_token.location.start_column = this->current.column;
+  this->last_token.location.start_char_idx = this->current.char_idx;
+}
+
+void Lexer::set_token_end() {
+  this->last_token.location.end_line = this->current.line;
+  this->last_token.location.end_column = this->current.column;
+  this->last_token.location.end_char_idx = this->current.char_idx;
+}
+
+std::string_view Lexer::extract_string(int from, int to) const {
+  std::string_view view = this->source;
+  return view.substr(from, to - from);
+}

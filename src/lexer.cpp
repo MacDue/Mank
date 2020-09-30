@@ -201,6 +201,10 @@ void Lexer::next_token() {
     }
     auto ident = this->extract_string(ident_start, this->current.char_idx);
     this->last_token.type = ident_to_token(ident);
+  } else if (match_numeric_literal()) {
+    /* Numeric literal now matched & token set */
+  } else if (match_string_literal()) {
+    /* String literal now matched & token set */
   } else if (this->peek_next_char() == EOF) {
     this->last_token.type = TokenType::LEX_EOF;
   } else {
@@ -244,6 +248,53 @@ bool Lexer::match_digits(int& start, int& end) {
   }
   end = this->current.char_idx;
   return true;
+}
+
+bool Lexer::match_numeric_literal() {
+  /*
+    Numeric literal: [0-9]+(\.[0-9]+)?
+    TODO float literals like .3 (currently will be parsed as DOT 3)
+      -- maybe handle in parser
+  */
+  int leading_digits_start, leading_digits_end;
+  if (match_digits(leading_digits_start, leading_digits_end)) {
+    this->last_token.type = TokenType::LITERAL;
+    if (match(".")) {
+      this->last_token.literal_type = LiteralType::FLOAT64;
+      int decimal_digits_start, decimal_digits_end;
+      if (match_digits(decimal_digits_start, decimal_digits_end)) {
+        /* Nothing needs to happen */
+      }
+      this->last_token.literal_type = LiteralType::FLOAT64;
+    } else {
+      this->last_token.literal_type = LiteralType::INTEGER;
+    }
+    return true;
+  }
+  return false;
+}
+
+bool Lexer::match_string_literal() {
+  if (match("\"")) {
+    this->last_token.type = TokenType::LITERAL;
+    this->last_token.literal_type = LiteralType::STRING;
+
+    int next_char;
+    while ((next_char = this->peek_next_char() != '"')) {
+      if (next_char == EOF) {
+        // TODO: Unclosed string literal
+        break;
+      }
+      if (!match("\\\"") /* match and consume \" (an escaped quote)*/) {
+        this->consume_char();
+      }
+    }
+
+    this->consume_char();
+    return true;
+  } else {
+    return false;
+  }
 }
 
 /* Helpers */

@@ -1,5 +1,5 @@
 #pragma once
 
-struct Type {
-  /* TODO Stub */
-};
+struct Type;
+
+using Type_Ptr = std::shared_ptr<Type>;

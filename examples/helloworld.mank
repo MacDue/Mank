@@ -1,0 +1,5 @@
+proc main {
+  println("Hello, World!");
+}
+
+

@@ -73,7 +73,12 @@ SourceLocation Lexer::get_last_token_location() const {
 /* Error messages */
 
 std::string_view Lexer::extract_lines(SourceLocation loc) const {
-  // TODO
+  auto pior_newline = source.rfind('\n', loc.start_char_idx);
+  auto next_newline = source.find('\n', loc.end_char_idx);
+
+  auto line_start = pior_newline == std::string::npos ? 0 : pior_newline + 1;
+  auto line_end = next_newline == std::string::npos ? source.size() - 1 : next_newline;
+  return extract_string(line_start, line_end);
 }
 
 /* Char actions */

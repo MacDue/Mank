@@ -58,10 +58,16 @@ int main(int argc, char* argv[]) {
   Parser parser(lexer);
   if (selected_options.print_ast) {
     for (auto const & input_file: selected_options.input_files) {
-      AstPrinter ast_printer(std::cout);
-      lexer.load_file(input_file);
-      auto parsed_file = parser.parse_file();
-      ast_printer.print_file(parsed_file);
+      try {
+        // TODO: the error should have a reference to the parser
+        lexer.load_file(input_file);
+        auto parsed_file = parser.parse_file();
+        AstPrinter ast_printer(std::cout);
+        ast_printer.print_file(parsed_file);
+      } catch (CompilerError & error) {
+        error.set_lexing_context(lexer);
+        std::cerr << error;
+      }
     }
   }
 }

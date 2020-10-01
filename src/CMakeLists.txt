@@ -2,6 +2,8 @@ add_library(MankCore
   lexer.cpp
   parser.cpp
   ast_printer.cpp
+  compiler_error_printer.cpp
+  token_helpers.cpp
 )
 
 find_package(Boost COMPONENTS program_options REQUIRED)

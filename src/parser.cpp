@@ -1,6 +1,7 @@
 #include <mpark/patterns.hpp>
 
 #include "parser.h"
+#include "token_helpers.h"
 
 /* Top level constructs */
 
@@ -78,6 +79,8 @@ std::shared_ptr<Ast_Function_Declaration> Parser::parse_function() {
     throw_error_here("unexpected \"{}\"m expecting function or procedure");
   }
 }
+
+/* Statements */
 
 std::optional<Ast_Block> Parser::parse_block() {
   Ast_Block parsed_block;
@@ -159,8 +162,6 @@ Statement_Ptr Parser::parse_if() {
     return nullptr;
   }
 }
-
-
 
 /* Expressions */
 
@@ -378,7 +379,8 @@ bool Parser::consume(TokenType token_type) {
 
 void Parser::expect(TokenType token_type) {
   if (!this->consume(token_type)) {
-    throw_error_here("unexpected \"{}\", was expected a [TODO]");
+    throw_error_here("unexpected \"{}\", was expected a {}",
+      token_type_to_string(token_type));
   }
 }
 

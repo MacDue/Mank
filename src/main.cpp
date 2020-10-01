@@ -74,7 +74,6 @@ int main(int argc, char* argv[]) {
       lexer.load_file(input_file);
       auto parsed_file = parser.parse_file();
 
-
       /* yuck! */
       std::optional<CompilerError> sema_error;
       try {
@@ -84,7 +83,9 @@ int main(int argc, char* argv[]) {
       } catch (CompilerError& e) {
         sema_error = e;
       }
-      print_ast(parsed_file);
+      if (selected_options.print_ast) {
+        print_ast(parsed_file);
+      }
       if (sema_error) {
         throw *sema_error;
       }

@@ -1,7 +1,6 @@
 #include <mpark/patterns.hpp>
 
 #include "parser.h"
-#include "compiler_errors.h"
 
 /* Top level constructs */
 

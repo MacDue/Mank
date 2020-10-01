@@ -4,6 +4,8 @@
 // when print functions are called/return (see DepthUpdate)
 #define self (*this)
 
+/* Constructs */
+
 void AstPrinter::print_file(Ast_File& file) {
   putf("* File with {} functions", file.functions.size());
   putf("- Source name: {}", file.filename);
@@ -33,6 +35,8 @@ void AstPrinter::print_function(Ast_Function_Declaration& func) {
     self->print_stmt(func.body);
   }
 }
+
+/* Statements */
 
 void AstPrinter::print_stmt(Ast_Statement& stmt) {
   std::visit([&](auto& stmt) {
@@ -70,6 +74,8 @@ void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
   putf("- Value");
   self->print_expr(*return_stmt.expression);
 }
+
+/* Expressions */
 
 void AstPrinter::print_expr(Ast_Expression& expr) {
   std::visit([&](auto& expr){

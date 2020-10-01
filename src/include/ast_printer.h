@@ -28,14 +28,14 @@ class AstPrinter {
     for (uint s = 0; s < tab_width; s++) os << ' ';
   }
 
-  template<typename P, typename... A>
-  void printf(P format_pattern, A const & ... args) {
+  template<typename TPattern, typename... TArgs>
+  void printf(TPattern format_pattern, TArgs const & ... args) {
     for (uint t = 0; t < current_depth; t++) indent();
     os << formatxx::format_string(format_pattern, args...);
   }
 
-  template<typename P, typename... A>
-  void putf(P format_pattern, A const & ... args) {
+  template<typename TPattern, typename... TArgs>
+  void putf(TPattern format_pattern, TArgs const & ... args) {
     printf(format_pattern, args...);
     os << '\n';
   }

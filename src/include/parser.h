@@ -4,6 +4,7 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include "compiler_errors.h"
 
 struct Parser {
   Parser(Lexer& lexer)
@@ -13,6 +14,15 @@ struct Parser {
 
 private:
   Lexer& lexer;
+
+  /* Errors */
+  template<typename TPattern, typename... TArgs>
+  [[ noreturn ]] void throw_error_here(
+    TPattern format_pattern, TArgs const & ... args
+  ) {
+    Token& last_token = lexer.peek_next_token();
+    throw_compile_error(last_token.location, format_pattern, args...);
+  }
 
   /* Types */
   std::shared_ptr<Type> parse_type();

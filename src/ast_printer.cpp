@@ -1,9 +1,25 @@
+#include <mpark/patterns.hpp>
+
 #include "ast_printer.h"
 #include "token_helpers.h"
 
 // Little hack that allows depth to be incremented/decremented
 // when print functions are called/return (see DepthUpdate)
 #define self (*this)
+
+/* Types */
+
+static std::string type_to_string(Type& type) {
+  using namespace std::string_literals;
+  using namespace mpark::patterns;
+  return match(type.v)(
+    pattern(as<UncheckedType>(arg)) = [](auto & unchecked_type) {
+      return formatxx::format_string("unchecked type - {}", unchecked_type.identifer.name);
+    },
+    pattern(_) = []{
+      return "???"s;
+    });
+}
 
 /* Constructs */
 
@@ -23,12 +39,12 @@ void AstPrinter::print_function(Ast_Function_Declaration& func) {
   putf("- External: {}", func.external);
   putf("- C function: {}", func.external);
   if (!func.procedure) {
-    putf("- Return type: TODO");
+    putf("- Return type: {}", type_to_string(*func.return_type));
   }
   if (func.arguments.size() > 0) {
     putf("- Arguments:");
     for (auto& arg: func.arguments) {
-      indent(); putf(" TODO : TODO");
+      indent(); putf(" {} : {}", arg.name.name, type_to_string(*arg.type));
     }
   }
   if (!func.external) {

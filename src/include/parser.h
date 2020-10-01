@@ -21,11 +21,12 @@ private:
     TPattern format_pattern, TArgs const & ... args
   ) {
     Token& last_token = lexer.peek_next_token();
-    throw_compile_error(last_token.location, format_pattern, args...);
+    throw_compile_error(last_token.location, format_pattern,
+      std::string(last_token.raw_token), args...);
   }
 
   /* Types */
-  std::shared_ptr<Type> parse_type();
+  Type_Ptr parse_type();
   std::shared_ptr<Ast_Function_Declaration> parse_function();
 
   /* Constructs */

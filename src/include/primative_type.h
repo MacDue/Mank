@@ -1,6 +1,6 @@
 #pragma once
 
-enum class LiteralType {
+enum class PrimativeTypeTag {
   FLOAT32,
   FLOAT64,
   STRING,

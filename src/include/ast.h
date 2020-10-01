@@ -5,9 +5,8 @@
 #include <variant>
 
 #include "scope.h"
-#include "types.h"
 #include "constants.h"
-#include "literal_type.h"
+#include "primative_type.h"
 #include "source_location.h"
 
 /* Top level constructs */
@@ -29,6 +28,12 @@ struct Ast_If_Statement;
 struct Ast_Expression_Statement;
 struct Ast_Return_Statement;
 
+/* Types */
+struct Type;
+struct UncheckedType;
+struct PrimativeType;
+
+using Type_Ptr = std::shared_ptr<Type>;
 using Statement_Ptr = std::shared_ptr<Ast_Statement>;
 using Expression_Ptr = std::shared_ptr<Ast_Expression>;
 
@@ -54,7 +59,7 @@ struct Ast_Identifier: Ast_Node {
 };
 
 struct Ast_Argument {
-  std::shared_ptr<Type> type;
+  Type_Ptr type;
   Ast_Identifier name;
 };
 
@@ -73,11 +78,11 @@ struct Ast_Call: Ast_Node {
 };
 
 struct Ast_Literal: Ast_Node {
-  LiteralType literal_type;
+  PrimativeTypeTag literal_type;
   std::string value;
 
   // Ast_Literal(
-  //   SourceLocation location, LiteralType literal_type, std::string value
+  //   SourceLocation location, PrimativeTypeTag literal_type, std::string value
   // ) : Ast_Node(location), literal_type{literal_type}, value{value} {}
 };
 
@@ -147,12 +152,39 @@ struct Ast_Statement {
     : v{std::move(v)} {}
 };
 
-struct Ast_Function_Declaration: Ast_Node, Type /* will need to change */ {
+struct Ast_Function_Declaration: Ast_Node {
   bool external = false;
   bool c_function = false;
   bool procedure = false;
   Ast_Identifier identifer;
   std::vector<Ast_Argument> arguments;
-  std::shared_ptr<Type> return_type;
+  Type_Ptr return_type;
   Ast_Block body;
+};
+
+/* Types */
+
+struct UncheckedType {
+  Ast_Identifier identifer;
+};
+
+struct PrimativeType {
+  PrimativeTypeTag tag;
+
+  PrimativeType() = default;
+  PrimativeType(PrimativeTypeTag tag)
+    : tag{tag} {}
+};
+
+// (Great name! The type of the type that represents our types...)
+using Type_Type = std::variant<
+  UncheckedType,
+  PrimativeType,
+  Ast_Function_Declaration>;
+
+struct Type {
+  Type_Type v;
+
+  Type(Type_Type v)
+    : v{std::move(v)} {};
 };

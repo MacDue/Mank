@@ -185,6 +185,7 @@ void Lexer::next_token() {
     || match("!", TokenType::LOGICAL_NOT)
     || match("¬", TokenType::LOGICAL_NOT)
     /* Basic elements */
+    || match(",", TokenType::COMMA)
     || match(";", TokenType::SEMICOLON)
     || match(":", TokenType::COLON)
     || match(".", TokenType::DOT)
@@ -264,14 +265,14 @@ bool Lexer::match_numeric_literal() {
   if (match_digits(leading_digits_start, leading_digits_end)) {
     this->last_token.type = TokenType::LITERAL;
     if (match(".")) {
-      this->last_token.literal_type = LiteralType::FLOAT64;
+      this->last_token.literal_type = PrimativeTypeTag::FLOAT64;
       int decimal_digits_start, decimal_digits_end;
       if (match_digits(decimal_digits_start, decimal_digits_end)) {
         /* Nothing needs to happen */
       }
-      this->last_token.literal_type = LiteralType::FLOAT64;
+      this->last_token.literal_type = PrimativeTypeTag::FLOAT64;
     } else {
-      this->last_token.literal_type = LiteralType::INTEGER;
+      this->last_token.literal_type = PrimativeTypeTag::INTEGER;
     }
     return true;
   }
@@ -281,7 +282,7 @@ bool Lexer::match_numeric_literal() {
 bool Lexer::match_string_literal() {
   if (match("\"")) {
     this->last_token.type = TokenType::LITERAL;
-    this->last_token.literal_type = LiteralType::STRING;
+    this->last_token.literal_type = PrimativeTypeTag::STRING;
 
     int next_char;
     while ((next_char = this->peek_next_char() != '"')) {

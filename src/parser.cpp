@@ -14,8 +14,7 @@ Ast_File Parser::parse_file() {
     ) {
       parsed_file.functions.emplace_back(this->parse_function());
     } else {
-      /* TODO errors */
-      throw_compile_error({}, "TODO");
+      throw_error_here("unexpected \"{}\", expecting a function or procedure");
     }
   }
   return parsed_file;
@@ -27,27 +26,56 @@ std::shared_ptr<Ast_Function_Declaration> Parser::parse_function() {
 
     auto ident = this->parse_identifier();
     if (!ident) {
-      throw_compile_error({}, "TODO");
+      throw_error_here("\"{}\" is not a valid function name");
     }
     parsed_function->identifer = *ident;
     if (!parsed_function->procedure) {
-      /* TODO: functions -- return type */
-      throw_compile_error({}, "TODO");
+      /* return type */
+      expect(TokenType::COLON);
+      auto return_type = this->parse_type();
+      if (!return_type) {
+        throw_error_here("function return type expected");
+      } else {
+        parsed_function->return_type = return_type;
+      }
     }
 
-    /* Parameters */
     if (consume(TokenType::LEFT_PAREN)) {
-      throw_compile_error({}, "TODO");
+      /* Parameters */
+      while (!peek(TokenType::RIGHT_PAREN)) {
+        auto arg_name = this->parse_identifier();
+        if (!arg_name) {
+          throw_error_here("{} argument expected",
+            parsed_function->procedure ? "procedure" : "function");
+        }
+        /* arg type */
+        expect(TokenType::COLON);
+        auto arg_type = this->parse_type();
+        if (!arg_type) {
+          throw_error_here("type name expected");
+        }
+
+        parsed_function->arguments.emplace_back(Ast_Argument {
+          .type = arg_type,
+          .name = *arg_name
+        });
+
+        if (!consume(TokenType::COMMA)) {
+          break;
+        }
+      }
+      expect(TokenType::RIGHT_PAREN);
     }
 
     auto body = this->parse_block();
     if (!body) {
-      throw_compile_error({}, "TODO");
+      throw_error_here("expected function body");
     }
     parsed_function->body = *body;
     return parsed_function;
   } else {
-    assert(false && "should be unreachable");
+    // Should be unreachable
+    throw_error_here("unexpected \"{}\"m expecting function or procedure");
   }
 }
 
@@ -79,13 +107,60 @@ Statement_Ptr Parser::parse_statement() {
     expect(TokenType::SEMICOLON);
     return std::make_shared<Ast_Statement>(expr_stmt);
   } else {
-    throw_compile_error({}, "TODO");
+    throw_error_here("unexpected \"{}\", expecting an if, expression, or return statement");
   }
 }
 
 Statement_Ptr Parser::parse_if() {
-  assert(false && "TODO");
+  Ast_If_Statement parsed_if;
+  if (consume(TokenType::IF)) {
+    auto condition = this->parse_expression();
+    if (!condition) {
+      throw_error_here("unexpected \"{}\", expecting a condition expression");
+    }
+    parsed_if.cond = condition;
+    auto then_block = this->parse_block();
+    if (!then_block) {
+      throw_error_here("expected (braced) then block");
+    }
+    parsed_if.then_block = std::make_shared<Ast_Statement>(*then_block);
+    if (consume(TokenType::ELSE)) {
+      parsed_if.has_else = true;
+
+      if (peek(TokenType::IF)) {
+        /*
+        support for:
+        if () {
+          ...
+        } else if {
+          ...
+        }
+
+        rather than:
+        if () {
+
+        } else {
+          if () {
+            ...
+          }
+        }
+        */
+        parsed_if.else_block = this->parse_if();
+      } else {
+        auto else_block = this->parse_block();
+        if (!else_block) {
+          throw_error_here("expected (braced) else block");
+        }
+        parsed_if.else_block = std::make_shared<Ast_Statement>(*else_block);
+      }
+    }
+    return std::make_shared<Ast_Statement>(parsed_if);
+  } else {
+    return nullptr;
+  }
 }
+
+
 
 /* Expressions */
 
@@ -127,7 +202,7 @@ Expression_Ptr Parser::parse_primary_expression() {
   } else if (peek(TokenType::LEFT_PAREN)) {
     return this->parse_parenthesised_expression();
   } else {
-    throw_compile_error({}, "TODO");
+    throw_error_here("no primary expressions start with \"{}\"");
   }
 }
 
@@ -136,10 +211,11 @@ Expression_Ptr Parser::parse_parenthesised_expression() {
   expect(TokenType::LEFT_PAREN);
   auto expr = this->parse_expression();
   expect(TokenType::RIGHT_PAREN);
-  match(expr->v)(pattern(as<Ast_Binary_Operation>(arg))
-    = [](auto & binary_op) {
+  match(expr->v)(
+    pattern(as<Ast_Binary_Operation>(arg)) = [](auto & binary_op) {
       binary_op.parenthesised = true;
-    });
+    },
+    pattern(_) = [] {});
   return expr;
 }
 
@@ -259,7 +335,7 @@ Expression_Ptr Parser::parse_literal() {
   Ast_Literal parsed_literal;
 
   parsed_literal.literal_type = token.literal_type;
-  if (token.literal_type == LiteralType::STRING) {
+  if (token.literal_type == PrimativeTypeTag::STRING) {
     // Remove ""s
     parsed_literal.value =
       token.raw_token.substr(1, token.raw_token.length() - 2);
@@ -279,6 +355,17 @@ std::optional<Ast_Identifier> Parser::parse_identifier() {
   return std::nullopt;
 }
 
+/* Types */
+
+Type_Ptr Parser::parse_type() {
+  auto type_name = this->parse_identifier();
+  if (type_name) {
+    UncheckedType type{*type_name};
+    return std::make_shared<Type>(type);
+  }
+  return nullptr;
+}
+
 /* Helpers */
 
 bool Parser::consume(TokenType token_type) {
@@ -291,7 +378,7 @@ bool Parser::consume(TokenType token_type) {
 
 void Parser::expect(TokenType token_type) {
   if (!this->consume(token_type)) {
-    throw_compile_error({}, "TODO");
+    throw_error_here("unexpected \"{}\", was expected a [TODO]");
   }
 }
 

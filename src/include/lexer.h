@@ -3,7 +3,7 @@
 #include <string>
 
 #include "constants.h"
-#include "literal_type.h"
+#include "primative_type.h"
 #include "source_location.h"
 
 enum class TokenType {
@@ -13,7 +13,7 @@ enum class TokenType {
 struct Token {
   TokenType type = TokenType::EMPTY;
   SourceLocation location;
-  LiteralType literal_type;
+  PrimativeTypeTag literal_type;
   std::string_view raw_token;
 };
 

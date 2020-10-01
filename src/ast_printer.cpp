@@ -98,15 +98,15 @@ void AstPrinter::print_expr(Ast_Call& call) {
   }
 }
 
-static char const * literal_type_to_string(LiteralType type) {
+static char const * literal_type_to_string(PrimativeTypeTag type) {
   switch (type) {
-    case LiteralType::FLOAT32:
+    case PrimativeTypeTag::FLOAT32:
       return "Float32";
-    case LiteralType::FLOAT64:
+    case PrimativeTypeTag::FLOAT64:
       return "Float64";
-    case LiteralType::INTEGER:
+    case PrimativeTypeTag::INTEGER:
       return "Integer";
-    case LiteralType::STRING:
+    case PrimativeTypeTag::STRING:
       return "Static string";
     default:
       return "???";
@@ -116,7 +116,7 @@ static char const * literal_type_to_string(LiteralType type) {
 void AstPrinter::print_expr(Ast_Literal& literal) {
   putf("* Literal");
   putf(
-    literal.literal_type == LiteralType::STRING
+    literal.literal_type == PrimativeTypeTag::STRING
       ? "- {}: \"{}\"" : "- {}: {}",
       literal_type_to_string(literal.literal_type),
       literal.value);

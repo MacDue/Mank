@@ -41,6 +41,7 @@ TEST_CASE("Lex basic elements", "[Lexer]") {
     std::make_pair("(", TokenType::LEFT_PAREN),
     std::make_pair(")", TokenType::RIGHT_PAREN),
     std::make_pair("=", TokenType::ASSIGN),
+    std::make_pair(",", TokenType::COMMA),
     /* with padding */
     std::make_pair("   ;", TokenType::SEMICOLON),
     std::make_pair("}   ", TokenType::RIGHT_BRACE),
@@ -149,7 +150,7 @@ TEST_CASE("Lex string literals", "[Lexer]") {
     lexer.set_input_to_string(source_literal);
     auto token = lexer.peek_next_token();
     REQUIRE(token.type == TokenType::LITERAL);
-    REQUIRE(token.literal_type == LiteralType::STRING);
+    REQUIRE(token.literal_type == PrimativeTypeTag::STRING);
     REQUIRE(token.raw_token == source_literal);
     expect_eof(lexer);
   }
@@ -160,11 +161,11 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
 
   // Note: prefexes +/- are treated as unary expressions
   std::array valid_numerical_literals_and_expected_type {
-    std::make_pair("42", LiteralType::INTEGER),
-    std::make_pair("10000.", LiteralType::FLOAT64),
-    std::make_pair("3.14", LiteralType::FLOAT64),
+    std::make_pair("42", PrimativeTypeTag::INTEGER),
+    std::make_pair("10000.", PrimativeTypeTag::FLOAT64),
+    std::make_pair("3.14", PrimativeTypeTag::FLOAT64),
     // Note the literals are not parsed yet (that is done later)
-    std::make_pair("999999999999999999999999", LiteralType::INTEGER),
+    std::make_pair("999999999999999999999999", PrimativeTypeTag::INTEGER),
   };
 
   for (auto [numeric_literal, expected_literal_type]: valid_numerical_literals_and_expected_type) {
@@ -174,5 +175,31 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
     REQUIRE(token.literal_type == expected_literal_type);
     REQUIRE(token.raw_token == numeric_literal);
     expect_eof(lexer);
+  }
+}
+
+TEST_CASE("Lexing simple function header", "[Lexer]") {
+  Lexer lexer;
+
+  lexer.set_input_to_string("proc main(argc: int, test: int)");
+
+  std::array expected_token_stream {
+    TokenType::PROCEDURE,
+    TokenType::IDENT,
+    TokenType::LEFT_PAREN,
+    TokenType::IDENT,
+    TokenType::COLON,
+    TokenType::IDENT,
+    TokenType::COMMA,
+    TokenType::IDENT,
+    TokenType::COLON,
+    TokenType::IDENT,
+    TokenType::RIGHT_PAREN,
+    TokenType::LEX_EOF
+  };
+
+  for (auto expected_token: expected_token_stream) {
+    REQUIRE(next_token_type(lexer) == expected_token);
+    lexer.consume_token();
   }
 }

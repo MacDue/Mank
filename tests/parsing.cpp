@@ -15,3 +15,18 @@ TEST_CASE("Hello world!", "[Parser]") {
 
   auto parsed_result = parser.parse_file();
 }
+
+/*
+  Want:
+  auto expected_ast = make_file(
+    make_procedure("main",
+      make_block(
+        make_expr_stmt(
+          make_call("print",
+            make_literal("Hello World")
+          )
+        )
+      )
+    )
+  )
+*/

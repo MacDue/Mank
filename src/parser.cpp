@@ -3,6 +3,17 @@
 #include "parser.h"
 #include "token_helpers.h"
 
+SourceLocation join_source_locations(SourceLocation start, SourceLocation end) {
+  return SourceLocation {
+    .start_line = start.start_line,
+    .start_column = start.start_column,
+    .end_line = end.end_line,
+    .end_column = end.end_column,
+    .start_char_idx = start.start_char_idx,
+    .end_char_idx = end.end_char_idx,
+  };
+}
+
 /* Top level constructs */
 
 Ast_File Parser::parse_file() {
@@ -166,19 +177,26 @@ Statement_Ptr Parser::parse_if() {
 /* Expressions */
 
 Expression_Ptr Parser::parse_expression() {
-  return this->parse_binary_expression();
+  auto expr_start = this->current_location();
+  auto expr = this->parse_binary_expression();
+  return mark_ast_location(expr_start, expr);
 }
 
 Expression_Ptr Parser::parse_postfix_expression() {
+  auto postfix_start = this->current_location();
   auto expr = this->parse_primary_expression();
   while (true) {
+    mark_ast_location(postfix_start, expr);
+
+    lexer.save_state();
     if (peek(TokenType::LEFT_PAREN)) {
       expr = this->parse_call(std::move(expr));
     } else {
+      lexer.restore_state();
       break;
     }
   }
-  return expr;
+  return mark_ast_location(postfix_start, expr);
 }
 
 Expression_Ptr Parser::parse_call(Expression_Ptr target) {
@@ -319,6 +337,7 @@ Expression_Ptr Parser::parse_binary_expression() {
 }
 
 Expression_Ptr Parser::parse_unary() {
+  auto unary_start = this->current_location();
   auto unary_op = this->lexer.peek_next_token().type;
   if (!is_unary_op(unary_op)) {
     return this->parse_postfix_expression();
@@ -328,13 +347,15 @@ Expression_Ptr Parser::parse_unary() {
   this->lexer.consume_token();
   // For nested unary expressions e.g. -------------10 (if you want that?)
   parsed_unary.operand = this->parse_unary();
-  return std::make_shared<Ast_Expression>(parsed_unary);
+  auto unary = std::make_shared<Ast_Expression>(parsed_unary);
+  return mark_ast_location(unary_start, unary);
 }
 
 Expression_Ptr Parser::parse_literal() {
   auto& token = this->lexer.peek_next_token();
   Ast_Literal parsed_literal;
 
+  parsed_literal.location = token.location;
   parsed_literal.literal_type = token.literal_type;
   if (token.literal_type == PrimativeTypeTag::STRING) {
     // Remove ""s

@@ -6,6 +6,8 @@
 #include "lexer.h"
 #include "compiler_errors.h"
 
+SourceLocation join_source_locations(SourceLocation start, SourceLocation end);
+
 struct Parser {
   Parser(Lexer& lexer)
     : lexer{lexer} {}
@@ -14,6 +16,24 @@ struct Parser {
 
 private:
   Lexer& lexer;
+
+  /* Location Helpers */
+  SourceLocation current_location() {
+    return this->lexer.peek_next_token_location();
+  }
+
+  template<typename T>
+  void mark_ast_location(SourceLocation start, T& ast) {
+    ast.location = join_source_locations(start, lexer.get_last_token_location());
+  }
+
+  template<typename T>
+  auto& mark_ast_location(SourceLocation start, std::shared_ptr<T>& ast) {
+    std::visit([&](auto & ast){
+      mark_ast_location(start, ast);
+    }, ast->v);
+    return ast;
+  }
 
   /* Errors */
   template<typename TPattern, typename... TArgs>

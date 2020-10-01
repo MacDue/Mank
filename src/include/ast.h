@@ -7,7 +7,6 @@
 #include "scope.h"
 #include "types.h"
 #include "constants.h"
-#include "variant_meta.h"
 #include "literal_type.h"
 #include "source_location.h"
 
@@ -61,6 +60,7 @@ struct Ast_Argument {
 
 struct Ast_File: Ast_Node {
   Scope scope;
+  std::string filename;
   std::vector<
     std::shared_ptr<Ast_Function_Declaration>> functions;
 };
@@ -92,17 +92,18 @@ struct Ast_Binary_Operation: Ast_Node {
   bool parenthesised = false;
 };
 
-struct Ast_Expression: std::variant<
+using Ast_Expression_Type = std::variant<
   Ast_Call,
   Ast_Literal,
   Ast_Identifier,
   Ast_Unary_Operation,
-  Ast_Binary_Operation
-> {
-  using variant::variant;
-};
+  Ast_Binary_Operation>;
 
-VARIANT_META_FOR(Ast_Expression)
+struct Ast_Expression {
+  Ast_Expression_Type v;
+  Ast_Expression(Ast_Expression_Type v)
+    : v{std::move(v)} {}
+};
 
 /* Statements */
 
@@ -134,18 +135,17 @@ struct Ast_If_Statement: Ast_Node {
   Statement_Ptr then_block, else_block;
 };
 
-struct Ast_Statement: std::variant<
+using Ast_Statement_Type = std::variant<
   Ast_Expression_Statement,
   Ast_Return_Statement,
   Ast_Block,
-  Ast_If_Statement
-> {
-  using variant::variant;
+  Ast_If_Statement>;
+
+struct Ast_Statement {
+  Ast_Statement_Type v;
+  Ast_Statement(Ast_Statement_Type v)
+    : v{std::move(v)} {}
 };
-
-VARIANT_META_FOR(Ast_Statement)
-
-/* Top level constructs */
 
 struct Ast_Function_Declaration: Ast_Node, Type /* will need to change */ {
   bool external = false;

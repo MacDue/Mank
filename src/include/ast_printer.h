@@ -36,7 +36,7 @@ class AstPrinter {
 
   template<typename P, typename... A>
   void putf(P format_pattern, A const & ... args) {
-    printf(std::forward(format_pattern), std::forward(args...));
+    printf(format_pattern, args...);
     os << '\n';
   }
 
@@ -44,7 +44,7 @@ class AstPrinter {
     uint tab_width,
          current_depth;
 
-    AstPrinter(std::ostream& os, uint tab_width = 2, uint current_depth = 0)
+    AstPrinter(std::ostream& os, uint tab_width = 1, uint current_depth = 0)
       : os{os}, tab_width{tab_width}, current_depth{current_depth} {}
 
     void print_file(Ast_File& file);

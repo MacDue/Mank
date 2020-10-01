@@ -1,10 +1,14 @@
 add_library(MankCore
   lexer.cpp
   parser.cpp
+  ast_printer.cpp
 )
+
+find_package(Boost COMPONENTS program_options REQUIRED)
 
 include_directories(
   include
+  ${Boost_INCLUDE_DIR}
 )
 
 target_link_libraries(MankCore
@@ -12,5 +16,9 @@ target_link_libraries(MankCore
   mpark_patterns
 )
 
+message(${Boost_LIBRARIES})
+
 add_executable(mankc main.cpp)
-target_link_libraries(mankc MankCore)
+target_link_libraries(mankc
+  MankCore
+  ${Boost_LIBRARIES})

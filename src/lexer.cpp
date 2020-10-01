@@ -1,4 +1,5 @@
 #include <fstream>
+#include <filesystem>
 
 #include "lexer.h"
 
@@ -10,6 +11,7 @@ static std::string read_entire_file(std::string const & file) {
   if (in) {
     in.seekg(0, std::ios::end);
     file_text.resize(in.tellg());
+    in.seekg(0, std::ios::beg);
     in.read(&file_text[0], file_text.size());
     in.close();
   } else {
@@ -37,11 +39,13 @@ void Lexer::restore_state() {
 void Lexer::load_file(std::string const & file_path) {
   this->reset();
   this->source = read_entire_file(file_path);
+  this->source_name = std::filesystem::path(file_path).filename();
 }
 
 void Lexer::set_input_to_string(std::string source) {
   this->reset();
   this->source = source;
+  this->source_name = "<string>";
 }
 
 /* Token actions */
@@ -314,4 +318,8 @@ void Lexer::set_token_end() {
 std::string_view Lexer::extract_string(int from, int to) const {
   std::string_view view = this->source;
   return view.substr(from, to - from);
+}
+
+std::string Lexer::input_source_name() const {
+  return this->source_name;
 }

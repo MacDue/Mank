@@ -7,6 +7,7 @@
 
 Ast_File Parser::parse_file() {
   Ast_File parsed_file;
+  parsed_file.filename = this->lexer.input_source_name();
   Token next_token;
   while (!this->peek(TokenType::LEX_EOF, next_token)) {
     if (next_token.type == TokenType::FUNCTION
@@ -136,7 +137,7 @@ Expression_Ptr Parser::parse_parenthesised_expression() {
   expect(TokenType::LEFT_PAREN);
   auto expr = this->parse_expression();
   expect(TokenType::RIGHT_PAREN);
-  match(*expr)(pattern(as<Ast_Binary_Operation>(arg))
+  match(expr->v)(pattern(as<Ast_Binary_Operation>(arg))
     = [](auto & binary_op) {
       binary_op.parenthesised = true;
     });
@@ -201,7 +202,7 @@ static Expression_Ptr fix_precedence_and_association(
   Ast_Operator op
 ) {
   using namespace mpark::patterns;
-  return match(*rhs)(
+  return match(rhs->v)(
     pattern(as<Ast_Binary_Operation>(arg)) = [&](auto & rhs_binop) {
       WHEN(!rhs_binop.parenthesised
         && get_binary_precdence(rhs_binop.operation) < get_binary_precdence(op)

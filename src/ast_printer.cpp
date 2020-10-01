@@ -1,5 +1,3 @@
-#include <mpark/patterns.hpp>
-
 #include "ast_printer.h"
 
 // Little hack that allows depth to be incremented/decremented
@@ -8,6 +6,7 @@
 
 void AstPrinter::print_file(Ast_File& file) {
   putf("* File with {} functions", file.functions.size());
+  putf("- Source name: {}", file.filename);
   for (auto& func: file.functions) {
     self->print_function(*func);
     putf("");
@@ -38,7 +37,7 @@ void AstPrinter::print_function(Ast_Function_Declaration& func) {
 void AstPrinter::print_stmt(Ast_Statement& stmt) {
   std::visit([&](auto& stmt) {
     self->print_stmt(stmt);
-  }, stmt);
+  }, stmt.v);
 }
 
 void AstPrinter::print_stmt(Ast_Block& block) {
@@ -75,7 +74,7 @@ void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
 void AstPrinter::print_expr(Ast_Expression& expr) {
   std::visit([&](auto& expr){
     self->print_expr(expr);
-  }, expr);
+  }, expr.v);
 }
 
 void AstPrinter::print_expr(Ast_Call& call) {
@@ -110,13 +109,16 @@ static char const * literal_type_to_string(LiteralType type) {
 
 void AstPrinter::print_expr(Ast_Literal& literal) {
   putf("* Literal");
-  printf("- {}: ", literal_type_to_string(literal.literal_type));
-  putf(literal.literal_type == LiteralType::STRING ? "\"{}\"" : "{}", literal.value);
+  putf(
+    literal.literal_type == LiteralType::STRING
+      ? "- {}: \"{}\"" : "- {}: {}",
+      literal_type_to_string(literal.literal_type),
+      literal.value);
 }
 
-void AstPrinter::print_expr(Ast_Literal& ident) {
+void AstPrinter::print_expr(Ast_Identifier& ident) {
   putf("* Identifier");
-  putf("- {}", ident.value);
+  putf("- {}", ident.name);
 }
 
 char const * operation_to_string(Ast_Operator op) {
@@ -167,3 +169,4 @@ void AstPrinter::print_expr(Ast_Binary_Operation& binop) {
   putf("- Right:");
   self->print_expr(*binop.right);
 }
+

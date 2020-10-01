@@ -42,9 +42,10 @@ struct Lexer {
 
   /* Error messages */
   std::string_view extract_lines(SourceLocation loc) const;
-
+  std::string input_source_name() const;
 private:
   std::string source;
+  std::string source_name;
   Token last_token;
 
   /* Char actions */

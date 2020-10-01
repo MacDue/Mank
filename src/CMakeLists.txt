@@ -4,6 +4,7 @@ add_library(MankCore
   ast_printer.cpp
   compiler_error_printer.cpp
   token_helpers.cpp
+  semantics.cpp
 )
 
 find_package(Boost COMPONENTS program_options REQUIRED)

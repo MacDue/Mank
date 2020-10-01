@@ -10,8 +10,7 @@
 struct Ast_File: Ast_Node {
   Scope scope;
   std::string filename;
-  std::vector<
-    std::shared_ptr<Ast_Function_Declaration>> functions;
+  std::vector<Function_Ptr> functions;
 };
 
 struct Ast_Function_Declaration: Ast_Node {

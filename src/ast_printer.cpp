@@ -9,12 +9,30 @@
 
 /* Types */
 
+static char const * literal_type_to_string(PrimativeTypeTag type) {
+  switch (type) {
+    case PrimativeTypeTag::FLOAT32:
+      return "Float32";
+    case PrimativeTypeTag::FLOAT64:
+      return "Float64";
+    case PrimativeTypeTag::INTEGER:
+      return "Integer";
+    case PrimativeTypeTag::STRING:
+      return "Static string";
+    default:
+      return "???";
+  }
+}
+
 static std::string type_to_string(Type& type) {
   using namespace std::string_literals;
   using namespace mpark::patterns;
   return match(type.v)(
     pattern(as<UncheckedType>(arg)) = [](auto & unchecked_type) {
       return formatxx::format_string("unchecked type - {}", unchecked_type.identifer.name);
+    },
+    pattern(as<PrimativeType>(arg)) = [](auto & primative_type) {
+      return std::string(literal_type_to_string(primative_type.tag));
     },
     pattern(_) = []{
       return "???"s;
@@ -27,7 +45,7 @@ void AstPrinter::print_file(Ast_File& file) {
   putf("* File with {} functions", file.functions.size());
   putf("- Source name: {}", file.filename);
   for (auto& func: file.functions) {
-    self->print_function(*func);
+    self->print_function(std::get<Ast_Function_Declaration>(func->v));
     putf("");
   }
 }
@@ -112,21 +130,6 @@ void AstPrinter::print_expr(Ast_Call& call) {
       self->print_expr(*arg);
       ++arg_idx;
     }
-  }
-}
-
-static char const * literal_type_to_string(PrimativeTypeTag type) {
-  switch (type) {
-    case PrimativeTypeTag::FLOAT32:
-      return "Float32";
-    case PrimativeTypeTag::FLOAT64:
-      return "Float64";
-    case PrimativeTypeTag::INTEGER:
-      return "Integer";
-    case PrimativeTypeTag::STRING:
-      return "Static string";
-    default:
-      return "???";
   }
 }
 

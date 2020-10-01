@@ -31,6 +31,7 @@ struct PrimativeType;
 
 using Statement_Ptr = std::shared_ptr<Ast_Statement>;
 using Expression_Ptr = std::shared_ptr<Ast_Expression>;
+using Function_Ptr = Type_Ptr;
 
 /* Test AST based on std::variant & pattern matching */
 
@@ -47,6 +48,8 @@ struct Ast_Identifier: Ast_Node {
   Ast_Identifier() = default;
   Ast_Identifier(SourceLocation location, std::string name)
     : Ast_Node(location), name{name} {}
+  Ast_Identifier(std::string name)
+    : Ast_Identifier({} /* dummy */, name) {};
 };
 
 enum class Ast_Operator {

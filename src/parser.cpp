@@ -21,23 +21,23 @@ Ast_File Parser::parse_file() {
   return parsed_file;
 }
 
-std::shared_ptr<Ast_Function_Declaration> Parser::parse_function() {
-  auto parsed_function = std::make_shared<Ast_Function_Declaration>();
-  if (consume(TokenType::FUNCTION) || (parsed_function->procedure = consume(TokenType::PROCEDURE))) {
+Function_Ptr Parser::parse_function() {
+  Ast_Function_Declaration parsed_function;
+  if (consume(TokenType::FUNCTION) || (parsed_function.procedure = consume(TokenType::PROCEDURE))) {
 
     auto ident = this->parse_identifier();
     if (!ident) {
       throw_error_here("\"{}\" is not a valid function name");
     }
-    parsed_function->identifer = *ident;
-    if (!parsed_function->procedure) {
+    parsed_function.identifer = *ident;
+    if (!parsed_function.procedure) {
       /* return type */
       expect(TokenType::COLON);
       auto return_type = this->parse_type();
       if (!return_type) {
         throw_error_here("function return type expected");
       } else {
-        parsed_function->return_type = return_type;
+        parsed_function.return_type = return_type;
       }
     }
 
@@ -47,7 +47,7 @@ std::shared_ptr<Ast_Function_Declaration> Parser::parse_function() {
         auto arg_name = this->parse_identifier();
         if (!arg_name) {
           throw_error_here("{} argument expected",
-            parsed_function->procedure ? "procedure" : "function");
+            parsed_function.procedure ? "procedure" : "function");
         }
         /* arg type */
         expect(TokenType::COLON);
@@ -56,7 +56,7 @@ std::shared_ptr<Ast_Function_Declaration> Parser::parse_function() {
           throw_error_here("type name expected");
         }
 
-        parsed_function->arguments.emplace_back(Ast_Argument {
+        parsed_function.arguments.emplace_back(Ast_Argument {
           .type = arg_type,
           .name = *arg_name
         });
@@ -72,8 +72,8 @@ std::shared_ptr<Ast_Function_Declaration> Parser::parse_function() {
     if (!body) {
       throw_error_here("expected function body");
     }
-    parsed_function->body = *body;
-    return parsed_function;
+    parsed_function.body = *body;
+    return std::make_shared<Type>(parsed_function);
   } else {
     // Should be unreachable
     throw_error_here("unexpected \"{}\"m expecting function or procedure");

@@ -27,7 +27,7 @@ private:
 
   /* Types */
   Type_Ptr parse_type();
-  std::shared_ptr<Ast_Function_Declaration> parse_function();
+  Function_Ptr parse_function();
 
   /* Constructs */
   std::optional<Ast_Identifier> parse_identifier();

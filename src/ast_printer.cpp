@@ -1,4 +1,5 @@
 #include "ast_printer.h"
+#include "token_helpers.h"
 
 // Little hack that allows depth to be incremented/decremented
 // when print functions are called/return (see DepthUpdate)
@@ -127,37 +128,8 @@ void AstPrinter::print_expr(Ast_Identifier& ident) {
   putf("- {}", ident.name);
 }
 
-char const * operation_to_string(Ast_Operator op) {
-  /* No great way in C++ */
-  switch (op)
-  {
-    case Ast_Operator::BITWISE_NOT: return "~ (BITWISE_NOT)";
-    case Ast_Operator::BITWISE_AND: return "& (BITWISE_AND)";
-    case Ast_Operator::BITWISE_OR: return "| (BITWISE_OR)";
-
-    case Ast_Operator::PLUS: return "+ (ADD)";
-    case Ast_Operator::MINUS: return "- (MINUS)";
-    case Ast_Operator::DIVIDE: return "/ (DIVIDE)";
-    case Ast_Operator::TIMES: return "* (TIMES)";
-    case Ast_Operator::MODULO: return "% (MODULO)";
-
-    case Ast_Operator::LESS_THAN: return "< (LESS_THAN)";
-    case Ast_Operator::GREATER_THAN: return "> (GREATER_THAN)";
-
-    case Ast_Operator::BITWISE_XOR: return "|! (BITWISE_XOR)";
-
-    case Ast_Operator::LOGICAL_OR: return "|| (LOGICAL_OR)";
-    case Ast_Operator::LOGICAL_NOT: return "¬ (LOGICAL_NOT)";
-    case Ast_Operator::LEFT_SHIFT: return "<< (LEFT_SHIFT)";
-    case Ast_Operator::RIGHT_SHIFT: return ">> (RIGHT_SHIFT)";
-    case Ast_Operator::GREATER_EQUAL: return ">= (GREATER_EQUAL)";
-    case Ast_Operator::LESS_EQUAL: return "<= (LESS_EQUAL)";
-    case Ast_Operator::EQUAL_TO: return "== (EQUAL_TO)";
-    case Ast_Operator::NOT_EQUAL_TO: return "!= (NOT_EQUAL_TO)";
-
-    case Ast_Operator::LOGICAL_AND: return "&& (LOGICAL_AND)";
-    default: return "?? (UNKNOWN)";
-  }
+static char const * operation_to_string(Ast_Operator operation) {
+  return token_type_to_string(static_cast<TokenType>(operation));
 }
 
 void AstPrinter::print_expr(Ast_Unary_Operation& unary) {

@@ -19,9 +19,9 @@ struct Token {
 
 struct Lexer {
   struct Position {
-    int char_idx = 0;
-    int line = 0;
-    int column = 0;
+    uint char_idx = 0;
+    uint line = 0;
+    uint column = 0;
   } current;
 
   void reset();

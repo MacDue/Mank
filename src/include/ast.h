@@ -18,8 +18,7 @@ struct Ast_Function_Declaration;
 /* Expressions */
 struct Ast_Expression;
 struct Ast_Call;
-struct Ast_Number;
-struct Ast_String;
+struct Ast_Literal;
 struct Ast_Identifier;
 struct Ast_Unary_Operation;
 struct Ast_Binary_Operation;

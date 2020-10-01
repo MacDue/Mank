@@ -34,7 +34,7 @@ void annotate_lines(std::vector<std::string>& lines, SourceLocation loc) {
   for (auto& line: lines) {
     bool at_start = line_num == loc.start_line + 1;
     uint marker_start = at_start ? loc.start_column : 0;
-    uint marker_end = line_num == loc.end_column + 1 ? loc.end_column : line.length();
+    uint marker_end = line_num == loc.end_line + 1 ? loc.end_column : line.length();
     std::string error_pointer;
     if (marker_end > marker_start) {
       uint pointer_start = marker_start;

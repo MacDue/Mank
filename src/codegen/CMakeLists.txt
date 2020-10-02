@@ -17,4 +17,5 @@ target_link_libraries(MankCodegen
   LLVM-10
   formatxx
   mpark_patterns
+  MankAnalysis
 )

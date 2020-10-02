@@ -6,6 +6,7 @@ add_library(MankAnalysis
   token_helpers.cpp
   semantics.cpp
   types.cpp
+  return_reachability.cpp
 )
 
 include_directories(

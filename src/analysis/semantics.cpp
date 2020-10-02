@@ -5,6 +5,7 @@
 
 #include "semantics.h"
 #include "sema_errors.h"
+#include "ast/return_reachability.h"
 
 namespace Sema {
 
@@ -105,13 +106,41 @@ void analyse_function_header(Ast_Function_Declaration& func) {
   }
 }
 
+static void analyse_block(Ast_Block& block, Scope& scope, Type* return_type) {
+  block.scope.parent = &scope;
+
+  for (uint stmt_idx = 0; stmt_idx < block.statements.size(); stmt_idx++) {
+    auto& stmt = *block.statements[stmt_idx];
+    analyse_statement(stmt, block.scope, return_type);
+    Ast_Return_Statement* return_stmt;
+    /*
+      Re-computation :( -- already worked out when checking the function before
+      & subproblems will be recomputed again in recursive calls :(
+    */
+    if (AstHelper::block_returns(stmt, &return_stmt)) {
+      if (stmt_idx < block.statements.size() - 1) {
+        throw_sema_error_at(block.statements.at(stmt_idx + 1),
+          "unreachable code");
+      }
+    }
+  }
+}
+
 void analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     func.body.scope.symbols.emplace_back(
       Symbol(arg.name, arg.type, Symbol::LOCAL));
   }
-  for (auto& stmt: func.body.statements) {
-    analyse_statement(*stmt, func.body.scope, func.return_type.get());
+  analyse_block(func.body, *func.body.scope.parent, func.return_type.get());
+
+  if (!func.procedure) {
+    Ast_Statement func_body(func.body);
+    Ast_Return_Statement* return_stmt;
+    bool all_paths_return = AstHelper::block_returns(func_body, &return_stmt);
+    if (!all_paths_return) {
+      throw_sema_error_at(func.identifer,
+        "non-void function possibly fails to return a value");
+    }
   }
 }
 
@@ -147,10 +176,7 @@ void analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
   using namespace mpark::patterns;
   match(stmt.v)(
     pattern(as<Ast_Block>(arg)) = [&](auto& block) {
-      block.scope.parent = &scope;
-      for (auto stmt: block.statements) {
-        analyse_statement(*stmt, block.scope, return_type);
-      }
+      return analyse_block(block, scope, return_type);
     },
     pattern(as<Ast_Expression_Statement>(arg)) = [&](auto& expr_stmt){
       analyse_expression_statement(expr_stmt, scope);

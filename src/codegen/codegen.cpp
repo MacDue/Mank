@@ -204,7 +204,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
   switch (literal.literal_type) {
     case PrimativeTypeTag::INTEGER:
       return llvm::ConstantInt::get(llvm_context,
-        llvm::APInt(/*bits:*/ 32, /*value:*/ std::stoi(literal.value), /*signed:*/ true));
+        llvm::APInt(
+          /*bits:*/ primative_size(literal.literal_type),
+          /*value:*/ std::stoi(literal.value),
+          /*signed:*/ true));
     case PrimativeTypeTag::FLOAT32:
       return llvm::ConstantFP::get(llvm_context,
         llvm::APFloat(/*value:*/ std::stof(literal.value)));
@@ -216,7 +219,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
       return nullptr;
     case PrimativeTypeTag::BOOL:
       return llvm::ConstantInt::get(llvm_context,
-        llvm::APInt(/*bits*/ 1,
+        llvm::APInt(/*bits*/ primative_size(literal.literal_type),
                     /*value: */ literal.value == "true" ? 1 : 0,
                     /*signed: */ false));
   }
@@ -239,17 +242,35 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
+  using namespace mpark::patterns;
   llvm::Value* operand = codegen_expression(*unary.operand, scope);
+  auto& unary_type = std::get<PrimativeType>(unary.operand->type->v);
 
-  // switch (unary.operation) {
-  //   case /* constant-expression */:
-  //     /* code */
-  //     break;
-
-  //   default:
-  //     break;
-  // }
-
+  return match(unary_type.tag, unary.operation)(
+    pattern(anyof(PrimativeTypeTag::INTEGER, PrimativeTypeTag::FLOAT64), Ast_Operator::PLUS) = [&]{
+      return operand;
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::MINUS) = [&]{
+      return ir_builder.CreateSub(
+        llvm::ConstantInt::get(llvm_context,
+          llvm::APInt(primative_size(PrimativeTypeTag::INTEGER), 0, true)),
+        operand,
+        "int_minus");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::BITWISE_NOT) = [&]{
+      return ir_builder.CreateXor(
+        operand,
+        llvm::ConstantInt::get(llvm_context,
+          llvm::APInt(primative_size(PrimativeTypeTag::INTEGER), -1, true)),
+        "int_bitwise_not");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::MINUS) = [&]{
+      return ir_builder.CreateFSub(
+        llvm::ConstantFP::get(llvm_context, llvm::APFloat(0.0)),
+        operand,
+        "float_minus");
+    }
+  );
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {

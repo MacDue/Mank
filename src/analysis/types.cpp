@@ -1,3 +1,4 @@
+#include <cassert>
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
 
@@ -41,6 +42,25 @@ std::string type_to_string(Type* type) {
     return type_to_string(*type);
   } else {
     return "Void";
+  }
+}
+
+uint primative_size(PrimativeTypeTag type_tag) {
+  switch (type_tag) {
+    case PrimativeTypeTag::FLOAT32:
+      return 32;
+    case PrimativeTypeTag::FLOAT64:
+      return 64;
+    case PrimativeTypeTag::INTEGER:
+      return 32;
+    case PrimativeTypeTag::STRING: {
+      assert(false && "depends on target");
+      return 0;
+    }
+    case PrimativeTypeTag::BOOL:
+      return 1;
+    default:
+      assert(false && "fix me! unknown primative size");
   }
 }
 

@@ -9,6 +9,8 @@ enum class PrimativeTypeTag {
   /* TODO: more integer types */
 };
 
+uint primative_size(PrimativeTypeTag type_tag);
+
 bool numeric_type(PrimativeTypeTag type_tag);
 bool integer_type(PrimativeTypeTag type_tag);
 bool float_type(PrimativeTypeTag type_tag);

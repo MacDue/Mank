@@ -157,14 +157,21 @@ void analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
       auto expr_type = analyse_expression(*return_stmt.expression, scope);
       if (!match_types(expr_type.get(), return_type)) {
-        throw_sema_error_at(return_stmt,
+        throw_sema_error_at(return_stmt.expression,
           "invalid return type, expected {}, was {}",
           type_to_string(return_type), type_to_string(expr_type.get()));
       }
     },
     pattern(as<Ast_If_Statement>(arg)) = [&](auto& if_stmt){
-      (void) if_stmt;
-
+      auto cond_type = analyse_expression(*if_stmt.cond, scope);
+      if (!match_types(cond_type.get(), Primative::BOOL.get())) {
+        throw_sema_error_at(if_stmt.cond,
+          "if condition must be a {}", type_to_string(*Primative::BOOL));
+      }
+      analyse_statement(*if_stmt.then_block, scope, return_type);
+      if (if_stmt.has_else) {
+        analyse_statement(*if_stmt.else_block, scope, return_type);
+      }
     }
   );
 }

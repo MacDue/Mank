@@ -7,6 +7,7 @@
 
 #include "codegen.h"
 #include "llvm_codegen.h"
+#include "token_helpers.h"
 
 CodeGen::CodeGen(Ast_File& file_ast)
   : impl{std::make_unique<LLVMCodeGen>(file_ast)} {}
@@ -361,7 +362,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
       return ir_builder.CreateSDiv(left, right, "int_div");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::TIMES) = [&]{
       return ir_builder.CreateMul(left, right, "int_mult");
     },
     pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
@@ -406,7 +407,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::DIVIDE) = [&]{
       return ir_builder.CreateFDiv(left, right, "float_div");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::DIVIDE) = [&]{
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::TIMES) = [&]{
       return ir_builder.CreateFMul(left, right, "float_mult");
     },
     pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::LESS_THAN) = [&]{
@@ -426,6 +427,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     },
     pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::NOT_EQUAL_TO) = [&]{
       return ir_builder.CreateFCmpUNE(left, right, "float_ne");
+    },
+    pattern(_, _) = [&]{
+      llvm::errs() << formatxx::format_string(
+        ":( binary operation {} not implemented for type {}\n",
+        token_type_to_string(static_cast<TokenType>(binop.operation)),
+        type_to_string(binop.left->type.get()));
+      assert(false);
+      return static_cast<llvm::Value*>(nullptr);
     }
   );
 }

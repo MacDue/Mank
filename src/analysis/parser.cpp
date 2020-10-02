@@ -107,22 +107,25 @@ std::optional<Ast_Block> Parser::parse_block() {
 }
 
 Statement_Ptr Parser::parse_statement() {
+  auto stmt_start = this->current_location();
+  Statement_Ptr stmt;
   if (peek(TokenType::IF)) {
-    return this->parse_if();
+    stmt = this->parse_if();
   } else if (consume(TokenType::RETURN)) {
     Ast_Return_Statement return_stmt;
     auto expr = this->parse_expression();
     return_stmt.expression = expr;
     expect(TokenType::SEMICOLON);
-    return std::make_shared<Ast_Statement>(return_stmt);
+    stmt = std::make_shared<Ast_Statement>(return_stmt);
   } else if (auto expr = this->parse_expression()) {
     Ast_Expression_Statement expr_stmt;
     expr_stmt.expression = expr;
     expect(TokenType::SEMICOLON);
-    return std::make_shared<Ast_Statement>(expr_stmt);
+    stmt = std::make_shared<Ast_Statement>(expr_stmt);
   } else {
     throw_error_here("unexpected \"{}\", expecting an if, expression, or return statement");
   }
+  return mark_ast_location(stmt_start, stmt);
 }
 
 Statement_Ptr Parser::parse_if() {

@@ -109,6 +109,7 @@ std::optional<Ast_Block> Parser::parse_block() {
 Statement_Ptr Parser::parse_statement() {
   auto stmt_start = this->current_location();
   Statement_Ptr stmt;
+  //this->lexer.save_state();
   if (peek(TokenType::IF)) {
     stmt = this->parse_if();
   } else if (consume(TokenType::RETURN)) {
@@ -141,6 +142,7 @@ Statement_Ptr Parser::parse_if() {
       throw_error_here("expected (braced) then block");
     }
     parsed_if.then_block = std::make_shared<Ast_Statement>(*then_block);
+    this->lexer.save_state();
     if (consume(TokenType::ELSE)) {
       parsed_if.has_else = true;
 
@@ -170,6 +172,8 @@ Statement_Ptr Parser::parse_if() {
         }
         parsed_if.else_block = std::make_shared<Ast_Statement>(*else_block);
       }
+    } else {
+      this->lexer.restore_state();
     }
     return std::make_shared<Ast_Statement>(parsed_if);
   } else {

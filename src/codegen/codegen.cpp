@@ -168,9 +168,25 @@ void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
   }
 }
 
+static bool is_return_block(Ast_Block& block) {
+  using namespace mpark::patterns;
+  for (auto& stmt: block.statements) {
+    bool is_return_stmt = match(stmt->v)(
+      pattern(as<Ast_Return_Statement>(_)) = []{ return true; },
+      pattern(_) = []{ return false; });
+    if (is_return_stmt) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
   llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
   llvm::Value* condition = codegen_expression(*if_stmt.cond, scope);
+
+  bool then_block_returns = is_return_block(std::get<Ast_Block>(if_stmt.then_block->v));
+  bool else_block_returns = is_return_block(std::get<Ast_Block>(if_stmt.else_block->v));
 
   /* Create and insert the 'then' block into the function */
   llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
@@ -183,7 +199,6 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
 
   if (if_stmt.has_else) {
     else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
-
     ir_builder.CreateCondBr(condition, then_block, else_block);
   } else {
     ir_builder.CreateCondBr(condition, then_block, end_block);
@@ -192,6 +207,9 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
   /* then */
   ir_builder.SetInsertPoint(then_block);
   codegen_statement(*if_stmt.then_block, scope);
+  if (!then_block_returns) {
+    ir_builder.CreateBr(end_block);
+  }
 
   /* else */
   if (if_stmt.has_else) {
@@ -199,7 +217,9 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
     current_function->getBasicBlockList().push_back(else_block);
     ir_builder.SetInsertPoint(else_block);
     codegen_statement(*if_stmt.else_block, scope);
-    ir_builder.CreateBr(end_block);
+    if (!else_block_returns) {
+      ir_builder.CreateBr(end_block);
+    }
   }
 
   /* end */

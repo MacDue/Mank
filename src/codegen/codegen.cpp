@@ -259,7 +259,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
     call_args.push_back(codegen_expression(*arg, scope));
   }
 
-  return ir_builder.CreateCall(callee, call_args, "call_ret");
+  return ir_builder.CreateCall(callee, call_args,
+    function_type.procedure ? "" : "call_ret");
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {

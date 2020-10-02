@@ -274,7 +274,7 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
     },
     pattern(some(_), anyof(
       Ast_Operator::LEFT_SHIFT, Ast_Operator::RIGHT_SHIFT, Ast_Operator::BITWISE_AND,
-      Ast_Operator::BITWISE_OR, Ast_Operator::BITWISE_XOR
+      Ast_Operator::BITWISE_OR, Ast_Operator::BITWISE_XOR, Ast_Operator::MODULO
     )) = [&]{
       WHEN(integer_type(primative_type->tag)) {
         return left_type;

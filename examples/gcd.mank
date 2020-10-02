@@ -1,0 +1,7 @@
+fun gcd: i32 (m: i32, n: i32) {
+  if (m % n == 0) {
+    return n;
+  } else {
+    return gcd(n, m % n);
+  }
+}

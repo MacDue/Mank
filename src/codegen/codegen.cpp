@@ -5,6 +5,7 @@
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
 
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include "codegen.h"
@@ -144,7 +145,13 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
 
   codegen_statement(func.body, func.body.scope);
 
+  if (func.procedure) {
+    ir_builder.CreateRet(nullptr);
+  }
+
   llvm_func->print(llvm::errs());
+
+  assert("function should be valid IR" && !llvm::verifyFunction(*llvm_func, &llvm::errs()));
 }
 
 /* Statements */
@@ -262,10 +269,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope) {
+  using namespace mpark::patterns;
   Symbol* symbol = scope.lookup_first_name(ident);
   assert(symbol->kind == Symbol::LOCAL && "only locals implemented");
 
-  using namespace mpark::patterns;
   return match(symbol->meta)(
     pattern(some(as<SymbolMetaLocal>(arg))) = [&](auto& meta) {
       auto load_inst = ir_builder.CreateLoad(meta.alloca,

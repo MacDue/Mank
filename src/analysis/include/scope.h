@@ -1,29 +1,19 @@
 #pragma once
 
 #include <vector>
-#include <variant>
+#include <memory>
 #include "types.h"
 #include "ast/ast_node.h"
 
 using SymbolName = Ast_Identifier;
 
-struct LocalSymbolMeta {
-  /* put llvm alloc stuff here */
-};
-
-struct GlobalSymbolMeta {
-  /* put llvm global var stuff here */
+struct SymbolMeta {
+  virtual ~SymbolMeta() = 0;
 };
 
 struct Symbol {
   SymbolName name;
   Type_Ptr type;
-
-  /* this may make sense just to inline into the Symbol struct */
-  using Meta = std::variant<
-    std::monostate,
-    LocalSymbolMeta,
-    GlobalSymbolMeta>;
 
   enum Kind {
     FUNCTION,
@@ -32,8 +22,8 @@ struct Symbol {
     TYPE,
   } kind;
 
-  Meta meta;
-
+  /* transitively -- as the AST shared (which holds scope nodes) -- this really _should_ be unique */
+  std::shared_ptr<SymbolMeta> meta;
   Symbol(SymbolName name, Type_Ptr type, Kind kind)
     : name{name}, type{type}, kind{kind} {};
 };

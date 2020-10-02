@@ -214,7 +214,7 @@ Expression_Ptr Parser::parse_call(Expression_Ptr target) {
 }
 
 Expression_Ptr Parser::parse_primary_expression() {
-  if (peek(TokenType::LITERAL)) {
+  if (peek(TokenType::LITERAL) || peek(TokenType::TRUE) || peek(TokenType::FALSE)) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
     return std::make_shared<Ast_Expression>(*this->parse_identifier());
@@ -363,14 +363,18 @@ Expression_Ptr Parser::parse_literal() {
   Ast_Literal parsed_literal;
 
   parsed_literal.location = token.location;
-  parsed_literal.literal_type = token.literal_type;
-  if (token.literal_type == PrimativeTypeTag::STRING) {
-    // Remove ""s
-    parsed_literal.value =
-      token.raw_token.substr(1, token.raw_token.length() - 2);
+  parsed_literal.value = token.raw_token;
+  if (token.type != TokenType::TRUE && token.type != TokenType::FALSE) {
+    parsed_literal.literal_type = token.literal_type;
+    if (token.literal_type == PrimativeTypeTag::STRING) {
+      // Remove ""s
+      parsed_literal.value =
+        token.raw_token.substr(1, token.raw_token.length() - 2);
+    }
   } else {
-    parsed_literal.value = token.raw_token;
+    parsed_literal.literal_type = PrimativeTypeTag::BOOL;
   }
+
   this->lexer.consume_token();
   return std::make_shared<Ast_Expression>(parsed_literal);
 }

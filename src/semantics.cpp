@@ -42,6 +42,7 @@ void analyse_file(Ast_File& file) {
     std::make_pair("f64", &Primative::FLOAT64),
     std::make_pair("i32", &Primative::INTEGER),
     std::make_pair("string", &Primative::STRING),
+    std::make_pair("bool", &Primative::BOOL),
   };
 
   for (auto [type_name, type] : primative_types) {

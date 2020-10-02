@@ -145,6 +145,10 @@ static TokenType ident_to_token(std::string_view ident) {
     return TokenType::POD;
   } else if (ident == "return") {
     return TokenType::RETURN;
+  } else if (ident == "true") {
+    return TokenType::TRUE;
+  } else if (ident == "false") {
+    return TokenType::FALSE;
   } else {
     return TokenType::IDENT;
   }

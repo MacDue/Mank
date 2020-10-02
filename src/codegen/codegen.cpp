@@ -161,7 +161,42 @@ void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
 }
 
 void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
+  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::Value* condition = codegen_expression(*if_stmt.cond, scope);
 
+  /* Create and insert the 'then' block into the function */
+  llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
+    llvm_context, "then_block", current_function);
+
+  llvm::BasicBlock* else_block = nullptr;
+
+  llvm::BasicBlock* end_block = llvm::BasicBlock::Create(
+    llvm_context, "if_end");
+
+  if (if_stmt.has_else) {
+    else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
+
+    ir_builder.CreateCondBr(condition, then_block, else_block);
+  } else {
+    ir_builder.CreateCondBr(condition, then_block, end_block);
+  }
+
+  /* then */
+  ir_builder.SetInsertPoint(then_block);
+  codegen_statement(*if_stmt.then_block, scope);
+
+  /* else */
+  if (if_stmt.has_else) {
+    // Now add the else block!
+    current_function->getBasicBlockList().push_back(else_block);
+    ir_builder.SetInsertPoint(else_block);
+    codegen_statement(*if_stmt.else_block, scope);
+    ir_builder.CreateBr(end_block);
+  }
+
+  /* end */
+  current_function->getBasicBlockList().push_back(end_block);
+  ir_builder.SetInsertPoint(end_block);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {

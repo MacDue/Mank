@@ -239,10 +239,168 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
+  llvm::Value* operand = codegen_expression(*unary.operand, scope);
 
+  // switch (unary.operation) {
+  //   case /* constant-expression */:
+  //     /* code */
+  //     break;
+
+  //   default:
+  //     break;
+  // }
 
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {
-
+  using namespace mpark::patterns;
+  auto& binop_type = std::get<PrimativeType>(binop.left->type->v);
+  /* this could better */
+  return match(binop_type.tag, binop.operation)(
+    /* Basic integer operations */
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::PLUS) = [&]{
+      return ir_builder.CreateAdd(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_add");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::MINUS) = [&]{
+      return ir_builder.CreateSub(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_sub");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
+      return ir_builder.CreateSDiv(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_div");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
+      return ir_builder.CreateMul(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_mult");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
+      return ir_builder.CreateSRem(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_mod");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::LESS_THAN) = [&]{
+      return ir_builder.CreateICmpSLT(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_lt");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::GREATER_THAN) = [&]{
+      return ir_builder.CreateICmpUGT(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_gt");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::BITWISE_AND) = [&]{
+      return ir_builder.CreateAnd(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_bitwise_and");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::BITWISE_OR) = [&]{
+      return ir_builder.CreateOr(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_bitwise_or");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::GREATER_EQUAL) = [&]{
+      return ir_builder.CreateICmpSGE(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_ge");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::LESS_EQUAL) = [&]{
+      return ir_builder.CreateICmpSLE(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_le");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::EQUAL_TO) = [&]{
+      return ir_builder.CreateICmpEQ(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_eq");
+    },
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::NOT_EQUAL_TO) = [&]{
+      return ir_builder.CreateICmpNE(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "int_ne");
+    },
+    /*
+      Basic float operations
+      TODO: Understand floating point ordering!
+      Read: https://stackoverflow.com/a/38516544/3818491
+      Something to do with NaN (just using unordered operations for now)
+    */
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::PLUS) = [&]{
+      return ir_builder.CreateFAdd(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_add");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::MINUS) = [&]{
+      return ir_builder.CreateFSub(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_sub");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::DIVIDE) = [&]{
+      return ir_builder.CreateFDiv(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_div");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::DIVIDE) = [&]{
+      return ir_builder.CreateFMul(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_mult");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::LESS_THAN) = [&]{
+      return ir_builder.CreateFCmpULT(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_lt");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::GREATER_THAN) = [&]{
+      return ir_builder.CreateFCmpUGT(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_gt");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::GREATER_EQUAL) = [&]{
+      return ir_builder.CreateFCmpUGE(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_ge");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::LESS_EQUAL) = [&]{
+      return ir_builder.CreateFCmpULE(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_le");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::EQUAL_TO) = [&]{
+      return ir_builder.CreateFCmpUEQ(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_eq");
+    },
+    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::NOT_EQUAL_TO) = [&]{
+      return ir_builder.CreateFCmpUNE(
+        codegen_expression(*binop.left, scope),
+        codegen_expression(*binop.right, scope),
+        "float_ne");
+    }
+  );
 }

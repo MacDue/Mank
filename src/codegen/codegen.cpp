@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include <mpark/patterns.hpp>
+#include <formatxx/std_string.h>
 
 #include <llvm/Support/raw_ostream.h>
 
@@ -267,7 +268,9 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
   using namespace mpark::patterns;
   return match(symbol->meta)(
     pattern(some(as<SymbolMetaLocal>(arg))) = [&](auto& meta) {
-      return meta.value;
+      auto load_inst = ir_builder.CreateLoad(meta.alloca,
+        formatxx::format_string("load_{}", ident.name));
+      return static_cast<llvm::Value*>(load_inst);
     },
     pattern(_) = []{
       assert(false && "fix me! unknown symbol meta");

@@ -16,10 +16,10 @@
 class LLVMCodeGen: public CodeGenerator {
 
   struct SymbolMetaLocal: SymbolMeta {
-    llvm::Value* value;
+    llvm::AllocaInst* alloca;
 
-    SymbolMetaLocal(llvm::Value* value)
-      : value{value} {}
+    SymbolMetaLocal(llvm::AllocaInst* alloca)
+      : alloca{alloca} {}
   };
 
   /*

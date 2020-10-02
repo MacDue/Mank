@@ -43,6 +43,8 @@ llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeTypeTag primative) {
       return llvm::Type::getInt8PtrTy(llvm_context);
     case PrimativeTypeTag::BOOL:
       return llvm::Type::getInt1Ty(llvm_context);
+    default:
+      assert(false && "fix me! mapping unknown primative to LLVM");
   }
 }
 
@@ -161,6 +163,7 @@ void LLVMCodeGen::codegen_statement(Ast_Statement& stmt, Scope& scope) {
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
+  (void) scope; // Not needed
   for (auto& stmt: block.statements) {
     codegen_statement(*stmt, block.scope);
   }
@@ -237,8 +240,8 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
 /* Expressions */
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope) {
-  std::visit([&](auto& expr) {
-    codegen_expression(expr, scope);
+  return std::visit([&](auto& expr) {
+    return codegen_expression(expr, scope);
   }, expr.v);
 }
 
@@ -262,6 +265,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {
+  (void) scope; // Not needed
   /* TODO: better parsing */
   switch (literal.literal_type) {
     case PrimativeTypeTag::INTEGER:
@@ -284,6 +288,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
         llvm::APInt(/*bits*/ primative_size(literal.literal_type),
                     /*value: */ literal.value == "true" ? 1 : 0,
                     /*signed: */ false));
+    default:
+      assert(false && "fix me! codegen for unknown literal type");
   }
 }
 

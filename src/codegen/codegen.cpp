@@ -75,6 +75,8 @@ llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
 
 llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& func) {
   std::vector<llvm::Type*> arg_types;
+  arg_types.reserve(func.arguments.size());
+
   std::transform(func.arguments.begin(), func.arguments.end(), std::back_inserter(arg_types),
     [&](auto const & arg) {
       return map_type_to_llvm(arg.type.get());
@@ -139,6 +141,8 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
     ir_builder.CreateStore(&arg, arg_alloca);
   }
 
+  codegen_statement(func.body, func.body.scope);
+
   llvm_func->print(llvm::errs());
 }
 
@@ -150,44 +154,95 @@ void LLVMCodeGen::codegen_statement(Ast_Statement& stmt, Scope& scope) {
   }, stmt.v);
 }
 
-void LLVMCodeGen::codegen_statement(Ast_Block& stmt, Scope& scope) {
+void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
+  for (auto& stmt: block.statements) {
+    codegen_statement(*stmt, block.scope);
+  }
+}
+
+void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
 
 }
 
-void LLVMCodeGen::codegen_statement(Ast_If_Statement& stmt, Scope& scope) {
-
+void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
+  (void) codegen_expression(*expr_stmt.expression, scope);
 }
 
-void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& stmt, Scope& scope) {
-
-}
-
-void LLVMCodeGen::codegen_statement(Ast_Return_Statement& stmt, Scope& scope) {
-
+void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& scope) {
+  ir_builder.CreateRet(
+    codegen_expression(*return_stmt.expression, scope));
 }
 
 /* Expressions */
 
-llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope) {
+  std::visit([&](auto& expr) {
+    codegen_expression(expr, scope);
+  }, expr.v);
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
+  auto& called_function_ident = std::get<Ast_Identifier>(call.callee->v);
+
+  Symbol* called_function = scope.lookup_first_name(called_function_ident);
+  auto& function_type = std::get<Ast_Function_Declaration>(called_function->type->v);
+
+  llvm::Function* callee = this->get_function(function_type);
+
+  std::vector<llvm::Value*> call_args;
+  call_args.reserve(call.arguments.size());
+
+  for (auto& arg: call.arguments) {
+    call_args.push_back(codegen_expression(*arg, scope));
+  }
+
+  return ir_builder.CreateCall(callee, call_args, "call_ret");
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {
+  /* TODO: better parsing */
+  switch (literal.literal_type) {
+    case PrimativeTypeTag::INTEGER:
+      return llvm::ConstantInt::get(llvm_context,
+        llvm::APInt(/*bits:*/ 32, /*value:*/ std::stoi(literal.value), /*signed:*/ true));
+    case PrimativeTypeTag::FLOAT32:
+      return llvm::ConstantFP::get(llvm_context,
+        llvm::APFloat(/*value:*/ std::stof(literal.value)));
+    case PrimativeTypeTag::FLOAT64:
+        llvm::ConstantFP::get(llvm_context,
+          llvm::APFloat(/*value:*/ std::stod(literal.value)));
+    case PrimativeTypeTag::STRING:
+      assert(false && "string literal codegen not implemented");
+      return nullptr;
+    case PrimativeTypeTag::BOOL:
+      return llvm::ConstantInt::get(llvm_context,
+        llvm::APInt(/*bits*/ 1,
+                    /*value: */ literal.value == "true" ? 1 : 0,
+                    /*signed: */ false));
+  }
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope) {
+  Symbol* symbol = scope.lookup_first_name(ident);
+  assert(symbol->kind == Symbol::LOCAL && "only locals implemented");
+
+  using namespace mpark::patterns;
+  return match(symbol->meta)(
+    pattern(some(as<SymbolMetaLocal>(arg))) = [&](auto& meta) {
+      return meta.value;
+    },
+    pattern(_) = []{
+      assert(false && "fix me! unknown symbol meta");
+      return static_cast<llvm::Value*>(nullptr);
+    }
+  );
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
+
 
 }
 
-llvm::Value* codegen_expression(Ast_Call& expr, Scope& scope) {
-
-}
-
-llvm::Value* codegen_expression(Ast_Literal& expr, Scope& scope) {
-
-}
-
-llvm::Value* codegen_expression(Ast_Identifier& expr, Scope& scope) {
-
-}
-
-llvm::Value* codegen_expression(Ast_Unary_Operation& expr, Scope& scope) {
-
-}
-
-llvm::Value* codegen_expression(Ast_Binary_Operation& expr, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {
 
 }

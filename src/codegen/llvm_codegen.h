@@ -55,16 +55,16 @@ public:
 
   /* Statements */
   void codegen_statement(Ast_Statement& stmt, Scope& scope);
-  void codegen_statement(Ast_Block& stmt, Scope& scope);
-  void codegen_statement(Ast_If_Statement& stmt, Scope& scope);
-  void codegen_statement(Ast_Expression_Statement& stmt, Scope& scope);
-  void codegen_statement(Ast_Return_Statement& stmt, Scope& scope);
+  void codegen_statement(Ast_Block& block, Scope& scope);
+  void codegen_statement(Ast_If_Statement& if_stmt, Scope& scope);
+  void codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);
+  void codegen_statement(Ast_Return_Statement& return_stmt, Scope& scope);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope);
-  llvm::Value* codegen_expression(Ast_Call& expr, Scope& scope);
-  llvm::Value* codegen_expression(Ast_Literal& expr, Scope& scope);
-  llvm::Value* codegen_expression(Ast_Identifier& expr, Scope& scope);
-  llvm::Value* codegen_expression(Ast_Unary_Operation& expr, Scope& scope);
-  llvm::Value* codegen_expression(Ast_Binary_Operation& expr, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Call& call, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Literal& literal, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Identifier& ident, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Unary_Operation& unary, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Binary_Operation& binop, Scope& scope);
 };

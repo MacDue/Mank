@@ -1,0 +1,14 @@
+
+proc launch_nukes(secret_code: i32) {
+
+}
+
+fun test: i32 (a: i32, b: i32) {
+  if (a == 10) {
+    launch_nukes(10);
+    return 10 * a + b * 3 - 1;
+  } else {
+    return 20;
+  }
+  # return 11;
+}

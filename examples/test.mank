@@ -1,0 +1,17 @@
+
+
+proc stackoverflow {
+  stackoverflow();
+}
+
+fun wee: i32 {
+  return 100 + wee() | wee();
+}
+
+fun add: bool (a: i32, b: i32) {
+  if (a == 10) {
+    return false;
+  } else {
+    return true;
+  }
+}

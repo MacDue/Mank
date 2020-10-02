@@ -1,0 +1,19 @@
+
+
+fun test: bool {
+  return false;
+}
+
+proc a {
+  if (10 < 4) {
+    return 10;
+  }
+}
+
+fun less_than: bool (a: i32, b: i32) {
+  return a < b;
+}
+
+fun main: i32 (test: i32) {
+  return 1 + (1 + 10);
+}

@@ -318,7 +318,10 @@ static Expression_Ptr fix_precedence_and_association(
     },
     pattern(_) = [&] {
       Ast_Binary_Operation new_binop;
-      // new_binop->pos = join_pos(lhs->pos, rhs->pos);
+      std::visit(
+        [&](auto& lhs, auto& rhs) {
+          new_binop.location = join_source_locations(lhs.location, rhs.location);
+        }, lhs->v, rhs->v);
       new_binop.left = std::move(lhs);
       new_binop.right = std::move(rhs);
       new_binop.operation = op;
@@ -338,7 +341,6 @@ Expression_Ptr Parser::parse_binary_expression() {
     lhs = fix_precedence_and_association(
       std::move(lhs), std::move(rhs), static_cast<Ast_Operator>(bin_op));
   } else {
-    // Peeked token removed from expr
     this->lexer.restore_state();
   }
   return lhs;

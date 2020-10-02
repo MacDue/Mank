@@ -83,6 +83,9 @@ void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
 
 void AstPrinter::print_expr(Ast_Expression& expr) {
   std::visit([&](auto& expr){
+    putf("- Location: {}:{} -> {}:{}",
+      expr.location.start_line, expr.location.start_column,
+      expr.location.end_line, expr.location.end_column);
     self->print_expr(expr);
   }, expr.v);
 }

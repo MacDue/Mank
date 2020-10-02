@@ -246,6 +246,7 @@ static int get_binary_precdence(Ast_Operator op) {
   {
     case Ast_Operator::TIMES:
     case Ast_Operator::DIVIDE:
+    case Ast_Operator::MODULO:
       return 100;
     case Ast_Operator::PLUS:
     case Ast_Operator::MINUS:

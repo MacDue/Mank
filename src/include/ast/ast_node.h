@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "types.h"
+#include "constants.h"
 #include "source_location.h"
 
 /* Top level constructs */

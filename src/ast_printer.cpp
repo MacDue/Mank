@@ -1,43 +1,12 @@
 #include <mpark/patterns.hpp>
 
+#include "types.h"
 #include "ast_printer.h"
 #include "token_helpers.h"
 
 // Little hack that allows depth to be incremented/decremented
 // when print functions are called/return (see DepthUpdate)
 #define self (*this)
-
-/* Types */
-
-static char const * literal_type_to_string(PrimativeTypeTag type) {
-  switch (type) {
-    case PrimativeTypeTag::FLOAT32:
-      return "Float32";
-    case PrimativeTypeTag::FLOAT64:
-      return "Float64";
-    case PrimativeTypeTag::INTEGER:
-      return "Integer";
-    case PrimativeTypeTag::STRING:
-      return "Static string";
-    default:
-      return "???";
-  }
-}
-
-static std::string type_to_string(Type& type) {
-  using namespace std::string_literals;
-  using namespace mpark::patterns;
-  return match(type.v)(
-    pattern(as<UncheckedType>(arg)) = [](auto & unchecked_type) {
-      return formatxx::format_string("unchecked type - {}", unchecked_type.identifer.name);
-    },
-    pattern(as<PrimativeType>(arg)) = [](auto & primative_type) {
-      return std::string(literal_type_to_string(primative_type.tag));
-    },
-    pattern(_) = []{
-      return "???"s;
-    });
-}
 
 /* Constructs */
 

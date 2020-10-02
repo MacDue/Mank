@@ -16,6 +16,7 @@ namespace Primative {
   make_primative_type(FLOAT64);
   make_primative_type(INTEGER);
   make_primative_type(STRING);
+  make_primative_type(BOOL);
 };
 
 static bool match_types(Type* a, Type* b) {
@@ -152,15 +153,19 @@ void analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
     },
     pattern(as<Ast_Expression_Statement>(arg)) = [&](auto& expr_stmt){
       analyse_expression_statement(expr_stmt, scope);
-    }/*,
+    },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
       auto expr_type = analyse_expression(*return_stmt.expression, scope);
-
+      if (!match_types(expr_type.get(), return_type)) {
+        throw_sema_error_at(return_stmt,
+          "invalid return type, expected {}, was {}",
+          type_to_string(return_type), type_to_string(expr_type.get()));
+      }
     },
     pattern(as<Ast_If_Statement>(arg)) = [&](auto& if_stmt){
+      (void) if_stmt;
 
-
-    }*/
+    }
   );
 }
 
@@ -177,6 +182,10 @@ Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
           return Primative::FLOAT64;
         case PrimativeTypeTag::STRING:
           return Primative::STRING;
+        case PrimativeTypeTag::BOOL:
+          return Primative::BOOL;
+        default:
+          throw_sema_error_at(lit, "fix me! unknown literal type!");
       }
     },
     pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) {
@@ -189,22 +198,136 @@ Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
       return analyse_call(call, scope);
     },
+    pattern(as<Ast_Unary_Operation>(arg)) = [&](auto& unary) {
+      return analyse_unary_expression(unary, scope);
+    },
     pattern(as<Ast_Binary_Operation>(arg)) = [&](auto& binop) {
       return analyse_binary_expression(binop, scope);
+    },
+    pattern(_) = [&]{
+      throw_sema_error_at(expr, "fix me! unknown expression type!");
+      return Type_Ptr(nullptr);
     }
   );
 }
 
-Type_Ptr analyse_binary_expression(Ast_Binary_Operation& expr, Scope& scope) {
-  auto left_type = analyse_expression(*expr.left, scope);
-  auto right_type = analyse_expression(*expr.right, scope);
+Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
+  auto operand_type = analyse_expression(*unary.operand, scope);
+  PrimativeType* primative_type = std::get_if<PrimativeType>(&operand_type->v);
 
-  return nullptr;
+  if (primative_type)
+  switch (unary.operation) {
+    case Ast_Operator::PLUS:
+    case Ast_Operator::MINUS: {
+      if (numeric_type(primative_type->tag)) {
+        return operand_type;
+      }
+      break;
+    }
+    case Ast_Operator::BITWISE_NOT: {
+      if (integer_type(primative_type->tag)) {
+        return operand_type;
+      }
+      break;
+    }
+    case Ast_Operator::LOGICAL_NOT: {
+      if (boolean_type(primative_type->tag)) {
+        return operand_type;
+      }
+      break;
+    }
+    default: break;
+  }
+
+  throw_sema_error_at(unary, "invalid unary operation for {}",
+    type_to_string(operand_type.get()));
 }
 
-Type_Ptr analyse_call(Ast_Call& expr, Scope& scope) {
-  return nullptr;
+
+Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
+  using namespace mpark::patterns;
+  auto left_type = analyse_expression(*binop.left, scope);
+  auto right_type = analyse_expression(*binop.right, scope);
+
+  if (!match_types(left_type.get(), right_type.get())) {
+    throw_sema_error_at(binop, "incompatible types {} and {}",
+      type_to_string(left_type.get()), type_to_string(right_type.get()));
+  }
+
+  PrimativeType* primative_type = std::get_if<PrimativeType>(&left_type->v);
+  return match(primative_type, binop.operation)(
+    pattern(some(_), anyof(
+      Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,
+      Ast_Operator::DIVIDE
+    )) = [&]{
+      WHEN(numeric_type(primative_type->tag)) {
+        return left_type;
+      };
+    },
+    pattern(some(_), anyof(
+      Ast_Operator::LEFT_SHIFT, Ast_Operator::RIGHT_SHIFT, Ast_Operator::BITWISE_AND,
+      Ast_Operator::BITWISE_OR, Ast_Operator::BITWISE_XOR
+    )) = [&]{
+      WHEN(integer_type(primative_type->tag)) {
+        return left_type;
+      };
+    },
+    pattern(some(_), anyof(
+      Ast_Operator::LESS_THAN, Ast_Operator::LESS_EQUAL, Ast_Operator::GREATER_THAN,
+      Ast_Operator::GREATER_EQUAL, Ast_Operator::EQUAL_TO, Ast_Operator::NOT_EQUAL_TO
+    )) = [&]{
+      WHEN(numeric_type(primative_type->tag)) {
+        return Primative::BOOL;
+      };
+    },
+    pattern(_, _) = [&]{
+      throw_sema_error_at(binop, "invalid operation for {}", type_to_string(left_type.get()));
+      return Type_Ptr(nullptr);
+    }
+  );
 }
 
+#define NOT_CALLABLE "{} is not callable"
+
+Type_Ptr analyse_call(Ast_Call& call, Scope& scope) {
+  //Symbol* called_function = scope.lookup_first_name(expr.callee)
+  auto called_function_ident = std::get_if<Ast_Identifier>(&call.callee->v);
+  if (!called_function_ident) {
+    auto callee_type = analyse_expression(*call.callee, scope);
+    throw_sema_error_at(call.callee, NOT_CALLABLE, type_to_string(callee_type.get()));
+  }
+
+  Symbol* called_function = scope.lookup_first_name(*called_function_ident);
+  if (!called_function) {
+    throw_sema_error_at(*called_function_ident, "attempting to call undefined function \"{}\"",
+      called_function_ident->name);
+  }
+
+  if (called_function->kind != Symbol::FUNCTION) {
+    throw_sema_error_at(*called_function_ident, NOT_CALLABLE,
+      type_to_string(called_function->type.get()));
+  }
+
+  auto& function_type = std::get<Ast_Function_Declaration>(called_function->type->v);
+
+  if (function_type.arguments.size() != call.arguments.size()) {
+    throw_sema_error_at(call.callee, "{} expects {} arguments not {}",
+      function_type.identifer.name, function_type.arguments.size(), call.arguments.size());
+  }
+
+  for (uint arg_idx = 0; arg_idx < function_type.arguments.size(); arg_idx++) {
+    auto& expected_type = *function_type.arguments.at(arg_idx).type;
+    auto& argument = *call.arguments.at(arg_idx);
+    auto given_type = analyse_expression(argument, scope);
+    if (!match_types(&expected_type, given_type.get())) {
+      throw_sema_error_at(argument,
+        "expected to be called with {} but found {}",
+        type_to_string(expected_type), type_to_string(given_type.get()));
+    }
+  }
+
+  // FINALLY we've checked everything in the call!
+  return function_type.return_type;
+}
 
 }

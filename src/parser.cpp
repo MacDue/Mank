@@ -241,6 +241,7 @@ Expression_Ptr Parser::parse_parenthesised_expression() {
 /* TODO: Consider replacing with pratt parser */
 
 static int get_binary_precdence(Ast_Operator op) {
+  // Based off https://en.cppreference.com/w/c/language/operator_precedence
   switch (op)
   {
     case Ast_Operator::TIMES:
@@ -326,12 +327,18 @@ static Expression_Ptr fix_precedence_and_association(
 
 Expression_Ptr Parser::parse_binary_expression() {
   auto lhs = this->parse_unary();
+  // We want to undo this peek if the next token is
+  // not part of the binary expr (so it's not included in error messages)
+  this->lexer.save_state();
   auto bin_op = this->lexer.peek_next_token().type;
   if (is_binary_op(bin_op)) {
     lexer.consume_token();
     auto rhs = this->parse_expression();
     lhs = fix_precedence_and_association(
       std::move(lhs), std::move(rhs), static_cast<Ast_Operator>(bin_op));
+  } else {
+    // Peeked token removed from expr
+    this->lexer.restore_state();
   }
   return lhs;
 }

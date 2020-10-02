@@ -187,9 +187,6 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
   llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
   llvm::Value* condition = codegen_expression(*if_stmt.cond, scope);
 
-  bool then_block_returns = is_return_block(std::get<Ast_Block>(if_stmt.then_block->v));
-  bool else_block_returns = is_return_block(std::get<Ast_Block>(if_stmt.else_block->v));
-
   /* Create and insert the 'then' block into the function */
   llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
     llvm_context, "then_block", current_function);
@@ -207,6 +204,7 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
   }
 
   /* then */
+  bool then_block_returns = is_return_block(std::get<Ast_Block>(if_stmt.then_block->v));
   ir_builder.SetInsertPoint(then_block);
   codegen_statement(*if_stmt.then_block, scope);
   if (!then_block_returns) {
@@ -216,6 +214,11 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
   /* else */
   if (if_stmt.has_else) {
     // Now add the else block!
+    bool else_block_returns = false;
+    /* the else 'block' is _sometimes_ an if statememt (in the case of 'else if') */
+    if (auto ast_else_block = std::get_if<Ast_Block>(&if_stmt.else_block->v)) {
+      else_block_returns = is_return_block(*ast_else_block);
+    }
     current_function->getBasicBlockList().push_back(else_block);
     ir_builder.SetInsertPoint(else_block);
     codegen_statement(*if_stmt.else_block, scope);

@@ -8,7 +8,7 @@
 using SymbolName = Ast_Identifier;
 
 struct SymbolMeta {
-  virtual ~SymbolMeta() = 0;
+  virtual ~SymbolMeta() {};
 };
 
 struct Symbol {

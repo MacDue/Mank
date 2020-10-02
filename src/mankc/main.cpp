@@ -9,13 +9,16 @@
 #include "semantics.h"
 #include "ast_printer.h"
 
+#include "codegen.h"
+
 struct CompilerOptions {
   std::vector<std::string> input_files;
   bool
     success = true,
     show_help = false,
     print_ast = false,
-    check_sema = false;
+    check_sema = false,
+    code_gen = false;
 };
 
 #define ARG_GIVEN(name) vm.count(name)
@@ -29,6 +32,7 @@ static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
     ("help", "show help")
     ("print-ast", "print AST of the input source")
     ("check-sema", "check the semantics of the input")
+    ("codegen", "generate LLVM IR")
     ("input-file", po::value<std::vector<std::string>>(), "input file");
 
   po::positional_options_description p;
@@ -46,7 +50,8 @@ static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
   }
 
   selected_options.print_ast = ARG_GIVEN("print-ast");
-  selected_options.check_sema = ARG_GIVEN("check-sema");
+  selected_options.code_gen = ARG_GIVEN("codegen");
+  selected_options.check_sema = selected_options.code_gen || ARG_GIVEN("check-sema");
 
   if (vm.count("input-file")) {
     selected_options.input_files = vm["input-file"].as<std::vector<std::string>>();
@@ -88,6 +93,10 @@ int main(int argc, char* argv[]) {
       }
       if (sema_error) {
         throw *sema_error;
+      }
+
+      if (selected_options.code_gen) {
+        CodeGen codegen(parsed_file);
       }
 
     } catch (CompilerError & error) {

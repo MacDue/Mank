@@ -34,6 +34,7 @@ using Ast_Expression_Type = std::variant<
   Ast_Binary_Operation>;
 
 struct Ast_Expression {
+  Type_Ptr type;
   Ast_Expression_Type v;
   Ast_Expression(Ast_Expression_Type v)
     : v{std::move(v)} {}

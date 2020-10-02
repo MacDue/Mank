@@ -334,6 +334,7 @@ Type_Ptr analyse_call(Ast_Call& call, Scope& scope) {
     }
   }
 
+  call.callee->type = called_function->type;
   // FINALLY we've checked everything in the call!
   return function_type.return_type;
 }

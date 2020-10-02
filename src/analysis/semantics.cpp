@@ -220,27 +220,27 @@ Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
 }
 
 Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
-  auto operand_type = analyse_expression(*unary.operand, scope);
-  PrimativeType* primative_type = std::get_if<PrimativeType>(&operand_type->v);
+  unary.operand->type = analyse_expression(*unary.operand, scope);
+  PrimativeType* primative_type = std::get_if<PrimativeType>(&unary.operand->type->v);
 
   if (primative_type)
   switch (unary.operation) {
     case Ast_Operator::PLUS:
     case Ast_Operator::MINUS: {
       if (numeric_type(primative_type->tag)) {
-        return operand_type;
+        return unary.operand->type;
       }
       break;
     }
     case Ast_Operator::BITWISE_NOT: {
       if (integer_type(primative_type->tag)) {
-        return operand_type;
+        return unary.operand->type;
       }
       break;
     }
     case Ast_Operator::LOGICAL_NOT: {
       if (boolean_type(primative_type->tag)) {
-        return operand_type;
+        return unary.operand->type;
       }
       break;
     }
@@ -248,28 +248,28 @@ Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
   }
 
   throw_sema_error_at(unary, "invalid unary operation for {}",
-    type_to_string(operand_type.get()));
+    type_to_string(unary.operand->type.get()));
 }
 
 
 Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
-  auto left_type = analyse_expression(*binop.left, scope);
-  auto right_type = analyse_expression(*binop.right, scope);
+  binop.left->type = analyse_expression(*binop.left, scope);
+  binop.right->type = analyse_expression(*binop.right, scope);
 
-  if (!match_types(left_type.get(), right_type.get())) {
+  if (!match_types(binop.left->type.get(), binop.right->type.get())) {
     throw_sema_error_at(binop, "incompatible types {} and {}",
-      type_to_string(left_type.get()), type_to_string(right_type.get()));
+      type_to_string(binop.left->type.get()), type_to_string(binop.right->type.get()));
   }
 
-  PrimativeType* primative_type = std::get_if<PrimativeType>(&left_type->v);
+  PrimativeType* primative_type = std::get_if<PrimativeType>(&binop.left->type->v);
   return match(primative_type, binop.operation)(
     pattern(some(_), anyof(
       Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,
       Ast_Operator::DIVIDE
     )) = [&]{
       WHEN(numeric_type(primative_type->tag)) {
-        return left_type;
+        return binop.left->type;
       };
     },
     pattern(some(_), anyof(
@@ -277,7 +277,7 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
       Ast_Operator::BITWISE_OR, Ast_Operator::BITWISE_XOR, Ast_Operator::MODULO
     )) = [&]{
       WHEN(integer_type(primative_type->tag)) {
-        return left_type;
+        return binop.left->type;
       };
     },
     pattern(some(_), anyof(
@@ -289,7 +289,8 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
       };
     },
     pattern(_, _) = [&]{
-      throw_sema_error_at(binop, "invalid operation for {}", type_to_string(left_type.get()));
+      throw_sema_error_at(binop, "invalid operation for {}",
+        type_to_string(binop.left->type.get()));
       return Type_Ptr(nullptr);
     }
   );

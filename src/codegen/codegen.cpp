@@ -360,7 +360,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     pattern(PrimativeTypeTag::INTEGER, Ast_Operator::TIMES) = [&]{
       return ir_builder.CreateMul(left, right, "int_mult");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
+    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::MODULO) = [&]{
       return ir_builder.CreateSRem(left, right, "int_mod");
     },
     pattern(PrimativeTypeTag::INTEGER, Ast_Operator::LESS_THAN) = [&]{

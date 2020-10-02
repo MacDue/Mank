@@ -2,12 +2,20 @@
 
 #include <string>
 
+/* Shut up GCC warning about LLVM code */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Target/TargetMachine.h>
+
+#include <llvm/IR/Verifier.h>
+#include <llvm/Support/raw_ostream.h>
+#pragma GCC diagnostic pop
 
 #include "ast.h"
 #include "scope.h"

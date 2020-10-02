@@ -5,9 +5,6 @@
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
 
-#include <llvm/IR/Verifier.h>
-#include <llvm/Support/raw_ostream.h>
-
 #include "codegen.h"
 #include "llvm_codegen.h"
 

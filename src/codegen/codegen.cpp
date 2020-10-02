@@ -150,6 +150,7 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
   }
 
   llvm_func->print(llvm::errs());
+  llvm::errs() << '\n';
 
   assert("function should be valid IR" && !llvm::verifyFunction(*llvm_func, &llvm::errs()));
 }
@@ -276,7 +277,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
       return llvm::ConstantFP::get(llvm_context,
         llvm::APFloat(/*value:*/ std::stof(literal.value)));
     case PrimativeTypeTag::FLOAT64:
-        llvm::ConstantFP::get(llvm_context,
+      return llvm::ConstantFP::get(llvm_context,
           llvm::APFloat(/*value:*/ std::stod(literal.value)));
     case PrimativeTypeTag::STRING:
       assert(false && "string literal codegen not implemented");

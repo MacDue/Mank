@@ -307,12 +307,19 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
   );
 }
 
+static Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
+  if (auto type_ptr = weak_type_ptr.lock()) {
+    return type_ptr;
+  }
+  assert(false && "fix me! expression type imformation is missing!");
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
   using namespace mpark::patterns;
   llvm::Value* operand = codegen_expression(*unary.operand, scope);
-  auto& unary_type = std::get<PrimativeType>(unary.operand->type->v);
+  auto& unary_primative = std::get<PrimativeType>(extract_type(unary.operand->type)->v);
 
-  return match(unary_type.tag, unary.operation)(
+  return match(unary_primative.tag, unary.operation)(
     pattern(anyof(PrimativeTypeTag::INTEGER, PrimativeTypeTag::FLOAT64), Ast_Operator::PLUS) = [&]{
       return operand;
     },
@@ -341,12 +348,13 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
-  auto& binop_type = std::get<PrimativeType>(binop.left->type->v);
+  auto binop_type = extract_type(binop.left->type);
+  auto& binop_primative = std::get<PrimativeType>(binop_type->v);
 
   llvm::Value* left = codegen_expression(*binop.left, scope);
   llvm::Value* right = codegen_expression(*binop.right, scope);
 
-  return match(binop_type.tag, binop.operation)(
+  return match(binop_primative.tag, binop.operation)(
     /* Basic integer operations */
     pattern(PrimativeTypeTag::INTEGER, Ast_Operator::PLUS) = [&]{
       return ir_builder.CreateAdd(left, right, "int_add");
@@ -427,7 +435,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
       llvm::errs() << formatxx::format_string(
         ":( binary operation {} not implemented for type {}\n",
         token_type_to_string(static_cast<TokenType>(binop.operation)),
-        type_to_string(binop.left->type.get()));
+        type_to_string(binop_type.get()));
       assert(false);
       return static_cast<llvm::Value*>(nullptr);
     }

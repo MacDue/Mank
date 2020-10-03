@@ -209,7 +209,7 @@ Expression_Ptr Parser::parse_postfix_expression() {
 Expression_Ptr Parser::parse_call(Expression_Ptr target) {
   expect(TokenType::LEFT_PAREN);
   Ast_Call parsed_call;
-  parsed_call.callee = target;
+  parsed_call.callee = std::move(target);
   while (!peek(TokenType::RIGHT_PAREN)) {
     parsed_call.arguments.emplace_back(this->parse_expression());
     if (!consume(TokenType::COMMA)) {

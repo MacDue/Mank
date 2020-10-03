@@ -1,0 +1,9 @@
+# Paper that might help making a better version http://sat.inesc-id.pt/~mikolas/JanotaGrigoreMoskal07.pdf
+
+fun i_am_broken: i32 {
+  # the reachablity code is crap & is fooled by this simple example
+  if (false) {
+    return 1337; # it does not understand control flow and thinks we return here
+  }
+  return 42; # is reachable >:(
+}

@@ -1,0 +1,10 @@
+
+
+fun gcd: i32 (m: i32, n: i32) {
+  if (n % m == 0) {
+    return false;
+  } else {
+    #return n;
+    return gcd(n, m % n);
+  }
+}

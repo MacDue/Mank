@@ -1,7 +1,10 @@
+#include <iostream>
 #include "catch/catch.hpp"
 
 #include "lexer.h"
 #include "parser.h"
+#include "ast_printer.h"
+#include "helpers/ast_builder.h"
 
 TEST_CASE("Hello world!", "[Parser]") {
   Lexer lexer;
@@ -14,6 +17,13 @@ TEST_CASE("Hello world!", "[Parser]") {
   )");
 
   auto parsed_result = parser.parse_file();
+
+  auto expected_result = make_file(
+    make_procedure("main", make_body()));
+
+  AstPrinter printer(std::cout);
+
+  printer.print_file(expected_result);
 }
 
 /*

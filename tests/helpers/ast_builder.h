@@ -84,6 +84,7 @@ Ast_Block make_body(TStmt && ... stmts) {
 
 template <typename TStmt>
 Statement_Ptr to_stmt_ptr(TStmt && stmt) {
+  stmt.location = {};
   return std::make_shared<Ast_Statement>(stmt);
 }
 
@@ -95,8 +96,50 @@ Statement_Ptr make_block(TStmt && ... stmts) {
 
 /* Statements */
 
+inline Statement_Ptr make_expr_stmt(Expression_Ptr expr) {
+  Ast_Expression_Statement expr_stmt;
+  expr_stmt.expression = expr;
+  return to_stmt_ptr(expr_stmt);
+}
+
 // TODO
 
 /* Expressions */
+
+template <typename TExpr>
+Expression_Ptr to_expr_ptr(TExpr && expr) {
+  expr.location = {};
+  return std::make_shared<Ast_Expression>(expr);
+}
+
+inline Expression_Ptr make_literal(PrimativeTypeTag type, std::string value) {
+  Ast_Literal literal;
+  literal.literal_type = type;
+  literal.value = value;
+  return to_expr_ptr(literal);
+}
+
+inline Expression_Ptr make_string(std::string value) {
+  return make_literal(PrimativeTypeTag::STRING, value);
+}
+
+inline Expression_Ptr make_ident(std::string name) {
+  Ast_Identifier ident;
+  ident.name = name;
+  return to_expr_ptr(ident);
+}
+
+template <typename... TArgs>
+Expression_Ptr make_call(Expression_Ptr callee, TArgs && ... args) {
+  Ast_Call call;
+  call.callee = callee;
+  call.arguments = std::vector<Expression_Ptr> { args ... };
+  return to_expr_ptr(call);
+}
+
+template <typename... TArgs>
+Expression_Ptr make_call(std::string callee, TArgs && ... args) {
+  return make_call(make_ident(callee), args...);
+}
 
 // TODO

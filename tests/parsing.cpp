@@ -19,7 +19,9 @@ TEST_CASE("Hello world!", "[Parser]") {
   auto parsed_result = parser.parse_file();
 
   auto expected_result = make_file(
-    make_procedure("main", make_body()));
+    make_procedure("main", make_body(
+      make_expr_stmt(
+        make_call("print", make_string("Hello World"))))));
 
   AstPrinter printer(std::cout);
 

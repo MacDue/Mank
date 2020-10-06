@@ -12,7 +12,9 @@
 
 void AstPrinter::print_file(Ast_File& file) {
   putf("* File with {} functions", file.functions.size());
-  putf("- Source name: {}", file.filename);
+  if (!hide_lex_details) {
+    putf("- Source name: {}", file.filename);
+  }
   for (auto& func: file.functions) {
     self->print_function(std::get<Ast_Function_Declaration>(func->v));
     putf("");
@@ -83,9 +85,11 @@ void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
 
 void AstPrinter::print_expr(Ast_Expression& expr) {
   std::visit([&](auto& expr){
-    putf("- Location: {}:{} -> {}:{}",
-      expr.location.start_line, expr.location.start_column,
-      expr.location.end_line, expr.location.end_column);
+    if (!hide_lex_details) {
+      putf("- Location: {}:{} -> {}:{}",
+        expr.location.start_line, expr.location.start_column,
+        expr.location.end_line, expr.location.end_column);
+    }
     self->print_expr(expr);
   }, expr.v);
 }

@@ -41,11 +41,25 @@ class AstPrinter {
   }
 
   public:
+    /*
+      Hide stuff like locations and filenames.
+      Allows the AST Printer to be used a simple way to test parsing.
+    */
+    bool hide_lex_details;
+
     uint tab_width,
          current_depth;
 
-    AstPrinter(std::ostream& os, uint tab_width = 1, uint current_depth = 0)
-      : os{os}, tab_width{tab_width}, current_depth{current_depth} {}
+    AstPrinter(
+      std::ostream& os,
+      bool hide_lex_details = false,
+      uint tab_width = 1,
+      uint current_depth = 0
+    ):
+      os{os},
+      hide_lex_details{hide_lex_details},
+      tab_width{tab_width},
+      current_depth{current_depth} {}
 
     void print_file(Ast_File& file);
     void print_function(Ast_Function_Declaration& func);

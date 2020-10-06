@@ -7,6 +7,7 @@ add_library(MankAnalysis
   semantics.cpp
   types.cpp
   return_reachability.cpp
+  default_ast_visitor.cpp
 )
 
 include_directories(

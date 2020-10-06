@@ -1,0 +1,80 @@
+<ws> ::= " "
+<uppercase> ::= [A-Z]
+<lowercase> ::= [a-z]
+<char> ::= <letter> | <digit> | "_"
+<letter> ::= (<lowercase> | <uppercase>)
+<digit> ::= [0-9]
+<ident> ::= (<letter> | "_") <char>+
+<upper_ident> ::= <uppercase> <char>+
+<number> ::= <digit>+
+<bool> ::= "true" | "false"
+
+<function_type> ::= "proc" | "fun"
+<function> ::= <function_type> <ws> <ident> <type_annotation>? <function_args>? <block>
+<function_args> ::= "(" <var_list> ")"
+
+<type> ::= "int" | "uint" | "bool" | "float" | "double" | <upper_ident>
+<type_annotation> ::= ":" <type> 
+
+<pod_declare> ::= "pod" <ws> <ident> "{" <var_list>? "}"
+
+<statements> ::= <statement>+
+<statement> ::=   <block> 
+				| <if> 
+                | <while>
+                | <for>
+                | <declare> ";"
+                | <assign> ";"
+                | <expr> ";"
+                
+<block> ::= "{" <statements>? "}"
+
+<if> ::= "if" <ws> <expr> <ws> <block> <else_if>?
+<else_if> ::= "else" <block>
+
+<while> ::= "while" <ws> <expr> <ws> <block>
+
+<for> ::= "for" <ws> <ident> <type_annotation> <ws> "in" <ws> <expr> ".." <expr> <block>
+
+<var_declare> ::= <ident> <type_annotation>
+<var_list> ::= <var_declare> ("," <var_declare>)+
+<declare> ::= <var_declare> ("=" <expr>)?
+
+<assign> ::= <ident> "=" <expr>
+
+/*<expr> ::= <logical_or_expr>*/
+<expr> ::= "dummy"
+
+<logical_or_expr> ::=   <logical_and_expr>
+					  | <logical_or_expr> "||" <logical_and_expr>
+
+<logical_and_expr> ::=   <relational_expr>
+					   | <logical_and_expr> "&&" <relational_expr>
+
+<relational_expr> ::=   <additive_expr>
+					  | <relational_expr> <relational_op> <additive_expr>
+<relational_op> ::= "<" | ">" | "<=" | ">=" | "!="
+
+
+<additive_expr> ::=   <multiplicative_expr>
+				    | <additive_expr> ("+" | "-") <multiplicative_expr>
+
+<multiplicative_expr> ::=   <unary_expr>
+					  	  | <multiplicative_expr> ("*" | "/") <unary_expr>
+
+<unary_op> ::=   "!"
+			   | "~"
+		       | "&"
+               | "-"
+
+<unary_expr> ::= <unary_op>? <postfix_expr>
+
+<postfix_expr>	::=   <primary_expr>
+				    | <function_call_expr>
+
+<function_call_expr> ::= <ident> "(" (<expr> ("," <expr>)+)? ")"
+
+<primary_expr> ::= <number>
+			| <bool>
+			| <ident> 
+            | "(" <expr> ")"

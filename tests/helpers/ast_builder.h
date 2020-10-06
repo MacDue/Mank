@@ -41,6 +41,14 @@ std::vector<Ast_Argument> make_args(TArgs && ... args) {
   return std::vector<Ast_Argument>{ args... };
 }
 
+/* Types */
+
+inline Type_Ptr make_unchecked_type(std::string type_name) {
+  UncheckedType unchecked;
+  unchecked.identifer.name = type_name;
+  return std::make_shared<Type>(unchecked);
+}
+
 /* Functions */
 
 inline Ast_Function_Declaration make_function(
@@ -161,6 +169,10 @@ inline Expression_Ptr make_float64(double value) {
   return make_literal(PrimativeTypeTag::FLOAT64, std::to_string(value));
 }
 
+inline Expression_Ptr make_boolean(bool value) {
+  return make_literal(PrimativeTypeTag::BOOL, value ? "true" : "false");
+}
+
 /* Idents */
 
 inline Expression_Ptr make_ident(std::string name) {
@@ -203,4 +215,14 @@ inline Expression_Ptr make_binary(
   binop.left = left;
   binop.right = right;
   return to_expr_ptr(binop);
+}
+
+/* Test helpers */
+
+inline Ast_File wrap_stmt(Statement_Ptr stmt) {
+  return make_file(make_procedure("test", make_body(stmt)));
+}
+
+inline Ast_File wrap_expr(Expression_Ptr expr) {
+  return wrap_stmt(make_expr_stmt(expr));
 }

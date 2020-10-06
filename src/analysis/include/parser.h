@@ -14,6 +14,9 @@ struct Parser {
 
   Ast_File parse_file();
 
+  static Ast_File parse_from_file(std::string file_path);
+  static Ast_File parse_from_string(std::string source);
+
 private:
   Lexer& lexer;
 

@@ -3,6 +3,20 @@
 #include "parser.h"
 #include "token_helpers.h"
 
+Ast_File Parser::parse_from_file(std::string file_path) {
+  Lexer lexer;
+  lexer.load_file(file_path);
+  Parser parser(lexer);
+  return parser.parse_file();
+}
+
+Ast_File Parser::parse_from_string(std::string source) {
+  Lexer lexer;
+  lexer.set_input_to_string(source);
+  Parser parser(lexer);
+  return parser.parse_file();
+}
+
 SourceLocation join_source_locations(SourceLocation start, SourceLocation end) {
   return SourceLocation {
     .start_line = start.start_line,
@@ -308,7 +322,7 @@ static Expression_Ptr fix_precedence_and_association(
   return match(rhs->v)(
     pattern(as<Ast_Binary_Operation>(arg)) = [&](auto & rhs_binop) {
       WHEN(!rhs_binop.parenthesised
-        && get_binary_precdence(rhs_binop.operation) < get_binary_precdence(op)
+        && get_binary_precdence(rhs_binop.operation) <= get_binary_precdence(op)
       ) {
         /*
           Simple example:

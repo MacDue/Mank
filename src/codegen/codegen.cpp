@@ -324,7 +324,8 @@ static Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
   using namespace mpark::patterns;
   llvm::Value* operand = codegen_expression(*unary.operand, scope);
-  auto& unary_primative = std::get<PrimativeType>(extract_type(unary.operand->type)->v);
+  auto unary_type = extract_type(unary.operand->type);
+  auto& unary_primative = std::get<PrimativeType>(unary_type->v);
 
   return match(unary_primative.tag, unary.operation)(
     pattern(anyof(PrimativeTypeTag::INTEGER, PrimativeTypeTag::FLOAT64), Ast_Operator::PLUS) = [&]{
@@ -349,6 +350,17 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
         llvm::ConstantFP::get(llvm_context, llvm::APFloat(0.0)),
         operand,
         "float_minus");
+    },
+    pattern(PrimativeTypeTag::BOOL, Ast_Operator::LOGICAL_NOT) = [&]{
+      return ir_builder.CreateNot(operand, "bool_logical_not");
+    },
+    pattern(_, _) = [&]{
+      llvm::errs() << formatxx::format_string(
+        ":( unary operation {} not implemented for type {}\n",
+        token_type_to_string(static_cast<TokenType>(unary.operation)),
+        type_to_string(*unary_type));
+      assert(false);
+      return static_cast<llvm::Value*>(nullptr);
     }
   );
 }

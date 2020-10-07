@@ -15,5 +15,5 @@ fun const_expr_4: f64 {
 }
 
 fun const_expr_5: bool {
-  return 10 < 20;
+  return ¬(10 < 20);
 }

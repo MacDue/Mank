@@ -8,7 +8,6 @@
 #include "codegen.h"
 #include "llvm_codegen.h"
 #include "token_helpers.h"
-#include "ast/return_reachability.h"
 
 CodeGen::CodeGen(Ast_File& file_ast)
   : impl{std::make_unique<LLVMCodeGen>(file_ast)} {}
@@ -126,6 +125,8 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol*
   return alloca;
 }
 
+#define FUNCTION_RETURN_LOCAL "!return_value"
+
 void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
   llvm::Function* llvm_func = this->get_function(func);
 
@@ -144,11 +145,25 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
     ir_builder.CreateStore(&arg, arg_alloca);
   }
 
+  llvm::AllocaInst* return_alloca = nullptr;
+  if (/* functions */ !func.procedure) {
+    // Create function return value
+    func.body.scope.symbols.emplace_back(Symbol(
+      SymbolName(FUNCTION_RETURN_LOCAL),
+      func.return_type,
+      Symbol::LOCAL));
+    return_alloca = create_entry_alloca(
+      llvm_func, &func.body.scope.symbols.back());
+  }
+
   codegen_statement(func.body, func.body.scope);
 
-  if (func.procedure) {
-    ir_builder.CreateRet(nullptr);
+  llvm::Value* return_value = nullptr;
+  if (return_alloca) {
+    return_value = ir_builder.CreateLoad(return_alloca, "load_return_value");
   }
+
+  ir_builder.CreateRet(return_value);
 
   llvm_func->print(llvm::errs());
   llvm::errs() << '\n';
@@ -191,37 +206,24 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
     ir_builder.CreateCondBr(condition, then_block, end_block);
   }
 
-
   /* then */
-  bool then_block_returns = AstHelper::block_returns(*if_stmt.then_block);
-  bool both_then_and_else_return = false;
-
   ir_builder.SetInsertPoint(then_block);
   codegen_statement(*if_stmt.then_block, scope);
-  if (!then_block_returns) {
-    ir_builder.CreateBr(end_block);
-  }
+  ir_builder.CreateBr(end_block);
 
   /* else */
   if (if_stmt.has_else) {
     // Now add the else block!
-    bool else_block_returns = AstHelper::block_returns(
-      *if_stmt.else_block, nullptr, /*only last:*/ true);
-    both_then_and_else_return = then_block_returns && else_block_returns;
 
     current_function->getBasicBlockList().push_back(else_block);
     ir_builder.SetInsertPoint(else_block);
     codegen_statement(*if_stmt.else_block, scope);
-    if (!else_block_returns) {
-      ir_builder.CreateBr(end_block);
-    }
+    ir_builder.CreateBr(end_block);
   }
 
   /* end */
-  if (!both_then_and_else_return) {
-    current_function->getBasicBlockList().push_back(end_block);
-    ir_builder.SetInsertPoint(end_block);
-  }
+  current_function->getBasicBlockList().push_back(end_block);
+  ir_builder.SetInsertPoint(end_block);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
@@ -229,8 +231,14 @@ void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& 
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& scope) {
-  ir_builder.CreateRet(
-    codegen_expression(*return_stmt.expression, scope));
+  Symbol* return_local = scope.lookup_first(FUNCTION_RETURN_LOCAL);
+  assert(return_local && "return local must exist to codegen return statement!");
+
+  // If this is not a SymbolMetaLocal something is _very_ wrong!
+  auto return_meta = static_cast<SymbolMetaLocal*>(return_local->meta.get());
+
+  llvm::Value* return_value = codegen_expression(*return_stmt.expression, scope);
+  ir_builder.CreateStore(return_value, return_meta->alloca);
 }
 
 /* Expressions */

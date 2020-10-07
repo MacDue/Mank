@@ -19,7 +19,9 @@ void BaseAstVisitor::operator()(Ast_File& file) {
 void BaseAstVisitor::operator()(Ast_Function_Declaration& func) {
   before(func);
   visit(func);
-  recur(func.body);
+  if (!func.external) {
+    recur(func.body);
+  }
   after(func);
 }
 

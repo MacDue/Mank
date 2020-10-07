@@ -22,11 +22,12 @@ struct AstVisitor;
 /* Base visitor */
 template<typename TAst>
 struct AstVisitor<TAst> {
+  virtual void operator()(TAst&) = 0;
+
+protected:
   virtual void before(TAst&) {};
   virtual void after(TAst&)  {};
   virtual void visit(TAst&)  {};
-
-  virtual void operator()(TAst&) = 0;
 };
 
 #define with(func)                    \

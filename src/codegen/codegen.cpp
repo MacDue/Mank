@@ -270,27 +270,26 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {
   (void) scope; // Not needed
-  /* TODO: better parsing */
   switch (literal.literal_type) {
     case PrimativeTypeTag::INTEGER:
       return llvm::ConstantInt::get(llvm_context,
         llvm::APInt(
-          /*bits:*/ primative_size(literal.literal_type),
-          /*value:*/ std::stoi(literal.value),
+          /*bits:*/ literal.size_bytes(),
+          /*value:*/ literal.as_int32(),
           /*signed:*/ true));
     case PrimativeTypeTag::FLOAT32:
       return llvm::ConstantFP::get(llvm_context,
-        llvm::APFloat(/*value:*/ std::stof(literal.value)));
+        llvm::APFloat(/*value:*/ literal.as_float32()));
     case PrimativeTypeTag::FLOAT64:
       return llvm::ConstantFP::get(llvm_context,
-          llvm::APFloat(/*value:*/ std::stod(literal.value)));
+          llvm::APFloat(/*value:*/ literal.as_float64()));
     case PrimativeTypeTag::STRING:
       assert(false && "string literal codegen not implemented");
       return nullptr;
     case PrimativeTypeTag::BOOL:
       return llvm::ConstantInt::get(llvm_context,
-        llvm::APInt(/*bits*/ primative_size(literal.literal_type),
-                    /*value: */ literal.value == "true" ? 1 : 0,
+        llvm::APInt(/*bits*/ literal.size_bytes(),
+                    /*value: */ literal.as_bool(),
                     /*signed: */ false));
     default:
       assert(false && "fix me! codegen for unknown literal type");

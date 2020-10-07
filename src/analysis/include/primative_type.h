@@ -1,5 +1,7 @@
 #pragma once
 
+#include <variant>
+
 enum class PrimativeTypeTag {
   FLOAT32,
   FLOAT64,
@@ -8,6 +10,14 @@ enum class PrimativeTypeTag {
   BOOL,
   /* TODO: more integer types */
 };
+
+using PrimativeValue = std::variant<
+  std::monostate,
+  float,
+  double,
+  /* strings? */
+  int32_t,
+  bool>;
 
 uint primative_size(PrimativeTypeTag type_tag);
 

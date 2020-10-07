@@ -1,0 +1,19 @@
+fun const_expr_1: i32 {
+  return 1 + 2 + 3 + 4;
+}
+
+fun const_expr_2: i32 {
+  return 1 - 10;
+}
+
+fun const_expr_3: i32 {
+  return (1 + 2) * 3;
+}
+
+fun const_expr_4: f64 {
+  return 1.32 / 2.0;
+}
+
+fun const_expr_5: bool {
+  return 10 < 20;
+}

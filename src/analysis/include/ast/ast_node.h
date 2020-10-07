@@ -5,6 +5,7 @@
 
 #include "types.h"
 #include "constants.h"
+#include "primative_type.h"
 #include "source_location.h"
 
 /* Top level constructs */
@@ -43,18 +44,31 @@ struct Ast_Node {
   Ast_Node(SourceLocation location): location{location} {}
 };
 
-struct Ast_Identifier: Ast_Node {
+enum class Ast_Operator {
+  #include "operators.def"
+};
+
+struct Ast_Const_Expr: Ast_Node {
+  using Ast_Node::Ast_Node;
+  // Defaults to monostate if expression is not const
+  PrimativeValue const_expr_value;
+
+  inline bool is_const_expr() {
+    return std::holds_alternative<std::monostate>(const_expr_value);
+  }
+
+  PrimativeValue const_eval_unary(Ast_Operator op);
+  PrimativeValue const_eval_binary(Ast_Operator op,  Ast_Const_Expr& rhs);
+};
+
+struct Ast_Identifier: Ast_Const_Expr {
   std::string name;
 
   Ast_Identifier() = default;
   Ast_Identifier(SourceLocation location, std::string name)
-    : Ast_Node(location), name{name} {}
+    : Ast_Const_Expr(location), name{name} {}
   Ast_Identifier(std::string name)
     : Ast_Identifier({} /* dummy */, name) {};
-};
-
-enum class Ast_Operator {
-  #include "operators.def"
 };
 
 struct Ast_Argument {

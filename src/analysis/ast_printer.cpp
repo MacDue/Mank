@@ -1,3 +1,4 @@
+#include <type_traits>
 #include <mpark/patterns.hpp>
 
 #include "types.h"
@@ -127,9 +128,20 @@ static char const * operation_to_string(Ast_Operator operation) {
   return token_type_to_string(static_cast<TokenType>(operation));
 }
 
+void AstPrinter::print_const(PrimativeValue& const_value) {
+  std::visit([&](auto value) {
+    if constexpr (std::is_fundamental_v<decltype(value)>) {
+      putf("- Const value: {}", value);
+    } else {
+      putf("- Not yet found to be const");
+    }
+  }, const_value);
+}
+
 void AstPrinter::print_expr(Ast_Unary_Operation& unary) {
   putf("* Unary operation");
   putf("- Operation: {}", operation_to_string(unary.operation));
+  print_const(unary.const_expr_value);
   putf("- Operand:");
   self->print_expr(*unary.operand);
 }
@@ -137,6 +149,7 @@ void AstPrinter::print_expr(Ast_Unary_Operation& unary) {
 void AstPrinter::print_expr(Ast_Binary_Operation& binop) {
   putf("* Binary operation");
   putf("- Operation: {}", operation_to_string(binop.operation));
+  print_const(binop.const_expr_value);
   putf("- Left:");
   self->print_expr(*binop.left);
   putf("- Right:");

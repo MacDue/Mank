@@ -248,12 +248,13 @@ Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
 Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
   auto operand_type = analyse_expression(*unary.operand, scope);
   unary.operand->type = operand_type;
-  PrimativeType* primative_type = std::get_if<PrimativeType>(&operand_type->v);
+  unary.const_expr_value = unary.operand->const_eval_unary(unary.operation);
 
+  PrimativeType* primative_type = std::get_if<PrimativeType>(&operand_type->v);
   if (primative_type)
   switch (unary.operation) {
-    case Ast_Operator::PLUS:
-    case Ast_Operator::MINUS: {
+    case Ast_Operator::MINUS:
+    case Ast_Operator::PLUS: {
       if (numeric_type(primative_type->tag)) {
         return operand_type;
       }
@@ -285,6 +286,7 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   auto right_type = analyse_expression(*binop.right, scope);
   binop.left->type = left_type;
   binop.right->type = right_type;
+  binop.const_expr_value = binop.left->const_eval_binary(binop.operation, *binop.right);
 
   if (!match_types(left_type.get(), right_type.get())) {
     throw_sema_error_at(binop, "incompatible types {} and {}",

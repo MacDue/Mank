@@ -54,7 +54,7 @@ struct Ast_Const_Expr: Ast_Node {
   PrimativeValue const_expr_value;
 
   inline bool is_const_expr() {
-    return std::holds_alternative<std::monostate>(const_expr_value);
+    return !std::holds_alternative<std::monostate>(const_expr_value);
   }
 
   bool is_zero();

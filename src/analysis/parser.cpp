@@ -108,6 +108,7 @@ Function_Ptr Parser::parse_function() {
 /* Statements */
 
 std::optional<Ast_Block> Parser::parse_block() {
+  auto block_start = this->current_location();
   Ast_Block parsed_block;
   if (consume(TokenType::LEFT_BRACE)) {
     while (!peek(TokenType::RIGHT_BRACE)) {
@@ -117,6 +118,7 @@ std::optional<Ast_Block> Parser::parse_block() {
   } else {
     return std::nullopt;
   }
+  mark_ast_location(block_start, parsed_block);
   return parsed_block;
 }
 
@@ -178,7 +180,7 @@ Statement_Ptr Parser::parse_if() {
           }
         }
         */
-        parsed_if.else_block = this->parse_if();
+        parsed_if.else_block = this->parse_statement();
       } else {
         auto else_block = this->parse_block();
         if (!else_block) {

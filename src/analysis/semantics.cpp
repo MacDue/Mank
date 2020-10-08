@@ -293,7 +293,7 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   }
 
   PrimativeType* primative_type = std::get_if<PrimativeType>(&left_type->v);
-  return match(primative_type, binop.operation)(
+  auto binop_type = match(primative_type, binop.operation)(
     pattern(some(_), anyof(
       Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,
       Ast_Operator::DIVIDE
@@ -333,6 +333,7 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   );
   // Must be done after checking to avoid dvision by zeros!
   binop.const_expr_value = binop.left->const_eval_binary(binop.operation, *binop.right);
+  return binop_type;
 }
 
 #define NOT_CALLABLE "{} is not callable"

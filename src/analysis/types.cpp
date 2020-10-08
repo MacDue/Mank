@@ -166,6 +166,15 @@ int Ast_Literal::size_bytes() {
   I think this is a monad lol
 */
 
+bool Ast_Const_Expr::is_zero() {
+  return std::visit([](auto value) {
+    if constexpr (std::is_arithmetic_v<decltype(value)>) {
+       return value == 0;
+    }
+    return false;
+  }, const_expr_value);
+}
+
 PrimativeValue Ast_Const_Expr::const_eval_unary(Ast_Operator op) {
   using namespace mpark::patterns;
   return match(const_expr_value, op)(

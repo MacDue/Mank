@@ -65,13 +65,13 @@ struct Ast_Expression {
     : v{std::move(v)} {}
 
   inline PrimativeValue const_eval_unary(Ast_Operator op) {
-    return std::visit([&](auto operand){
+    return std::visit([&](Ast_Const_Expr& operand){
       return operand.const_eval_unary(op);
     }, v);
   }
 
   inline PrimativeValue const_eval_binary(Ast_Operator op, Ast_Expression& rhs) {
-    return std::visit([&](auto lhs, auto rhs){
+    return std::visit([&](Ast_Const_Expr& lhs, Ast_Const_Expr& rhs){
       return lhs.const_eval_binary(op, rhs);
     }, v, rhs.v);
   }

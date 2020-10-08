@@ -57,6 +57,8 @@ struct Ast_Const_Expr: Ast_Node {
     return std::holds_alternative<std::monostate>(const_expr_value);
   }
 
+  bool is_zero();
+
   PrimativeValue const_eval_unary(Ast_Operator op);
   PrimativeValue const_eval_binary(Ast_Operator op,  Ast_Const_Expr& rhs);
 };

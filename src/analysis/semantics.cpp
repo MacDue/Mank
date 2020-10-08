@@ -286,7 +286,6 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   auto right_type = analyse_expression(*binop.right, scope);
   binop.left->type = left_type;
   binop.right->type = right_type;
-  binop.const_expr_value = binop.left->const_eval_binary(binop.operation, *binop.right);
 
   if (!match_types(left_type.get(), right_type.get())) {
     throw_sema_error_at(binop, "incompatible types {} and {}",
@@ -300,6 +299,13 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
       Ast_Operator::DIVIDE
     )) = [&]{
       WHEN(numeric_type(primative_type->tag)) {
+        if (binop.operation == Ast_Operator::DIVIDE) {
+          std::visit([&](Ast_Const_Expr& const_expr){
+            if (const_expr.is_zero()) {
+              throw_sema_error_at(binop, "division by zero");
+            }
+          }, binop.right->v);
+        }
         return left_type;
       };
     },
@@ -325,6 +331,8 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
       return Type_Ptr(nullptr);
     }
   );
+  // Must be done after checking to avoid dvision by zeros!
+  binop.const_expr_value = binop.left->const_eval_binary(binop.operation, *binop.right);
 }
 
 #define NOT_CALLABLE "{} is not callable"

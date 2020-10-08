@@ -42,9 +42,11 @@ bool check_reachability(Ast_Statement& block_like, Ast_Statement** unreachable_s
           }
           return if_returns;
         } else {
-          return check_reachability(*if_stmt.then_block, unreachable_stmt)
-                 && (!if_stmt.has_else
-                      || check_reachability(*if_stmt.else_block, unreachable_stmt));
+          bool then_returns = check_reachability(*if_stmt.then_block, unreachable_stmt);
+          if (!if_stmt.has_else) {
+            return false; // Not _all_ paths return since it does not have an else;
+          }
+          return then_returns && check_reachability(*if_stmt.else_block, unreachable_stmt);
         }
       }, if_stmt.cond->v);
     },

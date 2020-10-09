@@ -47,6 +47,13 @@ std::string type_to_string(Type* type) {
   }
 }
 
+Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
+  if (auto type_ptr = weak_type_ptr.lock()) {
+    return type_ptr;
+  }
+  assert(false && "fix me! expression type imformation is missing!");
+}
+
 uint primative_size(PrimativeTypeTag type_tag) {
   switch (type_tag) {
     case PrimativeTypeTag::FLOAT32:

@@ -193,7 +193,7 @@ void analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
 
 Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
-  return match(expr.v)(
+  auto expr_type = match(expr.v)(
     pattern(as<Ast_Literal>(arg)) = [&](auto& lit) {
       switch (lit.literal_type) {
         case PrimativeTypeTag::INTEGER:
@@ -231,11 +231,12 @@ Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
       return Type_Ptr(nullptr);
     }
   );
+  expr.type = expr_type;
+  return expr_type;
 }
 
 Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
   auto operand_type = analyse_expression(*unary.operand, scope);
-  unary.operand->type = operand_type;
   unary.const_expr_value = unary.operand->const_eval_unary(unary.operation);
 
   PrimativeType* primative_type = std::get_if<PrimativeType>(&operand_type->v);
@@ -272,8 +273,6 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
   auto left_type = analyse_expression(*binop.left, scope);
   auto right_type = analyse_expression(*binop.right, scope);
-  binop.left->type = left_type;
-  binop.right->type = right_type;
 
   if (!match_types(left_type.get(), right_type.get())) {
     throw_sema_error_at(binop, "incompatible types {} and {}",

@@ -313,14 +313,6 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
     }
   );
 }
-
-static Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
-  if (auto type_ptr = weak_type_ptr.lock()) {
-    return type_ptr;
-  }
-  assert(false && "fix me! expression type imformation is missing!");
-}
-
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
   using namespace mpark::patterns;
   llvm::Value* operand = codegen_expression(*unary.operand, scope);

@@ -2,7 +2,6 @@
 #include "catch/catch.hpp"
 
 /* core */
-#include "lexer.h"
 #include "parser.h"
 #include "ast_printer.h"
 

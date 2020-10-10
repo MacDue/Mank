@@ -392,7 +392,7 @@ TEST_CASE("Expression statements", "[Sema]") {
 }
 
 
-TEST_CASE("Type names") {
+TEST_CASE("Type names", "[Sema]") {
   using namespace Catch::Matchers;
 
   SECTION("Undeclared return types should fail") {
@@ -417,7 +417,7 @@ TEST_CASE("Type names") {
 }
 
 
-TEST_CASE("Local variables") {
+TEST_CASE("Local variables", "[Sema]") {
 
   SECTION("Locals should be visable within nested scopes") {
     auto code = Parser::parse_from_string(R"(

@@ -4,8 +4,7 @@
 
 #include "lexer.h"
 
-#include "compiler_errors.h"
-#include "compiler_message.h"
+#include "compiler_message_printer.h"
 
 #define ANSI_FORMAT "\033["
 #define ANSI_SEPERATOR ";"
@@ -100,6 +99,3 @@ std::ostream& operator<< (std::ostream& os, CompilerMessage const & message) {
   return os;
 }
 
-std::ostream& operator<< (std::ostream& os, CompilerError const & error) {
-  return os << error.error_message;
-}

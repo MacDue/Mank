@@ -6,7 +6,10 @@ include_directories(
   ${Boost_INCLUDE_DIR}
 )
 
-add_executable(mankc main.cpp)
+add_executable(mankc
+  main.cpp
+  compiler_message_printer.cpp)
+
 target_link_libraries(mankc
   MankAnalysis
   MankCodegen

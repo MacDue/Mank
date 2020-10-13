@@ -10,6 +10,8 @@
 
 #include "codegen.h"
 
+#include "compiler_message_printer.h"
+
 struct CompilerOptions {
   std::vector<std::string> input_files;
   bool

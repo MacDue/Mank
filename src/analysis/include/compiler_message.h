@@ -2,7 +2,6 @@
 
 #include <string>
 #include <cassert>
-#include <ostream>
 
 #include "source_location.h"
 #include "ast/is_abstract_ast.h"
@@ -29,7 +28,5 @@ struct CompilerMessage {
     ERROR,
     WARNING
   } type = ERROR;
-  mutable Lexer* source_lexer = nullptr; // can be set once the exception is caught.
+  mutable Lexer* source_lexer = nullptr; // can added later for printing with context
 };
-
-std::ostream& operator<< (std::ostream& os, CompilerMessage const & message);

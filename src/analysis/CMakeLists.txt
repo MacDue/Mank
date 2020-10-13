@@ -2,7 +2,6 @@ add_library(MankAnalysis
   lexer.cpp
   parser.cpp
   ast_printer.cpp
-  compiler_message_printer.cpp
   token_helpers.cpp
   semantics.cpp
   types.cpp

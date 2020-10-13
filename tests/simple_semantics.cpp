@@ -4,6 +4,8 @@
 #include "parser.h"
 #include "semantics.h"
 
+#include "helpers/warning_matchers.h"
+
 TEST_CASE("Calling functions", "[Sema]") {
   using namespace Catch::Matchers;
 
@@ -18,7 +20,7 @@ TEST_CASE("Calling functions", "[Sema]") {
       }
     )");
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(Semantics().analyse_file(code));
   }
 
   SECTION("Calling an existing procedure before it's definded is okay") {
@@ -32,7 +34,7 @@ TEST_CASE("Calling functions", "[Sema]") {
       }
     )");
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(Semantics().analyse_file(code));
   }
 
   SECTION("Calling a function with correct args, and using return value") {
@@ -49,7 +51,7 @@ TEST_CASE("Calling functions", "[Sema]") {
       }
     )");
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(Semantics().analyse_file(code));
   }
 
   SECTION("Calling function and implicitly discarding the return value should fail") {
@@ -68,7 +70,7 @@ TEST_CASE("Calling functions", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), "return value discarded");
+    REQUIRE_THROWS_WITH(Semantics().analyse_file(code), "return value discarded");
   }
 
   SECTION("Section calling something other than a function should fail") {
@@ -79,7 +81,7 @@ TEST_CASE("Calling functions", "[Sema]") {
         }
       )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("not callable"));
+    REQUIRE_THROWS_WITH(Semantics().analyse_file(code), Contains("not callable"));
   }
 
   SECTION("Calling something with the wrong number of args should fail") {
@@ -94,7 +96,7 @@ TEST_CASE("Calling functions", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("expects 3 arguments"));
+    REQUIRE_THROWS_WITH(Semantics().analyse_file(code), Contains("expects 3 arguments"));
   }
 
   SECTION("Calling with the wrong argument types should fail") {
@@ -108,7 +110,7 @@ TEST_CASE("Calling functions", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code),
+    REQUIRE_THROWS_WITH(Semantics().analyse_file(code),
       "expected to be called with Float64 but found Integer");
   }
 
@@ -119,7 +121,7 @@ TEST_CASE("Calling functions", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("undefined function"));
+    REQUIRE_THROWS_WITH(Semantics().analyse_file(code), Contains("undefined function"));
   }
 }
 
@@ -139,13 +141,15 @@ void require_constant_binary_expr_value(Ast_File& code, T expected_value) {
   REQUIRE(!binary_expr.is_const_expr());
 
   // Should be found to be a constant integer value
-  REQUIRE_NOTHROW(Sema::analyse_file(code));
+  REQUIRE_NOTHROW(Semantics().analyse_file(code));
   REQUIRE(binary_expr.is_const_expr());
   REQUIRE(std::get<T>(binary_expr.const_expr_value) == expected_value);
 }
 
 TEST_CASE("Binary expressions", "[Sema]") {
   using namespace Catch::Matchers;
+
+  Semantics sema;
 
   SECTION("Simple expressions are resolved to the correct type") {
     auto code = Parser::parse_from_string(R"(
@@ -159,7 +163,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
     // Start with no type
     REQUIRE(binary_expr->type.expired());
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(sema.analyse_file(code));
 
     auto binop_type = extract_type(binary_expr->type);
     REQUIRE(std::holds_alternative<PrimativeType>(binop_type->v));
@@ -211,7 +215,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
         }
       )");
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(code), "division by zero");
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), "division by zero");
     }
 
     SECTION("Resolved zero") {
@@ -221,7 +225,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
         }
       )");
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(code), "division by zero");
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), "division by zero");
     }
   }
 
@@ -232,7 +236,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("incompatible types"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("incompatible types"));
   }
 
   SECTION("Mixing integers and booleans is not allowed implicitly") {
@@ -242,7 +246,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("incompatible types"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("incompatible types"));
   }
 
   // TODO: A few more type mixings
@@ -255,7 +259,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("invalid operation"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("invalid operation"));
   }
 
   std::array bitwise_operations = { "<<", ">>", "&", "|", "|!" };
@@ -268,7 +272,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
         }
       )", bitwise_op));
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("invalid operation"));
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("invalid operation"));
     }
   }
 
@@ -280,7 +284,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
         }
       )", bitwise_op));
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("invalid operation"));
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("invalid operation"));
     }
   }
 
@@ -292,7 +296,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
         }
       )", bitwise_op));
 
-      REQUIRE_NOTHROW(Sema::analyse_file(code));
+      REQUIRE_NOTHROW(sema.analyse_file(code));
     }
   }
 }
@@ -303,6 +307,8 @@ TEST_CASE("Unary expressions", "[Sema]") {
   std::array arth_unary_ops {"+", "-"};
   std::array bitwise_unary_ops {"~"};
   std::array logical_unary_ops = {"¬"};
+
+  Semantics sema;
 
   SECTION("Arithmetic operations are valid for floats and ints") {
     for (auto arth_op: arth_unary_ops) {
@@ -316,7 +322,7 @@ TEST_CASE("Unary expressions", "[Sema]") {
         }
       )", arth_op));
 
-      REQUIRE_NOTHROW(Sema::analyse_file(code));
+      REQUIRE_NOTHROW(sema.analyse_file(code));
     }
   }
 
@@ -334,10 +340,10 @@ TEST_CASE("Unary expressions", "[Sema]") {
         }
       )", bitwise_op));
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(float_code),
+      REQUIRE_THROWS_WITH(sema.analyse_file(float_code),
         Contains("invalid unary operation"));
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(bool_code),
+      REQUIRE_THROWS_WITH(sema.analyse_file(bool_code),
         Contains("invalid unary operation"));
     }
   }
@@ -350,7 +356,7 @@ TEST_CASE("Unary expressions", "[Sema]") {
         }
       )", logical_op));
 
-      REQUIRE_NOTHROW(Sema::analyse_file(code));
+      REQUIRE_NOTHROW(sema.analyse_file(code));
     }
   }
 
@@ -368,10 +374,10 @@ TEST_CASE("Unary expressions", "[Sema]") {
         }
       )", logical_op));
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(float_code),
+      REQUIRE_THROWS_WITH(sema.analyse_file(float_code),
         Contains("invalid unary operation"));
 
-      REQUIRE_THROWS_WITH(Sema::analyse_file(int_code),
+      REQUIRE_THROWS_WITH(sema.analyse_file(int_code),
         Contains("invalid unary operation"));
     }
   }
@@ -379,6 +385,8 @@ TEST_CASE("Unary expressions", "[Sema]") {
 
 TEST_CASE("Expression statements", "[Sema]") {
   // Should be warning in the future
+  Semantics sema;
+
   SECTION("Expressions without side effects are invalid") {
     auto code = Parser::parse_from_string(R"(
       proc haskals_reaction_when {
@@ -387,13 +395,16 @@ TEST_CASE("Expression statements", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), "statement has no effect");
+    sema.analyse_file(code);
+    REQUIRE_THAT(sema.get_warnings(), HasWarning("statement has no effect"));
   }
 }
 
 
 TEST_CASE("Type names", "[Sema]") {
   using namespace Catch::Matchers;
+
+  Semantics sema;
 
   SECTION("Undeclared return types should fail") {
     auto code = Parser::parse_from_string(R"(
@@ -402,7 +413,7 @@ TEST_CASE("Type names", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("undeclared return type"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("undeclared return type"));
   }
 
   SECTION("Undeclared parameter types should fail") {
@@ -412,12 +423,13 @@ TEST_CASE("Type names", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("undeclared arg type"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("undeclared arg type"));
   }
 }
 
 
 TEST_CASE("Local variables", "[Sema]") {
+  Semantics sema;
 
   SECTION("Locals should be visable within nested scopes") {
     auto code = Parser::parse_from_string(R"(
@@ -442,7 +454,7 @@ TEST_CASE("Local variables", "[Sema]") {
       }
     )");
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 
   SECTION("Using undeclared local variables should fail") {
@@ -452,11 +464,12 @@ TEST_CASE("Local variables", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), "n not declared");
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), "n not declared");
   }
 }
 
 TEST_CASE("If statements semantics", "[Sema]") {
+  Semantics sema;
 
   SECTION("If statement condtion must be a boolean") {
     auto code = Parser::parse_from_string(R"(
@@ -467,12 +480,14 @@ TEST_CASE("If statements semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), "if condition must be a Boolean");
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), "if condition must be a Boolean");
   }
 }
 
 TEST_CASE("Function and procedure semantics", "[Sema]") {
   using namespace Catch::Matchers;
+
+  Semantics sema;
 
   /* Other cases are implicitly tested in other tests */
 
@@ -483,7 +498,7 @@ TEST_CASE("Function and procedure semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("invalid return type"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("invalid return type"));
   }
 
   SECTION("Returning something in a procedure is invalid") {
@@ -493,6 +508,6 @@ TEST_CASE("Function and procedure semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("expected Void"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("expected Void"));
   }
 }

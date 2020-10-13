@@ -7,8 +7,6 @@
 #include "sema_errors.h"
 #include "ast/return_reachability.h"
 
-namespace Sema {
-
 #define make_primative_type(type_tag) \
   static auto type_tag = std::make_shared<Type>(PrimativeType(PrimativeTypeTag::type_tag))
 
@@ -35,7 +33,7 @@ static bool match_types(Type* a, Type* b) {
   return false;
 }
 
-void analyse_file(Ast_File& file) {
+void Semantics::analyse_file(Ast_File& file) {
   Scope& global_scope = file.scope;
 
   static std::array primative_types {
@@ -95,7 +93,7 @@ static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_for
   }
 }
 
-void analyse_function_header(Ast_Function_Declaration& func) {
+void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
   /* Try to resolve arg and return types */
   Scope& parent_scope = *func.body.scope.parent;
   if (!func.procedure) {
@@ -106,14 +104,14 @@ void analyse_function_header(Ast_Function_Declaration& func) {
   }
 }
 
-static void analyse_block(Ast_Block& block, Scope& scope, Type* return_type) {
+void Semantics::analyse_block(Ast_Block& block, Scope& scope, Type* return_type) {
   block.scope.parent = &scope;
   for (auto& stmt: block.statements) {
     analyse_statement(*stmt, block.scope, return_type);
   }
 }
 
-void analyse_function_body(Ast_Function_Declaration& func) {
+void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     func.body.scope.symbols.emplace_back(
       Symbol(arg.name, arg.type, Symbol::LOCAL));
@@ -126,9 +124,9 @@ void analyse_function_body(Ast_Function_Declaration& func) {
   if (!func.procedure && !all_paths_return) {
     throw_sema_error_at(func.identifer, "function possibly fails to return a value");
   }
-  // TODO: Only warn?
+
   if (first_unreachable_stmt) {
-    throw_sema_error_at(*first_unreachable_stmt, "unreachable code");
+    emit_warning_at(*first_unreachable_stmt, "unreachable code");
   }
 }
 
@@ -150,17 +148,19 @@ static bool expression_may_have_side_effects(Ast_Expression& expr) {
   );
 }
 
-static void analyse_expression_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
-  if (!expression_may_have_side_effects(*expr_stmt.expression)) {
-    throw_sema_error_at(expr_stmt.expression, "statement has no effect");
-  }
+void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
   auto expression_type = analyse_expression(*expr_stmt.expression, scope);
-  if (expression_type) {
+  bool is_call = std::get_if<Ast_Call>(&expr_stmt.expression->v) != nullptr;
+  if (!expression_may_have_side_effects(*expr_stmt.expression)) {
+    emit_warning_at(expr_stmt.expression, "statement has no effect");
+  } else if (!is_call) {
+    emit_warning_at(expr_stmt.expression, "result of expression discarded");
+  } else if (expression_type) {
     throw_sema_error_at(expr_stmt.expression, "return value discarded");
   }
 }
 
-void analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
+void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
   using namespace mpark::patterns;
   match(stmt.v)(
     pattern(as<Ast_Block>(arg)) = [&](auto& block) {
@@ -191,7 +191,7 @@ void analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
   );
 }
 
-Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
+Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
   auto expr_type = match(expr.v)(
     pattern(as<Ast_Literal>(arg)) = [&](auto& lit) {
@@ -235,7 +235,7 @@ Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope) {
   return expr_type;
 }
 
-Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
+Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
   auto operand_type = analyse_expression(*unary.operand, scope);
   unary.const_expr_value = unary.operand->const_eval_unary(unary.operation);
 
@@ -269,7 +269,7 @@ Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
 }
 
 
-Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
+Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
   auto left_type = analyse_expression(*binop.left, scope);
   auto right_type = analyse_expression(*binop.right, scope);
@@ -325,7 +325,7 @@ Type_Ptr analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
 
 #define NOT_CALLABLE "{} is not callable"
 
-Type_Ptr analyse_call(Ast_Call& call, Scope& scope) {
+Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   //Symbol* called_function = scope.lookup_first_name(expr.callee)
   auto called_function_ident = std::get_if<Ast_Identifier>(&call.callee->v);
   if (!called_function_ident) {
@@ -365,6 +365,4 @@ Type_Ptr analyse_call(Ast_Call& call, Scope& scope) {
   call.callee->type = called_function->type;
   // FINALLY we've checked everything in the call!
   return function_type.return_type;
-}
-
 }

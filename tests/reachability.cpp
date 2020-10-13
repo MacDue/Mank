@@ -4,8 +4,26 @@
 #include "parser.h"
 #include "semantics.h"
 
+#include "helpers/warning_matchers.h"
+
+
+WarningsMatcher HasWarning(std::string needle) {
+  return Catch::Matchers::Predicate<std::vector<CompilerMessage>>(
+    [&](auto const & warnings) -> bool {
+      for (auto const& warning: warnings) {
+        if (warning.message.find(needle) != std::string::npos) {
+          return true;
+        }
+      }
+      return false;
+    });
+}
+
+
 TEST_CASE("Return reachability", "[Sema]") {
   using namespace Catch::Matchers;
+
+  Semantics sema;
 
   SECTION("Simple functions that return are valid") {
     auto code = Parser::parse_from_string(R"(
@@ -14,7 +32,7 @@ TEST_CASE("Return reachability", "[Sema]") {
       }
     )");
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 
   SECTION("Functions without returns in a if statement are valid, if it can fallthrough to a return") {
@@ -54,7 +72,7 @@ TEST_CASE("Return reachability", "[Sema]") {
       }
     )");
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 
   SECTION("Not returning on all paths is invalid, even if where there's not returns can be found to be unreachable") {
@@ -69,7 +87,7 @@ TEST_CASE("Return reachability", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("fails to return a value"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("fails to return a value"));
   }
 
   SECTION("Having returns only within an if statement is valid, if all paths of the if return") {
@@ -98,7 +116,7 @@ TEST_CASE("Return reachability", "[Sema]") {
       }
     )");
 
-    REQUIRE_NOTHROW(Sema::analyse_file(code));
+    REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 
   SECTION("Not returning in a simple function is invalid") {
@@ -108,7 +126,7 @@ TEST_CASE("Return reachability", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("fails to return a value"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("fails to return a value"));
   }
 
   SECTION("Not returning a value in some path of an if is invalid (if there's no return after the if)") {
@@ -124,13 +142,14 @@ TEST_CASE("Return reachability", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("fails to return a value"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("fails to return a value"));
   }
 }
 
 TEST_CASE("Unreachable code", "[Sema]") {
+  Semantics sema;
 
- SECTION("Unreachable then blocks are invalid") {
+  SECTION("Unreachable then blocks are invalid") {
     auto code = Parser::parse_from_string(R"(
       fun bad_ifs: i32 {
         # Maybe allow this with a const if?
@@ -141,7 +160,8 @@ TEST_CASE("Unreachable code", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), "unreachable code");
+    sema.analyse_file(code);
+    REQUIRE_THAT(sema.get_warnings(), HasWarning("unreachable code"));
   }
 
   SECTION("Unreachable else blocks are invalid") {
@@ -155,7 +175,8 @@ TEST_CASE("Unreachable code", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), "unreachable code");
+    sema.analyse_file(code);
+    REQUIRE_THAT(sema.get_warnings(), HasWarning("unreachable code"));
   }
 
   SECTION("Unreachable statements are invalid") {
@@ -166,6 +187,7 @@ TEST_CASE("Unreachable code", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(Sema::analyse_file(code), "unreachable code");
+    sema.analyse_file(code);
+    REQUIRE_THAT(sema.get_warnings(), HasWarning("unreachable code"));
   }
 }

@@ -26,28 +26,48 @@ bool check_reachability(Ast_Statement& block_like, Ast_Statement** unreachable_s
     },
     pattern(as<Ast_If_Statement>(arg)) = [&](auto& if_stmt) {
       return std::visit([&](Ast_Const_Expr& const_expr){
+        /*
+          When deciding if a if statement returns the constant evaluation should not
+          be used. As it can make it confusing, as when the constant eval improves,
+          previously rejected functions can be accepted.
+
+          Things can also get arbitrarily complex.
+          e.g.
+
+          fun fermats_last_theorm: bool (x: i32, y: i32, z: i32, n: i32) {
+            if n > 2 {
+              if x^n + y^n == z^n {
+                # A sufficiently advanced compiler could prove this is
+                # unreachable and hence not matter there's no return.
+              }
+              return false;
+            } else {
+              return true;
+            }
+          }
+        */
+
+        // If can only return on _all_ paths if it has an else block, which also returns.
+        bool if_returns = check_reachability(*if_stmt.then_block, unreachable_stmt)
+            && if_stmt.has_else && check_reachability(*if_stmt.else_block, unreachable_stmt);
+
+        /*
+          Depending on the constant evaluation mark the then/else blocks unreachable.
+          This should be done after the pior calls to reachability so the topmost
+          unreachable statement is marked first.
+        */
         if (const_expr.is_const_expr()) {
-          bool if_returns;
-          // If the if cond is a constant expression the reachablity should only
-          // be checked in the reachable branch for better errors
           bool cond_value = std::get<bool>(const_expr.const_expr_value);
           if (cond_value) {
-            if_returns = check_reachability(*if_stmt.then_block, unreachable_stmt);
             if (if_stmt.has_else) {
               LAST_UNREACHABLE_STMT(if_stmt.else_block);
             }
           } else {
-            if_returns = if_stmt.has_else && check_reachability(*if_stmt.else_block, unreachable_stmt);
             LAST_UNREACHABLE_STMT(if_stmt.then_block);
           }
-          return if_returns;
-        } else {
-          bool then_returns = check_reachability(*if_stmt.then_block, unreachable_stmt);
-          if (!if_stmt.has_else) {
-            return false; // Not _all_ paths return since it does not have an else;
-          }
-          return then_returns && check_reachability(*if_stmt.else_block, unreachable_stmt);
         }
+
+        return if_returns;
       }, if_stmt.cond->v);
     },
     pattern(as<Ast_Return_Statement>(_)) = []{ return true; },

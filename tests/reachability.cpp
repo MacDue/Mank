@@ -57,6 +57,21 @@ TEST_CASE("Return reachability", "[Sema]") {
     REQUIRE_NOTHROW(Sema::analyse_file(code));
   }
 
+  SECTION("Not returning on all paths is invalid, even if where there's not returns can be found to be unreachable") {
+    auto code = Parser::parse_from_string(R"(
+      fun thats_a_paddlin: bool {
+        if false {
+          # This is so what's valid does not change as constrant propagation
+          # improves
+        } else {
+          return true;
+        }
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(Sema::analyse_file(code), Contains("fails to return a value"));
+  }
+
   SECTION("Having returns only within an if statement is valid, if all paths of the if return") {
     auto code = Parser::parse_from_string(R"(
       fun i_like_ifs: i32 (a: i32) {

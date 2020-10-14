@@ -82,6 +82,21 @@ void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
   self->print_expr(*return_stmt.expression);
 }
 
+void AstPrinter::print_stmt(Ast_Assign& assign) {
+  putf("* Assign statement");
+  putf("- Value");
+  self->print_expr(*assign.expression);
+}
+
+void AstPrinter::print_stmt(Ast_Variable_Declaration& var_decl) {
+  putf("* Variable declaration");
+  putf("- {} : {}", var_decl.variable.name, type_to_string(var_decl.type.get()));
+  if (var_decl.initializer) {
+    putf("- Initializer");
+    self->print_expr(*var_decl.initializer);
+  }
+}
+
 /* Expressions */
 
 void AstPrinter::print_expr(Ast_Expression& expr) {

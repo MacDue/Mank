@@ -24,11 +24,23 @@ struct Ast_If_Statement: Ast_Node {
   Statement_Ptr then_block, else_block;
 };
 
+struct Ast_Assign: Ast_Node {
+  Expression_Ptr target, expression;
+};
+
+struct Ast_Variable_Declaration: Ast_Node {
+  Type_Ptr type;
+  Ast_Identifier variable;
+  Expression_Ptr initializer = nullptr;
+};
+
 using Ast_Statement_Type = std::variant<
   Ast_Expression_Statement,
   Ast_Return_Statement,
   Ast_Block,
-  Ast_If_Statement>;
+  Ast_If_Statement,
+  Ast_Assign,
+  Ast_Variable_Declaration>;
 
 struct Ast_Statement {
   Ast_Statement_Type v;

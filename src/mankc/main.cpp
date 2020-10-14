@@ -76,21 +76,22 @@ int main(int argc, char* argv[]) {
   Parser parser(lexer);
   for (auto const & input_file: selected_options.input_files) {
     lexer.load_file(input_file);
-    auto parsed_file = parser.parse_file();
 
     Semantics sema;
+    std::optional<Ast_File> parsed_file;
     std::optional<CompilerError> sema_error;
     try {
-      if (selected_options.check_sema) {
-        sema.analyse_file(parsed_file);
+      parsed_file = parser.parse_file();
+      if (selected_options.check_sema || selected_options.code_gen) {
+        sema.analyse_file(*parsed_file);
       }
     } catch (CompilerError& e) {
       sema_error = e;
       sema_error->set_lexing_context(lexer);
     }
 
-    if (selected_options.print_ast) {
-      print_ast(parsed_file);
+    if (parsed_file && selected_options.print_ast) {
+      print_ast(*parsed_file);
     }
 
     // TODO: the error/warnings should alreadg have a reference to the lexer
@@ -99,13 +100,13 @@ int main(int argc, char* argv[]) {
       std::cerr << warning;
     }
 
-    if (!sema_error) {
-      if (selected_options.code_gen) {
-        CodeGen codegen(parsed_file);
-      }
-    } else {
+    if (sema_error) {
       std::cerr << *sema_error;
       return 1;
+    }
+
+    if (selected_options.code_gen) {
+      CodeGen codegen(*parsed_file);
     }
   }
   return 0;

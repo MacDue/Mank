@@ -109,12 +109,13 @@ void Semantics::analyse_block(Ast_Block& block, Scope& scope, Type* return_type)
   for (auto& stmt: block.statements) {
     analyse_statement(*stmt, block.scope, return_type);
   }
+  block.scope.destroy_locals();
 }
 
 void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     func.body.scope.symbols.emplace_back(
-      Symbol(arg.name, arg.type, Symbol::LOCAL));
+      Symbol(arg.name, arg.type, Symbol::INPUT));
   }
   analyse_block(func.body, *func.body.scope.parent, func.return_type.get());
 
@@ -187,6 +188,44 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
       if (if_stmt.has_else) {
         analyse_statement(*if_stmt.else_block, scope, return_type);
       }
+    },
+    pattern(as<Ast_Assign>(arg)) = [&](auto& assign){
+      auto* variable_name = std::get_if<Ast_Identifier>(&assign.target->v);
+      if (!variable_name) {
+        throw_sema_error_at(assign.target, "assignment target is not a variable");
+      }
+      auto target_type = analyse_expression(*assign.target, scope);
+      auto expr_type = analyse_expression(*assign.expression, scope);
+
+      if (!match_types(target_type.get(), expr_type.get())) {
+        throw_sema_error_at(assign, "cannot assign variable of type {} to {}",
+          type_to_string(target_type.get()), type_to_string(expr_type.get()));
+      }
+    },
+    pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto& var_decl) {
+      if (var_decl.type) {
+        resolve_type_or_fail(scope, var_decl.type, "undeclared type {}");
+      } else {
+        assert(false && "fix me! infer decl types");
+      }
+      if (var_decl.initializer) {
+        auto initializer_type = analyse_expression(*var_decl.initializer, scope);
+        if (!match_types(var_decl.type.get(), initializer_type.get())) {
+          throw_sema_error_at(var_decl.initializer,
+            "initializer type {} does not match declaration type {}",
+            type_to_string(initializer_type.get()), type_to_string(var_decl.type.get()));
+        }
+      } else {
+        emit_warning_at(var_decl, "default initialization is currently unimplemented");
+      }
+
+      Symbol* pior_symbol = scope.lookup_first_name(var_decl.variable);
+      if (pior_symbol) {
+        emit_warning_at(var_decl.variable, "declaration shadows existing symbol");
+      }
+
+      scope.symbols.emplace_back(
+        Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
     }
   );
 }
@@ -212,7 +251,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) {
       Symbol* symbol = scope.lookup_first_name(ident);
-      if (!symbol || symbol->kind != Symbol::LOCAL) {
+      if (!symbol || !symbol->is_local()) {
         throw_sema_error_at(ident, "{} not declared", ident.name);
       }
       return symbol->type;

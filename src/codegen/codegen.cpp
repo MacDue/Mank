@@ -114,7 +114,7 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol*
     &func->getEntryBlock(),
     func->getEntryBlock().begin());
 
-  assert("must be a local symbol" && symbol->kind == Symbol::LOCAL);
+  assert("must be a local symbol" && symbol->is_local());
 
   llvm::Type* llvm_type = map_type_to_llvm(symbol->type.get());
   llvm::AllocaInst* alloca =  entry_ir_builder.CreateAlloca(
@@ -241,6 +241,35 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
   ir_builder.CreateStore(return_value, return_meta->alloca);
 }
 
+void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
+  auto& variable_name = std::get<Ast_Identifier>(assign.target->v);
+  Symbol* variable = scope.lookup_first_name(variable_name);
+
+  assert(variable->is_local());
+
+  auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
+
+  llvm::Value* expression_value = codegen_expression(*assign.expression, scope);
+  ir_builder.CreateStore(expression_value, variable_meta->alloca);
+}
+
+void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope) {
+  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+
+  /*
+    Have to add the symbol again here as it's removed when it goes out of scope,
+    when checking sementics, otherwise resolving shadowed variables would be
+    nightmare.
+  */
+  scope.symbols.emplace_back(Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
+  llvm::AllocaInst* alloca = create_entry_alloca(current_function, &scope.symbols.back());
+
+  if (var_decl.initializer) {
+    llvm::Value* initializer = codegen_expression(*var_decl.initializer, scope);
+    ir_builder.CreateStore(initializer, alloca);
+  }
+}
+
 /* Expressions */
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope) {
@@ -299,7 +328,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope) {
   using namespace mpark::patterns;
   Symbol* symbol = scope.lookup_first_name(ident);
-  assert(symbol->kind == Symbol::LOCAL && "only locals implemented");
+  assert(symbol->is_local() && "only locals implemented");
 
   return match(symbol->meta)(
     pattern(some(as<SymbolMetaLocal>(arg))) = [&](auto& meta) {

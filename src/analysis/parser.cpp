@@ -1,6 +1,7 @@
 #include <mpark/patterns.hpp>
 
 #include "parser.h"
+#include "sema_errors.h"
 #include "token_helpers.h"
 
 Ast_File Parser::parse_from_file(std::string file_path) {
@@ -135,10 +136,31 @@ Statement_Ptr Parser::parse_statement() {
     expect(TokenType::SEMICOLON);
     stmt = std::make_shared<Ast_Statement>(return_stmt);
   } else if (auto expr = this->parse_expression()) {
-    Ast_Expression_Statement expr_stmt;
-    expr_stmt.expression = expr;
+    if (consume(TokenType::ASSIGN)) {
+      Ast_Assign assign;
+      assign.target = expr;
+      assign.expression = this->parse_expression();
+      stmt = std::make_shared<Ast_Statement>(assign);
+    } else if (consume(TokenType::COLON)) {
+      Ast_Variable_Declaration var_decl;
+      if (auto ident = std::get_if<Ast_Identifier>(&expr->v)) {
+        var_decl.variable = *ident;
+      } else {
+        // This is kinda a odd case... Since the code only becomes invalid
+        // after we parse more context.
+        throw_sema_error_at(expr, "expression is not an identifier");
+      }
+      var_decl.type = this->parse_type();
+      if (consume(TokenType::ASSIGN)) {
+        var_decl.initializer = this->parse_expression();
+      }
+      stmt = std::make_shared<Ast_Statement>(var_decl);
+    } else {
+      Ast_Expression_Statement expr_stmt;
+      expr_stmt.expression = expr;
+      stmt = std::make_shared<Ast_Statement>(expr_stmt);
+    }
     expect(TokenType::SEMICOLON);
-    stmt = std::make_shared<Ast_Statement>(expr_stmt);
   } else {
     throw_error_here("unexpected \"{}\", expecting an if, expression, or return statement");
   }

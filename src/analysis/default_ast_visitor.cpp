@@ -60,6 +60,22 @@ void BaseAstVisitor::operator()(Ast_If_Statement& if_stmt) {
   after(if_stmt);
 }
 
+void BaseAstVisitor::operator()(Ast_Assign& assign) {
+  before(assign);
+  visit(assign);
+  std::visit(recur, assign.expression->v);
+  after(assign);
+}
+
+void BaseAstVisitor::operator()(Ast_Variable_Declaration& var_decl) {
+  before(var_decl);
+  visit(var_decl);
+  if (var_decl.initializer) {
+    std::visit(recur, var_decl.initializer->v);
+  }
+  after(var_decl);
+}
+
 /* Expressions */
 
 void BaseAstVisitor::operator()(Ast_Call& call) {

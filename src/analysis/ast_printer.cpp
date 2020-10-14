@@ -97,6 +97,16 @@ void AstPrinter::print_stmt(Ast_Variable_Declaration& var_decl) {
   }
 }
 
+void AstPrinter::print_stmt(Ast_For_Loop& for_loop) {
+  putf("* For loop");
+  putf("- Loop variable: {} : {}", for_loop.loop_value.name,
+    type_to_string(for_loop.value_type.get()));
+  putf("- Range start");
+  self->print_expr(*for_loop.start_range);
+  putf("- Range end");
+  self->print_expr(*for_loop.end_range);
+}
+
 /* Expressions */
 
 void AstPrinter::print_expr(Ast_Expression& expr) {

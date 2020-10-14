@@ -270,6 +270,10 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
   }
 }
 
+void LLVMCodeGen::codegen_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
+  assert(false && "todo code gen for loops");
+}
+
 /* Expressions */
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope) {

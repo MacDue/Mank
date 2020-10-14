@@ -71,6 +71,7 @@ class AstPrinter {
     void print_stmt(Ast_Return_Statement& return_stmt);
     void print_stmt(Ast_Assign& assign);
     void print_stmt(Ast_Variable_Declaration& var_decl);
+    void print_stmt(Ast_For_Loop& for_loop);
 
     void print_const(PrimativeValue& const_value);
     void print_expr(Ast_Expression& expr);

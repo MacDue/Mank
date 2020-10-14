@@ -34,13 +34,21 @@ struct Ast_Variable_Declaration: Ast_Node {
   Expression_Ptr initializer = nullptr;
 };
 
+struct Ast_For_Loop: Ast_Node {
+  Ast_Identifier loop_value;
+  Type_Ptr value_type;
+  Expression_Ptr start_range;
+  Expression_Ptr end_range;
+};
+
 using Ast_Statement_Type = std::variant<
   Ast_Expression_Statement,
   Ast_Return_Statement,
   Ast_Block,
   Ast_If_Statement,
   Ast_Assign,
-  Ast_Variable_Declaration>;
+  Ast_Variable_Declaration,
+  Ast_For_Loop>;
 
 struct Ast_Statement {
   Ast_Statement_Type v;

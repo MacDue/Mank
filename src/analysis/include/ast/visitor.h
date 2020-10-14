@@ -54,6 +54,7 @@ struct BaseAstVisitor: public AstVisitor<
   Ast_If_Statement,
   Ast_Assign,
   Ast_Variable_Declaration,
+  Ast_For_Loop,
   /* Expressions */
   Ast_Call,
   Ast_Literal,
@@ -70,6 +71,7 @@ struct BaseAstVisitor: public AstVisitor<
   void operator()(Ast_If_Statement& if_stmt) override;
   void operator()(Ast_Assign& assign) override;
   void operator()(Ast_Variable_Declaration& var_decl) override;
+  void operator()(Ast_For_Loop& for_loop) override;
 
   void operator()(Ast_Call& call) override;
   void operator()(Ast_Literal& literal) override;

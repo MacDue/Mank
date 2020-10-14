@@ -135,6 +135,8 @@ Statement_Ptr Parser::parse_statement() {
     return_stmt.expression = expr;
     expect(TokenType::SEMICOLON);
     stmt = std::make_shared<Ast_Statement>(return_stmt);
+  } else if (peek(TokenType::FOR)) {
+    stmt = this->parse_for_loop();
   } else if (auto expr = this->parse_expression()) {
     if (consume(TokenType::ASSIGN)) {
       Ast_Assign assign;
@@ -151,6 +153,9 @@ Statement_Ptr Parser::parse_statement() {
         throw_sema_error_at(expr, "expression is not an identifier");
       }
       var_decl.type = this->parse_type();
+      if (!var_decl.type) {
+        throw_error_here("expected type name");
+      }
       if (consume(TokenType::ASSIGN)) {
         var_decl.initializer = this->parse_expression();
       }
@@ -216,6 +221,37 @@ Statement_Ptr Parser::parse_if() {
     return std::make_shared<Ast_Statement>(parsed_if);
   } else {
     return nullptr;
+  }
+}
+
+Statement_Ptr Parser::parse_for_loop() {
+  if (consume(TokenType::FOR)) {
+    Ast_For_Loop for_loop;
+    auto loop_value = this->parse_identifier();
+    if (!loop_value) {
+      throw_error_here("expected identifier (loop variable)");
+    }
+    for_loop.loop_value = *loop_value;
+    expect(TokenType::COLON);
+    for_loop.value_type = this->parse_type();
+    if (!for_loop.value_type) {
+      throw_error_here("expected loop value type");
+    }
+
+    for_loop.start_range = this->parse_expression();
+    expect(TokenType::DOUBLE_DOT);
+    for_loop.end_range = this->parse_expression();
+
+    auto body = this->parse_block();
+
+    if (!body) {
+      throw_error_here("expected (braced) loop body");
+    }
+    for_loop.body = std::make_shared<Ast_Statement>(*body);
+
+    return std::make_shared<Ast_Statement>(for_loop);
+  } else {
+    return nullptr; // impossible
   }
 }
 

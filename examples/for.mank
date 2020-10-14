@@ -1,0 +1,8 @@
+
+fun test: i32 {
+  count: i32 = 0;
+  for x: i32 0 .. 10 {
+    count = count + 1;
+  }
+  return count;
+}

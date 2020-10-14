@@ -59,6 +59,7 @@ private:
   /* Statements */
   Statement_Ptr parse_statement();
   Statement_Ptr parse_if();
+  Statement_Ptr parse_for_loop();
 
   /* Expressions */
   Expression_Ptr parse_expression();

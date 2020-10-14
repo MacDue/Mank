@@ -18,6 +18,7 @@ private:
   void analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type = nullptr);
   void analyse_block(Ast_Block& block, Scope& scope, Type* return_type);
   void analyse_expression_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);
+  void analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope, Type* return_type);
 
   Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope);
   Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope);

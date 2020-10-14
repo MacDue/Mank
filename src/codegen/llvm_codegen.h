@@ -69,7 +69,7 @@ public:
   void codegen_statement(Ast_Return_Statement& return_stmt, Scope& scope);
   void codegen_statement(Ast_Assign& assign, Scope& scope);
   void codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope);
-  void codegen_for_loop(Ast_For_Loop& for_loop, Scope& scope);
+  void codegen_statement(Ast_For_Loop& for_loop, Scope& scope);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope);

@@ -39,6 +39,7 @@ struct Ast_For_Loop: Ast_Node {
   Type_Ptr value_type;
   Expression_Ptr start_range;
   Expression_Ptr end_range;
+  Statement_Ptr body;
 };
 
 using Ast_Statement_Type = std::variant<

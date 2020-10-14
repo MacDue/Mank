@@ -194,6 +194,7 @@ void Lexer::next_token() {
     || match("!", TokenType::LOGICAL_NOT)
     || match("¬", TokenType::LOGICAL_NOT)
     /* Basic elements */
+    || match("..", TokenType::DOUBLE_DOT)
     || match(",", TokenType::COMMA)
     || match(";", TokenType::SEMICOLON)
     || match(":", TokenType::COLON)

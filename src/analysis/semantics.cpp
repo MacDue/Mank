@@ -226,8 +226,41 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
 
       scope.symbols.emplace_back(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
+    },
+    pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop) {
+      analyse_for_loop(for_loop, scope, return_type);
     }
   );
+}
+
+void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope, Type* return_type) {
+  resolve_type_or_fail(scope, for_loop.value_type, "undeclared loop type {}");
+
+  auto start_range_type = analyse_expression(*for_loop.start_range, scope);
+  if (!match_types(for_loop.value_type.get(), start_range_type.get())) {
+    throw_sema_error_at(for_loop.start_range,
+      "start range type type {} does not match loop value type {}",
+      type_to_string(start_range_type.get()), type_to_string(for_loop.value_type.get()));
+  }
+
+  auto end_range_type = analyse_expression(*for_loop.end_range, scope);
+  for_loop.end_range->type = end_range_type;
+  if (!match_types(start_range_type.get(), end_range_type.get())) {
+    throw_sema_error_at(for_loop.end_range,
+      "end range type {} does not match start range type {}",
+      type_to_string(end_range_type.get()), type_to_string(start_range_type.get()));
+  }
+
+  Symbol* pior_symbol = scope.lookup_first_name(for_loop.loop_value);
+  if (pior_symbol) {
+    emit_warning_at(for_loop.loop_value, "loop value shadows existing symbol");
+  }
+
+  auto& body = std::get<Ast_Block>(for_loop.body->v);
+  body.scope.symbols.emplace_back(Symbol(
+    for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
+
+  analyse_block(body, scope, return_type);
 }
 
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {

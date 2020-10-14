@@ -41,6 +41,9 @@ IN = TOK_MULTI_CHAR + 32,
 TRUE = TOK_MULTI_CHAR + 33,
 FALSE = TOK_MULTI_CHAR + 34,
 
+/* Misc */
+DOUBLE_DOT = TOK_MULTI_CHAR + 35,
+
 /* Lexer state */
 LEX_EOF = -1,
 EMPTY = -2,

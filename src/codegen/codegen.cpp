@@ -270,8 +270,83 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
   }
 }
 
-void LLVMCodeGen::codegen_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
-  assert(false && "todo code gen for loops");
+#define LOOP_RANGE_END   "!end_range"
+
+void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
+  /*
+    TODO: Move loop desugaring into parser
+
+    FIXME! Broken for loop (messy test codegen)
+
+    No support for early return in for loops currently.
+  */
+  llvm::Value* start_value = codegen_expression(*for_loop.start_range, scope);
+  llvm::Value* end_value = codegen_expression(*for_loop.end_range, scope);
+
+  auto& body = std::get<Ast_Block>(for_loop.body->v);
+  body.scope.symbols.emplace_back(Symbol(
+    for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
+
+  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::AllocaInst* loop_value = create_entry_alloca(current_function, &body.scope.symbols.back());
+  ir_builder.CreateStore(start_value, loop_value);
+
+  auto loop_range_type = extract_type(for_loop.end_range->type);
+  body.scope.symbols.emplace_back(Symbol(
+    SymbolName(LOOP_RANGE_END), loop_range_type, Symbol::LOCAL));
+  llvm::AllocaInst* range_end = create_entry_alloca(current_function, &body.scope.symbols.back());
+
+  ir_builder.CreateStore(end_value, range_end);
+
+  llvm::BasicBlock* for_check = llvm::BasicBlock::Create(
+    llvm_context, "for_check", current_function);
+
+  llvm::BasicBlock* for_body = llvm::BasicBlock::Create(
+    llvm_context, "for_body");
+
+  llvm::BasicBlock* for_end = llvm::BasicBlock::Create(
+    llvm_context, "for_end");
+
+  ir_builder.CreateBr(for_check);
+  ir_builder.SetInsertPoint(for_check);
+
+  Ast_Binary_Operation loop_cond;
+  loop_cond.operation = Ast_Operator::LESS_THAN;
+  loop_cond.left = std::make_shared<Ast_Expression>(for_loop.loop_value);
+  loop_cond.right = std::make_shared<Ast_Expression>(Ast_Identifier({}, LOOP_RANGE_END));
+  loop_cond.left->type = loop_cond.right->type = for_loop.start_range->type;
+
+  llvm::Value* loop_check = codegen_expression(loop_cond, body.scope);
+  ir_builder.CreateCondBr(loop_check, for_body, for_end);
+
+  // Probably could safely add directly
+  current_function->getBasicBlockList().push_back(for_body);
+  ir_builder.SetInsertPoint(for_body);
+
+  codegen_statement(body, scope);
+
+  // FIXME: Temp hack till I figure out proper ranges!
+  auto& primative_loop_type = std::get<PrimativeType>(loop_range_type->v);
+  Ast_Literal loop_inc_literal({},
+    primative_loop_type.tag == PrimativeTypeTag::BOOL ? "true" : "1", primative_loop_type.tag);
+
+  Ast_Binary_Operation next_loop_value = loop_cond;
+  next_loop_value.right = std::make_shared<Ast_Expression>(loop_inc_literal);
+  next_loop_value.operation = Ast_Operator::PLUS;
+
+  Ast_Assign inc_loop;
+  inc_loop.target = std::make_shared<Ast_Expression>(for_loop.loop_value);
+  inc_loop.expression = std::make_shared<Ast_Expression>(next_loop_value);
+
+  codegen_statement(inc_loop, body.scope);
+  // End FIXME
+
+  ir_builder.CreateBr(for_check);
+  body.scope.destroy_locals();
+
+
+  current_function->getBasicBlockList().push_back(for_end);
+  ir_builder.SetInsertPoint(for_end);
 }
 
 /* Expressions */

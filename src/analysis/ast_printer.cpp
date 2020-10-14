@@ -72,19 +72,19 @@ void AstPrinter::print_stmt(Ast_If_Statement& if_stmt) {
 
 void AstPrinter::print_stmt(Ast_Expression_Statement& expr_stmt) {
   putf("* Expression statement");
-  putf("- Value");
+  putf("- Value:");
   self->print_expr(*expr_stmt.expression);
 }
 
 void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
   putf("* Return statement");
-  putf("- Value");
+  putf("- Value:");
   self->print_expr(*return_stmt.expression);
 }
 
 void AstPrinter::print_stmt(Ast_Assign& assign) {
   putf("* Assign statement");
-  putf("- Value");
+  putf("- Value:");
   self->print_expr(*assign.expression);
 }
 
@@ -92,7 +92,7 @@ void AstPrinter::print_stmt(Ast_Variable_Declaration& var_decl) {
   putf("* Variable declaration");
   putf("- {} : {}", var_decl.variable.name, type_to_string(var_decl.type.get()));
   if (var_decl.initializer) {
-    putf("- Initializer");
+    putf("- Initializer:");
     self->print_expr(*var_decl.initializer);
   }
 }
@@ -101,10 +101,12 @@ void AstPrinter::print_stmt(Ast_For_Loop& for_loop) {
   putf("* For loop");
   putf("- Loop variable: {} : {}", for_loop.loop_value.name,
     type_to_string(for_loop.value_type.get()));
-  putf("- Range start");
+  putf("- Range start:");
   self->print_expr(*for_loop.start_range);
-  putf("- Range end");
+  putf("- Range end:");
   self->print_expr(*for_loop.end_range);
+  putf("- Loop body:");
+  self->print_stmt(*for_loop.body);
 }
 
 /* Expressions */

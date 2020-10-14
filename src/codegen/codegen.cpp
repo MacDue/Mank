@@ -344,7 +344,6 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   ir_builder.CreateBr(for_check);
   body.scope.destroy_locals();
 
-
   current_function->getBasicBlockList().push_back(for_end);
   ir_builder.SetInsertPoint(for_end);
 }

@@ -81,6 +81,7 @@ void BaseAstVisitor::operator()(Ast_For_Loop& for_loop) {
   visit(for_loop);
   std::visit(recur, for_loop.start_range->v);
   std::visit(recur, for_loop.end_range->v);
+  std::visit(recur, for_loop.body->v);
   after(for_loop);
 }
 

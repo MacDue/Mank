@@ -30,6 +30,13 @@ class LLVMCodeGen: public CodeGenerator {
       : alloca{alloca} {}
   };
 
+  struct SymbolMetaReturn: SymbolMetaLocal {
+    llvm::BasicBlock* return_block;
+
+    SymbolMetaReturn(llvm::AllocaInst* return_value, llvm::BasicBlock* return_block)
+      : SymbolMetaLocal(return_value), return_block{return_block} {}
+  };
+
   /*
     Owns core llvm datastructures (such as type & constants tables)
   */
@@ -47,6 +54,9 @@ class LLVMCodeGen: public CodeGenerator {
 
   Ast_File& file_ast;
 
+  bool block_terminates_here();
+
+  void create_exit_br(llvm::BasicBlock* target);
 public:
   LLVMCodeGen(Ast_File& file_ast);
   void create_module();

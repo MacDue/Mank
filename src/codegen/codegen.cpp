@@ -65,6 +65,26 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type) {
   );
 }
 
+bool LLVMCodeGen::block_terminates_here() {
+  auto last_block = ir_builder.GetInsertBlock();
+  if (!last_block->empty()) {
+    llvm::Instruction* last_inst = last_block->getTerminator();
+    if (last_inst) {
+      llvm::BranchInst* last_branch = llvm::dyn_cast<llvm::BranchInst>(last_inst);
+      if (last_branch && last_branch->isUnconditional()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void LLVMCodeGen::create_exit_br(llvm::BasicBlock* target) {
+  if (!block_terminates_here()) {
+    ir_builder.CreateBr(target);
+  }
+}
+
 /* Functions */
 
 llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
@@ -145,6 +165,9 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
     ir_builder.CreateStore(&arg, arg_alloca);
   }
 
+  llvm::BasicBlock* function_return = llvm::BasicBlock::Create(
+    llvm_context, "return");
+
   llvm::AllocaInst* return_alloca = nullptr;
   if (/* functions */ !func.procedure) {
     // Create function return value
@@ -152,11 +175,16 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
       SymbolName(FUNCTION_RETURN_LOCAL),
       func.return_type,
       Symbol::LOCAL));
-    return_alloca = create_entry_alloca(
-      llvm_func, &func.body.scope.symbols.back());
+    auto return_symbol = &func.body.scope.symbols.back();
+    return_alloca = create_entry_alloca(llvm_func, return_symbol);
+    return_symbol->meta = std::make_shared<SymbolMetaReturn>(return_alloca, function_return);
   }
 
   codegen_statement(func.body, func.body.scope);
+  create_exit_br(function_return);
+
+  llvm_func->getBasicBlockList().push_back(function_return);
+  ir_builder.SetInsertPoint(function_return);
 
   llvm::Value* return_value = nullptr;
   if (return_alloca) {
@@ -183,6 +211,9 @@ void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
   (void) scope; // Not needed
   for (auto& stmt: block.statements) {
     codegen_statement(*stmt, block.scope);
+    if (block_terminates_here()) {
+      break;
+    }
   }
 }
 
@@ -209,7 +240,7 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
   /* then */
   ir_builder.SetInsertPoint(then_block);
   codegen_statement(*if_stmt.then_block, scope);
-  ir_builder.CreateBr(end_block);
+  create_exit_br(end_block);
 
   /* else */
   if (if_stmt.has_else) {
@@ -218,7 +249,7 @@ void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
     current_function->getBasicBlockList().push_back(else_block);
     ir_builder.SetInsertPoint(else_block);
     codegen_statement(*if_stmt.else_block, scope);
-    ir_builder.CreateBr(end_block);
+    create_exit_br(end_block);
   }
 
   /* end */
@@ -235,10 +266,11 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
   assert(return_local && "return local must exist to codegen return statement!");
 
   // If this is not a SymbolMetaLocal something is _very_ wrong!
-  auto return_meta = static_cast<SymbolMetaLocal*>(return_local->meta.get());
+  auto return_meta = static_cast<SymbolMetaReturn*>(return_local->meta.get());
 
   llvm::Value* return_value = codegen_expression(*return_stmt.expression, scope);
   ir_builder.CreateStore(return_value, return_meta->alloca);
+  ir_builder.CreateBr(return_meta->return_block);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
@@ -324,6 +356,13 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   ir_builder.SetInsertPoint(for_body);
 
   codegen_statement(body, scope);
+
+  llvm::BasicBlock* for_inc = llvm::BasicBlock::Create(
+    llvm_context, "for_inc", current_function);
+
+  create_exit_br(for_inc);
+
+  ir_builder.SetInsertPoint(for_inc);
 
   // FIXME: Temp hack till I figure out proper ranges!
   auto& primative_loop_type = std::get<PrimativeType>(loop_range_type->v);

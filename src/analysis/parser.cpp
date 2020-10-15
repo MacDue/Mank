@@ -238,6 +238,8 @@ Statement_Ptr Parser::parse_for_loop() {
       throw_error_here("expected loop value type");
     }
 
+    expect(TokenType::IN);
+
     for_loop.start_range = this->parse_expression();
     expect(TokenType::DOUBLE_DOT);
     for_loop.end_range = this->parse_expression();

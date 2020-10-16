@@ -153,9 +153,7 @@ Statement_Ptr Parser::parse_statement() {
         throw_sema_error_at(expr, "expression is not an identifier");
       }
       var_decl.type = this->parse_type();
-      if (!var_decl.type) {
-        throw_error_here("expected type name");
-      }
+      // If there's no type it should be infered
       if (consume(TokenType::ASSIGN)) {
         var_decl.initializer = this->parse_expression();
       }
@@ -232,10 +230,11 @@ Statement_Ptr Parser::parse_for_loop() {
       throw_error_here("expected identifier (loop variable)");
     }
     for_loop.loop_value = *loop_value;
-    expect(TokenType::COLON);
-    for_loop.value_type = this->parse_type();
-    if (!for_loop.value_type) {
-      throw_error_here("expected loop value type");
+    if (consume(TokenType::COLON)) {
+      for_loop.value_type = this->parse_type();
+      if (!for_loop.value_type) {
+        throw_error_here("expected loop value type");
+      }
     }
 
     expect(TokenType::IN);

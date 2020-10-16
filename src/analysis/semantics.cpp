@@ -205,15 +205,24 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto& var_decl) {
       if (var_decl.type) {
         resolve_type_or_fail(scope, var_decl.type, "undeclared type {}");
-      } else {
-        assert(false && "fix me! infer decl types");
+      } else if (!var_decl.initializer) {
+        throw_sema_error_at(var_decl, "cannot infer type of {} without initializer",
+          var_decl.variable.name);
       }
       if (var_decl.initializer) {
         auto initializer_type = analyse_expression(*var_decl.initializer, scope);
-        if (!match_types(var_decl.type.get(), initializer_type.get())) {
-          throw_sema_error_at(var_decl.initializer,
-            "initializer type {} does not match declaration type {}",
-            type_to_string(initializer_type.get()), type_to_string(var_decl.type.get()));
+        if (var_decl.type) {
+          if (!match_types(var_decl.type.get(), initializer_type.get())) {
+            throw_sema_error_at(var_decl.initializer,
+              "initializer type {} does not match declaration type {}",
+              type_to_string(initializer_type.get()), type_to_string(var_decl.type.get()));
+          }
+        } else {
+          if (!initializer_type) {
+            throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
+              type_to_string(initializer_type.get()));
+          }
+          var_decl.type = initializer_type;
         }
       } else {
         emit_warning_at(var_decl, "default initialization is currently unimplemented");
@@ -234,13 +243,20 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
 }
 
 void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope, Type* return_type) {
-  resolve_type_or_fail(scope, for_loop.value_type, "undeclared loop type {}");
-
   auto start_range_type = analyse_expression(*for_loop.start_range, scope);
-  if (!match_types(for_loop.value_type.get(), start_range_type.get())) {
-    throw_sema_error_at(for_loop.start_range,
-      "start range type type {} does not match loop value type {}",
-      type_to_string(start_range_type.get()), type_to_string(for_loop.value_type.get()));
+  if (for_loop.value_type) {
+    resolve_type_or_fail(scope, for_loop.value_type, "undeclared loop type {}");
+    if (!match_types(for_loop.value_type.get(), start_range_type.get())) {
+      throw_sema_error_at(for_loop.start_range,
+        "start range type type {} does not match loop value type {}",
+        type_to_string(start_range_type.get()), type_to_string(for_loop.value_type.get()));
+    }
+  } else {
+    if (!start_range_type) {
+      throw_sema_error_at(for_loop.start_range, "loop value cannot be type {}",
+        type_to_string(start_range_type.get()));
+    }
+    for_loop.value_type = start_range_type;
   }
 
   auto end_range_type = analyse_expression(*for_loop.end_range, scope);

@@ -1,0 +1,10 @@
+fun fib_iter: i32 (n: i32) {
+  a := 0;
+  b := 1;
+  for _ in 0 .. (n - 1) {
+    temp := b;
+    b = a + b;
+    a = temp;
+  }
+  return b;
+}

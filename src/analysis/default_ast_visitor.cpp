@@ -37,7 +37,10 @@ void BaseAstVisitor::operator()(Ast_Expression_Statement& expr_stmt) {
 void BaseAstVisitor::operator()(Ast_Return_Statement& return_stmt) {
   before(return_stmt);
   visit(return_stmt);
-  std::visit(recur, return_stmt.expression->v);
+  if (return_stmt.expression) {
+    std::visit(recur, return_stmt.expression->v);
+  }
+  after(return_stmt);
 }
 
 void BaseAstVisitor::operator()(Ast_Block& block) {

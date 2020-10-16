@@ -78,8 +78,10 @@ void AstPrinter::print_stmt(Ast_Expression_Statement& expr_stmt) {
 
 void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
   putf("* Return statement");
-  putf("- Value:");
-  self->print_expr(*return_stmt.expression);
+  if (return_stmt.expression) {
+    putf("- Value:");
+    self->print_expr(*return_stmt.expression);
+  }
 }
 
 void AstPrinter::print_stmt(Ast_Assign& assign) {

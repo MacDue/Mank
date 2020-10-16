@@ -116,6 +116,16 @@ std::optional<Ast_Block> Parser::parse_block() {
       parsed_block.statements.emplace_back(this->parse_statement());
     }
     expect(TokenType::RIGHT_BRACE);
+    if (parsed_block.statements.size() > 0) {
+      if (auto final_expr = std::get_if<Ast_Expression_Statement>(
+            &parsed_block.statements.back()->v)
+      ) {
+        if (final_expr->final_expr) {
+          parsed_block.final_expr = final_expr->expression;
+          parsed_block.statements.pop_back();
+        }
+      }
+    }
   } else {
     return std::nullopt;
   }
@@ -140,6 +150,7 @@ Statement_Ptr Parser::parse_statement() {
   } else if (peek(TokenType::FOR)) {
     stmt = this->parse_for_loop();
   } else if (auto expr = this->parse_expression()) {
+    bool simple_expression = false;
     if (consume(TokenType::ASSIGN)) {
       Ast_Assign assign;
       assign.target = expr;
@@ -161,11 +172,17 @@ Statement_Ptr Parser::parse_statement() {
       }
       stmt = std::make_shared<Ast_Statement>(var_decl);
     } else {
+      simple_expression = true;
       Ast_Expression_Statement expr_stmt;
       expr_stmt.expression = expr;
       stmt = std::make_shared<Ast_Statement>(expr_stmt);
     }
-    expect(TokenType::SEMICOLON);
+    // Hack for final expressions of blocks
+    if (simple_expression && peek(TokenType::RIGHT_BRACE)) {
+      std::get<Ast_Expression_Statement>(stmt->v).final_expr = true;
+    } else {
+      expect(TokenType::SEMICOLON);
+    }
   } else {
     throw_error_here("unexpected \"{}\", expecting an if, expression, or return statement");
   }

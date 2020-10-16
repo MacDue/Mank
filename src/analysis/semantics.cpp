@@ -109,6 +109,14 @@ void Semantics::analyse_block(Ast_Block& block, Scope& scope, Type* return_type)
   for (auto& stmt: block.statements) {
     analyse_statement(*stmt, block.scope, return_type);
   }
+  if (block.final_expr) {
+    auto expr_type = analyse_expression(*block.final_expr, scope);
+    if (!match_types(expr_type.get(), return_type)) {
+      throw_sema_error_at(block.final_expr,
+        "final expression with type {} does not match expected type of {}",
+        type_to_string(expr_type.get()), type_to_string(return_type));
+    }
+  }
   block.scope.destroy_locals();
 }
 
@@ -118,6 +126,14 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       Symbol(arg.name, arg.type, Symbol::INPUT));
   }
   analyse_block(func.body, *func.body.scope.parent, func.return_type.get());
+  if (func.body.final_expr) {
+    // Desugar implict return for codegen ease
+    Ast_Return_Statement implicit_return;
+    implicit_return.expression = func.body.final_expr;
+    func.body.statements.emplace_back(
+      std::make_shared<Ast_Statement>(implicit_return));
+    func.body.final_expr = nullptr;
+  }
 
   Ast_Statement* first_unreachable_stmt = nullptr;
   Ast_Statement func_body(func.body);

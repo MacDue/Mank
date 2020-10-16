@@ -14,7 +14,7 @@ bool check_reachability(Ast_Statement& block_like, Ast_Statement** unreachable_s
   using namespace mpark::patterns;
   return match(block_like.v)(
     pattern(as<Ast_Block>(arg)) = [&](auto& block) {
-      bool block_returns = false;
+      bool block_returns = block.final_expr != nullptr;
       for (uint stmt_idx = 0; stmt_idx < block.statements.size(); stmt_idx++) {
         auto& stmt = block.statements.at(stmt_idx);
         block_returns |= check_reachability(*stmt, unreachable_stmt);

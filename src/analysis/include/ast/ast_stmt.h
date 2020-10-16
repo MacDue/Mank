@@ -7,6 +7,7 @@
 
 struct Ast_Expression_Statement: Ast_Node {
   Expression_Ptr expression;
+  bool final_expr = false;
 };
 
 struct Ast_Return_Statement: Ast_Node {
@@ -16,6 +17,7 @@ struct Ast_Return_Statement: Ast_Node {
 struct Ast_Block: Ast_Node {
   Scope scope;
   std::vector<Statement_Ptr> statements;
+  Expression_Ptr final_expr;
 };
 
 struct Ast_If_Statement: Ast_Node {

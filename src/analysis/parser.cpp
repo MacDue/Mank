@@ -126,7 +126,7 @@ std::optional<Ast_Block> Parser::parse_block() {
 Statement_Ptr Parser::parse_statement() {
   auto stmt_start = this->current_location();
   Statement_Ptr stmt;
-  //this->lexer.save_state();
+  consume(TokenType::SEMICOLON);
   if (peek(TokenType::IF)) {
     stmt = this->parse_if();
   } else if (consume(TokenType::RETURN)) {

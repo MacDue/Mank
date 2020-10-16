@@ -180,7 +180,7 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
   }
   return_symbol->meta = std::make_shared<SymbolMetaReturn>(return_alloca, function_return);
 
-  codegen_statement(func.body, func.body.scope);
+  codegen_expression(func.body, func.body.scope);
   create_exit_br(function_return);
 
   llvm_func->getBasicBlockList().push_back(function_return);
@@ -207,7 +207,7 @@ void LLVMCodeGen::codegen_statement(Ast_Statement& stmt, Scope& scope) {
   }, stmt.v);
 }
 
-void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope) {
   (void) scope; // Not needed
   for (auto& stmt: block.statements) {
     codegen_statement(*stmt, block.scope);
@@ -217,44 +217,44 @@ void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
   }
 }
 
-void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
-  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
-  llvm::Value* condition = codegen_expression(*if_stmt.cond, scope);
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_stmt, Scope& scope) {
+  // llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  // llvm::Value* condition = codegen_expression(*if_stmt.cond, scope);
 
-  /* Create and insert the 'then' block into the function */
-  llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
-    llvm_context, "then_block", current_function);
+  // /* Create and insert the 'then' block into the function */
+  // llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
+  //   llvm_context, "then_block", current_function);
 
-  llvm::BasicBlock* else_block = nullptr;
+  // llvm::BasicBlock* else_block = nullptr;
 
-  llvm::BasicBlock* end_block = llvm::BasicBlock::Create(
-    llvm_context, "if_end");
+  // llvm::BasicBlock* end_block = llvm::BasicBlock::Create(
+  //   llvm_context, "if_end");
 
-  if (if_stmt.has_else) {
-    else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
-    ir_builder.CreateCondBr(condition, then_block, else_block);
-  } else {
-    ir_builder.CreateCondBr(condition, then_block, end_block);
-  }
+  // if (if_stmt.has_else) {
+  //   else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
+  //   ir_builder.CreateCondBr(condition, then_block, else_block);
+  // } else {
+  //   ir_builder.CreateCondBr(condition, then_block, end_block);
+  // }
 
-  /* then */
-  ir_builder.SetInsertPoint(then_block);
-  codegen_statement(*if_stmt.then_block, scope);
-  create_exit_br(end_block);
+  // /* then */
+  // ir_builder.SetInsertPoint(then_block);
+  // codegen_statement(*if_stmt.then_block, scope);
+  // create_exit_br(end_block);
 
-  /* else */
-  if (if_stmt.has_else) {
-    // Now add the else block!
+  // /* else */
+  // if (if_stmt.has_else) {
+  //   // Now add the else block!
 
-    current_function->getBasicBlockList().push_back(else_block);
-    ir_builder.SetInsertPoint(else_block);
-    codegen_statement(*if_stmt.else_block, scope);
-    create_exit_br(end_block);
-  }
+  //   current_function->getBasicBlockList().push_back(else_block);
+  //   ir_builder.SetInsertPoint(else_block);
+  //   codegen_statement(*if_stmt.else_block, scope);
+  //   create_exit_br(end_block);
+  // }
 
-  /* end */
-  current_function->getBasicBlockList().push_back(end_block);
-  ir_builder.SetInsertPoint(end_block);
+  // /* end */
+  // current_function->getBasicBlockList().push_back(end_block);
+  // ir_builder.SetInsertPoint(end_block);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
@@ -317,7 +317,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   llvm::Value* start_value = codegen_expression(*for_loop.start_range, scope);
   llvm::Value* end_value = codegen_expression(*for_loop.end_range, scope);
 
-  auto& body = std::get<Ast_Block>(for_loop.body->v);
+  auto& body = for_loop.body;
   body.scope.symbols.emplace_back(Symbol(
     for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
 
@@ -357,7 +357,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   current_function->getBasicBlockList().push_back(for_body);
   ir_builder.SetInsertPoint(for_body);
 
-  codegen_statement(body, scope);
+  codegen_expression(body, scope);
 
   llvm::BasicBlock* for_inc = llvm::BasicBlock::Create(
     llvm_context, "for_inc", current_function);

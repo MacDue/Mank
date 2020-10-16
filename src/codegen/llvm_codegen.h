@@ -73,8 +73,6 @@ public:
 
   /* Statements */
   void codegen_statement(Ast_Statement& stmt, Scope& scope);
-  void codegen_statement(Ast_Block& block, Scope& scope);
-  void codegen_statement(Ast_If_Statement& if_stmt, Scope& scope);
   void codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);
   void codegen_statement(Ast_Return_Statement& return_stmt, Scope& scope);
   void codegen_statement(Ast_Assign& assign, Scope& scope);
@@ -83,6 +81,8 @@ public:
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Block& block, Scope& scope);
+  llvm::Value* codegen_expression(Ast_If_Expr& if_stmt, Scope& scope);
   llvm::Value* codegen_expression(Ast_Call& call, Scope& scope);
   llvm::Value* codegen_expression(Ast_Literal& literal, Scope& scope);
   llvm::Value* codegen_expression(Ast_Identifier& ident, Scope& scope);

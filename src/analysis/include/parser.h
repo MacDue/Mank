@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <iostream>
 
 #include "ast.h"
 #include "lexer.h"
@@ -58,10 +59,10 @@ private:
 
   /* Statements */
   Statement_Ptr parse_statement();
-  Statement_Ptr parse_if();
   Statement_Ptr parse_for_loop();
 
   /* Expressions */
+  Expression_Ptr parse_if();
   Expression_Ptr parse_expression();
   Expression_Ptr parse_postfix_expression();
   Expression_Ptr parse_call(Expression_Ptr target);
@@ -76,4 +77,8 @@ private:
   void expect(TokenType token_type);
   bool peek(TokenType token_type);
   bool peek(TokenType token_type, Token& token);
+
+  inline bool was_previously_terminating_symbol() {
+    return lexer.get_last_consumed().type == TokenType::RIGHT_BRACE;
+  }
 };

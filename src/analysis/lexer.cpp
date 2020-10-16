@@ -27,13 +27,12 @@ void Lexer::reset() {
 }
 
 void Lexer::save_state() {
-  this->saved_token = this->last_token;
-  this->saved_position = this->current;
+  this->saved.push(std::make_pair(this->last_token, this->current));
 }
 
 void Lexer::restore_state() {
-  this->last_token = this->saved_token;
-  this->current = this->saved_position;
+  std::tie(this->last_token, this->current) = this->saved.top();
+  this->saved.pop();
 }
 
 void Lexer::load_file(std::string const & file_path) {
@@ -58,7 +57,12 @@ Token& Lexer::peek_next_token() {
 }
 
 void Lexer::consume_token() {
+  this->last_consumed = this->last_token;
   this->last_token.type = TokenType::EMPTY;
+}
+
+Token Lexer::get_last_consumed() const {
+  return this->last_consumed;
 }
 
 SourceLocation Lexer::peek_next_token_location() {

@@ -65,8 +65,6 @@ class AstPrinter {
     void print_function(Ast_Function_Declaration& func);
 
     void print_stmt(Ast_Statement& stmt);
-    void print_stmt(Ast_Block& block);
-    void print_stmt(Ast_If_Statement& if_stmt);
     void print_stmt(Ast_Expression_Statement& expr_stmt);
     void print_stmt(Ast_Return_Statement& return_stmt);
     void print_stmt(Ast_Assign& assign);
@@ -74,6 +72,9 @@ class AstPrinter {
     void print_stmt(Ast_For_Loop& for_loop);
 
     void print_const(PrimativeValue& const_value);
+
+    void print_expr(Ast_Block& block);
+    void print_expr(Ast_If_Expr& if_stmt);
     void print_expr(Ast_Expression& expr);
     void print_expr(Ast_Call& call);
     void print_expr(Ast_Literal& literal);

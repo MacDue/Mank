@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "scope.h"
 #include "ast/ast_node.h"
+#include "ast/ast_block.h"
 
 struct Ast_Expression_Statement: Ast_Node {
   Expression_Ptr expression;
@@ -12,18 +12,6 @@ struct Ast_Expression_Statement: Ast_Node {
 
 struct Ast_Return_Statement: Ast_Node {
   Expression_Ptr expression;
-};
-
-struct Ast_Block: Ast_Node {
-  Scope scope;
-  std::vector<Statement_Ptr> statements;
-  Expression_Ptr final_expr;
-};
-
-struct Ast_If_Statement: Ast_Node {
-  bool has_else = false;
-  Expression_Ptr cond;
-  Statement_Ptr then_block, else_block;
 };
 
 struct Ast_Assign: Ast_Node {
@@ -41,14 +29,12 @@ struct Ast_For_Loop: Ast_Node {
   Type_Ptr value_type;
   Expression_Ptr start_range;
   Expression_Ptr end_range;
-  Statement_Ptr body;
+  Ast_Block body;
 };
 
 using Ast_Statement_Type = std::variant<
   Ast_Expression_Statement,
   Ast_Return_Statement,
-  Ast_Block,
-  Ast_If_Statement,
   Ast_Assign,
   Ast_Variable_Declaration,
   Ast_For_Loop>;

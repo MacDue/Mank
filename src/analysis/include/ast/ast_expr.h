@@ -4,6 +4,13 @@
 #include <memory>
 
 #include "ast/ast_node.h"
+#include "ast/ast_block.h"
+
+struct Ast_If_Expr: Ast_Const_Expr {
+  bool has_else = false;
+  Expression_Ptr cond;
+  Expression_Ptr then_block, else_block;
+};
 
 struct Ast_Call: Ast_Const_Expr {
   Expression_Ptr callee;
@@ -37,6 +44,8 @@ struct Ast_Binary_Operation: Ast_Const_Expr {
 };
 
 using Ast_Expression_Type = std::variant<
+  Ast_Block,
+  Ast_If_Expr,
   Ast_Call,
   Ast_Literal,
   Ast_Identifier,

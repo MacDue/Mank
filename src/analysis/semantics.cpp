@@ -104,20 +104,17 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
   }
 }
 
-void Semantics::analyse_block(Ast_Block& block, Scope& scope, Type* return_type) {
+Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   block.scope.parent = &scope;
   for (auto& stmt: block.statements) {
-    analyse_statement(*stmt, block.scope, return_type);
+    analyse_statement(*stmt, block.scope);
   }
+  Type_Ptr block_type;
   if (block.final_expr) {
-    auto expr_type = analyse_expression(*block.final_expr, scope);
-    if (!match_types(expr_type.get(), return_type)) {
-      throw_sema_error_at(block.final_expr,
-        "final expression with type {} does not match expected type of {}",
-        type_to_string(expr_type.get()), type_to_string(return_type));
-    }
+    block_type = analyse_expression(*block.final_expr, scope);
   }
   block.scope.destroy_locals();
+  return block_type;
 }
 
 void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
@@ -125,8 +122,14 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
     func.body.scope.symbols.emplace_back(
       Symbol(arg.name, arg.type, Symbol::INPUT));
   }
-  analyse_block(func.body, *func.body.scope.parent, func.return_type.get());
+  this->expected_return = func.return_type.get();
+  auto block_type = analyse_block(func.body, *func.body.scope.parent);
   if (func.body.final_expr) {
+    if (!match_types(block_type.get(), func.return_type.get())) {
+      throw_sema_error_at(func.body.final_expr,
+        "implicit return of type {} does not match expected type {}",
+        type_to_string(block_type.get()), type_to_string(func.return_type.get()));
+    }
     // Desugar implict return for codegen ease
     Ast_Return_Statement implicit_return;
     implicit_return.expression = func.body.final_expr;
@@ -135,16 +138,16 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
     func.body.final_expr = nullptr;
   }
 
-  Ast_Statement* first_unreachable_stmt = nullptr;
-  Ast_Statement func_body(func.body);
-  bool all_paths_return = AstHelper::check_reachability(func_body, &first_unreachable_stmt);
-  if (!func.procedure && !all_paths_return) {
-    throw_sema_error_at(func.identifer, "function possibly fails to return a value");
-  }
+  // Ast_Statement* first_unreachable_stmt = nullptr;
+  // Ast_Statement func_body(func.body);
+  // bool all_paths_return = AstHelper::check_reachability(func_body, &first_unreachable_stmt);
+  // if (!func.procedure && !all_paths_return) {
+  //   throw_sema_error_at(func.identifer, "function possibly fails to return a value");
+  // }
 
-  if (first_unreachable_stmt) {
-    emit_warning_at(*first_unreachable_stmt, "unreachable code");
-  }
+  // if (first_unreachable_stmt) {
+  //   emit_warning_at(*first_unreachable_stmt, "unreachable code");
+  // }
 }
 
 static bool expression_may_have_side_effects(Ast_Expression& expr) {
@@ -160,7 +163,9 @@ static bool expression_may_have_side_effects(Ast_Expression& expr) {
       return expression_may_have_side_effects(*binop.left)
         || expression_may_have_side_effects(*binop.right);
     },
-    pattern(as<Ast_Call>(_)) = []{ return true; },
+    pattern(anyof(as<Ast_Call>(_), as<Ast_Block>(_), as<Ast_If_Expr>(_))) = []{
+      return true;
+    },
     pattern(_) = []() { return false; }
   );
 }
@@ -170,19 +175,16 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
   bool is_call = std::get_if<Ast_Call>(&expr_stmt.expression->v) != nullptr;
   if (!expression_may_have_side_effects(*expr_stmt.expression)) {
     emit_warning_at(expr_stmt.expression, "statement has no effect");
-  } else if (!is_call) {
+  } else if (!is_call && expression_type) {
     emit_warning_at(expr_stmt.expression, "result of expression discarded");
   } else if (expression_type) {
     throw_sema_error_at(expr_stmt.expression, "return value discarded");
   }
 }
 
-void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* return_type) {
+void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
   using namespace mpark::patterns;
   match(stmt.v)(
-    pattern(as<Ast_Block>(arg)) = [&](auto& block) {
-      return analyse_block(block, scope, return_type);
-    },
     pattern(as<Ast_Expression_Statement>(arg)) = [&](auto& expr_stmt){
       analyse_expression_statement(expr_stmt, scope);
     },
@@ -190,24 +192,13 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
       Type_Ptr expr_type;
       if (return_stmt.expression) {
         expr_type = analyse_expression(*return_stmt.expression, scope);
-      } else if (return_type) {
+      } else if (expected_return) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
-      if (!match_types(expr_type.get(), return_type)) {
+      if (!match_types(expr_type.get(), expected_return)) {
         throw_sema_error_at(return_stmt.expression,
           "invalid return type, expected {}, was {}",
-          type_to_string(return_type), type_to_string(expr_type.get()));
-      }
-    },
-    pattern(as<Ast_If_Statement>(arg)) = [&](auto& if_stmt){
-      auto cond_type = analyse_expression(*if_stmt.cond, scope);
-      if (!match_types(cond_type.get(), Primative::BOOL.get())) {
-        throw_sema_error_at(if_stmt.cond,
-          "if condition must be a {}", type_to_string(*Primative::BOOL));
-      }
-      analyse_statement(*if_stmt.then_block, scope, return_type);
-      if (if_stmt.has_else) {
-        analyse_statement(*if_stmt.else_block, scope, return_type);
+          type_to_string(expected_return), type_to_string(expr_type.get()));
       }
     },
     pattern(as<Ast_Assign>(arg)) = [&](auto& assign){
@@ -258,12 +249,12 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
     },
     pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop) {
-      analyse_for_loop(for_loop, scope, return_type);
+      analyse_for_loop(for_loop, scope);
     }
   );
 }
 
-void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope, Type* return_type) {
+void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   auto start_range_type = analyse_expression(*for_loop.start_range, scope);
   if (for_loop.value_type) {
     resolve_type_or_fail(scope, for_loop.value_type, "undeclared loop type {}");
@@ -293,11 +284,14 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope, Type* ret
     emit_warning_at(for_loop.loop_value, "loop value shadows existing symbol");
   }
 
-  auto& body = std::get<Ast_Block>(for_loop.body->v);
+  auto& body = for_loop.body;
   body.scope.symbols.emplace_back(Symbol(
     for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
 
-  analyse_block(body, scope, return_type);
+  auto body_type = analyse_block(body, scope);
+  if (body_type) {
+    throw_sema_error_at(body.final_expr, "loop body should not evaluate to a value");
+  }
 }
 
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
@@ -318,6 +312,31 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         default:
           throw_sema_error_at(lit, "fix me! unknown literal type!");
       }
+    },
+    pattern(as<Ast_Block>(arg)) = [&](auto& block) {
+      return analyse_block(block, scope);
+    },
+    pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_expr){
+      auto cond_type = analyse_expression(*if_expr.cond, scope);
+      if (!match_types(cond_type.get(), Primative::BOOL.get())) {
+        throw_sema_error_at(if_expr.cond,
+          "if condition must be a {}", type_to_string(*Primative::BOOL));
+      }
+      auto then_type = analyse_expression(*if_expr.then_block, scope);
+      if (if_expr.has_else) {
+        auto else_type = analyse_expression(*if_expr.else_block, scope);
+        if (!match_types(then_type.get(), else_type.get())) {
+          throw_sema_error_at(if_expr,
+            "type of then block {} does not match else block {}",
+            type_to_string(then_type.get()), type_to_string(else_type.get()));
+        }
+      } else if (then_type) {
+        auto& final_expr = std::get<Ast_Block>(if_expr.then_block->v).final_expr;
+        throw_sema_error_at(final_expr,
+          "if expression cannot evaluate to {} without a matching else",
+          type_to_string(then_type.get()));
+      }
+      return then_type;
     },
     pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) {
       Symbol* symbol = scope.lookup_first_name(ident);

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <stack>
 #include <string>
+#include <utility>
 
 #include "constants.h"
 #include "primative_type.h"
@@ -36,6 +38,7 @@ struct Lexer {
 
   /* Token actions */
   Token& peek_next_token();
+  Token get_last_consumed() const;
   void consume_token();
   SourceLocation peek_next_token_location();
   SourceLocation get_last_token_location() const;
@@ -46,7 +49,7 @@ struct Lexer {
 private:
   std::string source;
   std::string source_name;
-  Token last_token;
+  Token last_token, last_consumed;
 
   /* Char actions */
   int peek_next_char();
@@ -70,7 +73,6 @@ private:
   void set_token_end();
   std::string_view extract_string(int from, int to) const;
 
-  Token saved_token = last_token;
-  Position saved_position = current;
+  std::stack<std::pair<Token, Position>> saved;
 };
 

@@ -137,9 +137,7 @@ Statement_Ptr Parser::parse_statement() {
   auto stmt_start = this->current_location();
   Statement_Ptr stmt;
   consume(TokenType::SEMICOLON);
-  if (peek(TokenType::IF)) {
-    stmt = this->parse_if();
-  } else if (consume(TokenType::RETURN)) {
+  if (consume(TokenType::RETURN)) {
     Ast_Return_Statement return_stmt;
     if (!peek(TokenType::SEMICOLON)) {
       auto expr = this->parse_expression();
@@ -178,9 +176,10 @@ Statement_Ptr Parser::parse_statement() {
       stmt = std::make_shared<Ast_Statement>(expr_stmt);
     }
     // Hack for final expressions of blocks
+    bool seen_terminator = was_previously_terminating_symbol();
     if (simple_expression && peek(TokenType::RIGHT_BRACE)) {
       std::get<Ast_Expression_Statement>(stmt->v).final_expr = true;
-    } else {
+    } else if (!seen_terminator) {
       expect(TokenType::SEMICOLON);
     }
   } else {
@@ -189,8 +188,8 @@ Statement_Ptr Parser::parse_statement() {
   return mark_ast_location(stmt_start, stmt);
 }
 
-Statement_Ptr Parser::parse_if() {
-  Ast_If_Statement parsed_if;
+Expression_Ptr Parser::parse_if() {
+  Ast_If_Expr parsed_if;
   if (consume(TokenType::IF)) {
     auto condition = this->parse_expression();
     if (!condition) {
@@ -201,7 +200,7 @@ Statement_Ptr Parser::parse_if() {
     if (!then_block) {
       throw_error_here("expected (braced) then block");
     }
-    parsed_if.then_block = std::make_shared<Ast_Statement>(*then_block);
+    parsed_if.then_block = std::make_shared<Ast_Expression>(*then_block);
     this->lexer.save_state();
     if (consume(TokenType::ELSE)) {
       parsed_if.has_else = true;
@@ -224,18 +223,18 @@ Statement_Ptr Parser::parse_if() {
           }
         }
         */
-        parsed_if.else_block = this->parse_statement();
+        parsed_if.else_block = this->parse_expression();
       } else {
         auto else_block = this->parse_block();
         if (!else_block) {
           throw_error_here("expected (braced) else block");
         }
-        parsed_if.else_block = std::make_shared<Ast_Statement>(*else_block);
+        parsed_if.else_block = std::make_shared<Ast_Expression>(*else_block);
       }
     } else {
       this->lexer.restore_state();
     }
-    return std::make_shared<Ast_Statement>(parsed_if);
+    return std::make_shared<Ast_Expression>(parsed_if);
   } else {
     return nullptr;
   }
@@ -267,7 +266,7 @@ Statement_Ptr Parser::parse_for_loop() {
     if (!body) {
       throw_error_here("expected (braced) loop body");
     }
-    for_loop.body = std::make_shared<Ast_Statement>(*body);
+    for_loop.body = *body;
 
     return std::make_shared<Ast_Statement>(for_loop);
   } else {
@@ -321,6 +320,10 @@ Expression_Ptr Parser::parse_primary_expression() {
     return std::make_shared<Ast_Expression>(*this->parse_identifier());
   } else if (peek(TokenType::LEFT_PAREN)) {
     return this->parse_parenthesised_expression();
+  } else if (peek(TokenType::IF)) {
+    return this->parse_if();
+  } else if (auto block = parse_block()) {
+    return std::make_shared<Ast_Expression>(*block);
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }

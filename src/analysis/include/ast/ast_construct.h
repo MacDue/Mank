@@ -5,7 +5,7 @@
 #include "types.h"
 #include "scope.h"
 #include "ast/ast_node.h"
-#include "ast/ast_stmt.h"
+#include "ast/ast_expr.h"
 
 struct Ast_File: Ast_Node {
   Scope scope;

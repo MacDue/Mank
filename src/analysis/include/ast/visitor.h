@@ -50,12 +50,12 @@ struct BaseAstVisitor: public AstVisitor<
   /* Statements */
   Ast_Expression_Statement,
   Ast_Return_Statement,
-  Ast_Block,
-  Ast_If_Statement,
   Ast_Assign,
   Ast_Variable_Declaration,
   Ast_For_Loop,
   /* Expressions */
+  Ast_Block,
+  Ast_If_Expr,
   Ast_Call,
   Ast_Literal,
   Ast_Identifier,
@@ -67,12 +67,12 @@ struct BaseAstVisitor: public AstVisitor<
 
   void operator()(Ast_Expression_Statement& expr_stmt) override;
   void operator()(Ast_Return_Statement& return_stmt) override;
-  void operator()(Ast_Block& ast_block) override;
-  void operator()(Ast_If_Statement& if_stmt) override;
   void operator()(Ast_Assign& assign) override;
   void operator()(Ast_Variable_Declaration& var_decl) override;
   void operator()(Ast_For_Loop& for_loop) override;
 
+  void operator()(Ast_Block& ast_block) override;
+  void operator()(Ast_If_Expr& if_expr) override;
   void operator()(Ast_Call& call) override;
   void operator()(Ast_Literal& literal) override;
   void operator()(Ast_Identifier& ident) override;

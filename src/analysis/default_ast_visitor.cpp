@@ -43,26 +43,6 @@ void BaseAstVisitor::operator()(Ast_Return_Statement& return_stmt) {
   after(return_stmt);
 }
 
-void BaseAstVisitor::operator()(Ast_Block& block) {
-  before(block);
-  visit(block);
-  for (auto& stmt: block.statements) {
-    std::visit(recur, stmt->v);
-  }
-  after(block);
-}
-
-void BaseAstVisitor::operator()(Ast_If_Statement& if_stmt) {
-  before(if_stmt);
-  visit(if_stmt);
-  std::visit(recur, if_stmt.cond->v);
-  std::visit(recur, if_stmt.then_block->v);
-  if (if_stmt.has_else) {
-    std::visit(recur, if_stmt.else_block->v);
-  }
-  after(if_stmt);
-}
-
 void BaseAstVisitor::operator()(Ast_Assign& assign) {
   before(assign);
   visit(assign);
@@ -84,11 +64,31 @@ void BaseAstVisitor::operator()(Ast_For_Loop& for_loop) {
   visit(for_loop);
   std::visit(recur, for_loop.start_range->v);
   std::visit(recur, for_loop.end_range->v);
-  std::visit(recur, for_loop.body->v);
+  recur(for_loop.body);
   after(for_loop);
 }
 
 /* Expressions */
+
+void BaseAstVisitor::operator()(Ast_Block& block) {
+  before(block);
+  visit(block);
+  for (auto& stmt: block.statements) {
+    std::visit(recur, stmt->v);
+  }
+  after(block);
+}
+
+void BaseAstVisitor::operator()(Ast_If_Expr& if_expr) {
+  before(if_expr);
+  visit(if_expr);
+  std::visit(recur, if_expr.cond->v);
+  std::visit(recur, if_expr.then_block->v);
+  if (if_expr.has_else) {
+    std::visit(recur, if_expr.else_block->v);
+  }
+  after(if_expr);
+}
 
 void BaseAstVisitor::operator()(Ast_Call& call) {
   before(call);

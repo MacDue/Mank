@@ -171,7 +171,10 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
       analyse_expression_statement(expr_stmt, scope);
     },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
-      auto expr_type = analyse_expression(*return_stmt.expression, scope);
+      Type_Ptr expr_type;
+      if (return_stmt.expression) {
+        expr_type = analyse_expression(*return_stmt.expression, scope);
+      }
       if (!match_types(expr_type.get(), return_type)) {
         throw_sema_error_at(return_stmt.expression,
           "invalid return type, expected {}, was {}",

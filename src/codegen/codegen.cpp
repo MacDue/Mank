@@ -169,16 +169,16 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
     llvm_context, "return");
 
   llvm::AllocaInst* return_alloca = nullptr;
+  // Create function return value
+  func.body.scope.symbols.emplace_back(Symbol(
+    SymbolName(FUNCTION_RETURN_LOCAL),
+    func.return_type,
+    Symbol::LOCAL));
+  auto return_symbol = &func.body.scope.symbols.back();
   if (/* functions */ !func.procedure) {
-    // Create function return value
-    func.body.scope.symbols.emplace_back(Symbol(
-      SymbolName(FUNCTION_RETURN_LOCAL),
-      func.return_type,
-      Symbol::LOCAL));
-    auto return_symbol = &func.body.scope.symbols.back();
     return_alloca = create_entry_alloca(llvm_func, return_symbol);
-    return_symbol->meta = std::make_shared<SymbolMetaReturn>(return_alloca, function_return);
   }
+  return_symbol->meta = std::make_shared<SymbolMetaReturn>(return_alloca, function_return);
 
   codegen_statement(func.body, func.body.scope);
   create_exit_br(function_return);
@@ -268,8 +268,10 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
   // If this is not a SymbolMetaLocal something is _very_ wrong!
   auto return_meta = static_cast<SymbolMetaReturn*>(return_local->meta.get());
 
-  llvm::Value* return_value = codegen_expression(*return_stmt.expression, scope);
-  ir_builder.CreateStore(return_value, return_meta->alloca);
+  if (return_stmt.expression) {
+    llvm::Value* return_value = codegen_expression(*return_stmt.expression, scope);
+    ir_builder.CreateStore(return_value, return_meta->alloca);
+  }
   ir_builder.CreateBr(return_meta->return_block);
 }
 

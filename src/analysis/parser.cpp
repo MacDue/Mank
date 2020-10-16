@@ -131,8 +131,10 @@ Statement_Ptr Parser::parse_statement() {
     stmt = this->parse_if();
   } else if (consume(TokenType::RETURN)) {
     Ast_Return_Statement return_stmt;
-    auto expr = this->parse_expression();
-    return_stmt.expression = expr;
+    if (!peek(TokenType::SEMICOLON)) {
+      auto expr = this->parse_expression();
+      return_stmt.expression = expr;
+    }
     expect(TokenType::SEMICOLON);
     stmt = std::make_shared<Ast_Statement>(return_stmt);
   } else if (peek(TokenType::FOR)) {

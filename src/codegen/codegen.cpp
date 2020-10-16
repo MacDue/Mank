@@ -215,46 +215,65 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope) {
       break;
     }
   }
+  if (block.final_expr) {
+    return codegen_expression(*block.final_expr, block.scope);
+  }
+  return nullptr;
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_stmt, Scope& scope) {
-  // llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
-  // llvm::Value* condition = codegen_expression(*if_stmt.cond, scope);
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope) {
+  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::Value* condition = codegen_expression(*if_expr.cond, scope);
 
-  // /* Create and insert the 'then' block into the function */
-  // llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
-  //   llvm_context, "then_block", current_function);
+  /* Create and insert the 'then' block into the function */
+  llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
+    llvm_context, "then_block", current_function);
 
-  // llvm::BasicBlock* else_block = nullptr;
+  llvm::BasicBlock* else_block = nullptr;
 
-  // llvm::BasicBlock* end_block = llvm::BasicBlock::Create(
-  //   llvm_context, "if_end");
+  llvm::BasicBlock* end_block = llvm::BasicBlock::Create(
+    llvm_context, "if_end");
 
-  // if (if_stmt.has_else) {
-  //   else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
-  //   ir_builder.CreateCondBr(condition, then_block, else_block);
-  // } else {
-  //   ir_builder.CreateCondBr(condition, then_block, end_block);
-  // }
+  if (if_expr.has_else) {
+    else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
+    ir_builder.CreateCondBr(condition, then_block, else_block);
+  } else {
+    ir_builder.CreateCondBr(condition, then_block, end_block);
+  }
 
-  // /* then */
-  // ir_builder.SetInsertPoint(then_block);
-  // codegen_statement(*if_stmt.then_block, scope);
-  // create_exit_br(end_block);
+  /* then */
+  ir_builder.SetInsertPoint(then_block);
+  llvm::Value* then_value = codegen_expression(*if_expr.then_block, scope);
+  create_exit_br(end_block);
+  // So the incoming edges into the Phi node are correct
+  // As nesting ifs change the current basic block.
+  then_block = ir_builder.GetInsertBlock();
 
-  // /* else */
-  // if (if_stmt.has_else) {
-  //   // Now add the else block!
+  /* else */
+  llvm::Value* else_value = nullptr;
+  if (if_expr.has_else) {
+    // Now add the else block!
 
-  //   current_function->getBasicBlockList().push_back(else_block);
-  //   ir_builder.SetInsertPoint(else_block);
-  //   codegen_statement(*if_stmt.else_block, scope);
-  //   create_exit_br(end_block);
-  // }
+    current_function->getBasicBlockList().push_back(else_block);
+    ir_builder.SetInsertPoint(else_block);
+    else_value = codegen_expression(*if_expr.else_block, scope);
+    create_exit_br(end_block);
+    else_block = ir_builder.GetInsertBlock();
+  }
 
-  // /* end */
-  // current_function->getBasicBlockList().push_back(end_block);
-  // ir_builder.SetInsertPoint(end_block);
+  /* end */
+  current_function->getBasicBlockList().push_back(end_block);
+  ir_builder.SetInsertPoint(end_block);
+
+  if (then_value && else_value) {
+    auto if_type = extract_type(if_expr.then_block->type);
+    llvm::PHINode* phi = ir_builder.CreatePHI(
+      map_type_to_llvm(if_type.get()), 2, "if_expr_selection");
+    phi->addIncoming(then_value, then_block);
+    phi->addIncoming(else_value, else_block);
+    return phi;
+  }
+  return nullptr;
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {

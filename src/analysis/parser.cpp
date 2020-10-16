@@ -179,7 +179,7 @@ Statement_Ptr Parser::parse_statement() {
     bool seen_terminator = was_previously_terminating_symbol();
     if (simple_expression && peek(TokenType::RIGHT_BRACE)) {
       std::get<Ast_Expression_Statement>(stmt->v).final_expr = true;
-    } else if (!seen_terminator) {
+    } else if (!seen_terminator || peek(TokenType::SEMICOLON)) {
       expect(TokenType::SEMICOLON);
     }
   } else {

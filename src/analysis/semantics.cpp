@@ -111,7 +111,7 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   }
   Type_Ptr block_type;
   if (block.final_expr) {
-    block_type = analyse_expression(*block.final_expr, scope);
+    block_type = analyse_expression(*block.final_expr, block.scope);
   }
   block.scope.destroy_locals();
   return block_type;

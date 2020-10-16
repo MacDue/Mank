@@ -174,6 +174,8 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope, Type* retur
       Type_Ptr expr_type;
       if (return_stmt.expression) {
         expr_type = analyse_expression(*return_stmt.expression, scope);
+      } else if (return_type) {
+        throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
       if (!match_types(expr_type.get(), return_type)) {
         throw_sema_error_at(return_stmt.expression,

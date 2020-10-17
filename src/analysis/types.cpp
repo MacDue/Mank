@@ -47,8 +47,15 @@ std::string type_to_string(Type* type) {
   }
 }
 
-Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
+Type_Ptr extract_type_nullable(std::weak_ptr<Type> weak_type_ptr) {
   if (auto type_ptr = weak_type_ptr.lock()) {
+    return type_ptr;
+  }
+  return nullptr;
+}
+
+Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
+  if (auto type_ptr = extract_type_nullable(weak_type_ptr)) {
     return type_ptr;
   }
   assert(false && "fix me! expression type imformation is missing!");
@@ -142,6 +149,14 @@ bool Ast_Literal::as_bool() {
 
 int Ast_Literal::size_bytes() {
   return primative_size(literal_type);
+}
+
+Expression_Ptr Ast_Block::get_final_expr() const {
+  if (has_final_expr) {
+    auto& expr_stmt = std::get<Ast_Expression_Statement>(statements.back()->v);
+    return expr_stmt.expression;
+  }
+  return nullptr;
 }
 
 /* Const expr */

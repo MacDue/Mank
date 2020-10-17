@@ -110,12 +110,15 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
     analyse_statement(*stmt, block.scope);
   }
   Type_Ptr block_type;
-  if (block.final_expr) {
-    block_type = analyse_expression(*block.final_expr, block.scope);
+  if (auto final_expr = block.get_final_expr()) {
+    block_type = extract_type_nullable(final_expr->type);
   }
   block.scope.destroy_locals();
   return block_type;
 }
+
+#include "ast_printer.h"
+#include <iostream>
 
 void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
@@ -124,30 +127,42 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   }
   this->expected_return = func.return_type.get();
   auto block_type = analyse_block(func.body, *func.body.scope.parent);
-  if (func.body.final_expr) {
-    if (!match_types(block_type.get(), func.return_type.get())) {
-      throw_sema_error_at(func.body.final_expr,
+
+  auto final_expr = func.body.get_final_expr();
+  if (final_expr) {
+    if (match_types(block_type.get(), func.return_type.get())) {
+      /* Desugar implict return for codegen + return checking ease */
+      func.body.has_final_expr = false;
+      Ast_Return_Statement implicit_return;
+      implicit_return.location
+        = std::get<Ast_Expression_Statement>(
+            func.body.statements.back()->v).location;
+      implicit_return.expression = final_expr;
+      func.body.statements.pop_back();
+      func.body.statements.emplace_back(
+        std::make_shared<Ast_Statement>(implicit_return));
+    }
+  }
+
+  Ast_Statement* first_unreachable_stmt = nullptr;
+  bool all_paths_return = AstHelper::check_reachability(func.body, &first_unreachable_stmt);
+  if (!func.procedure && !all_paths_return) {
+    if (!func.body.has_final_expr) {
+      throw_sema_error_at(func.identifer, "function possibly fails to return a value");
+    } else {
+      throw_sema_error_at(final_expr,
         "implicit return of type {} does not match expected type {}",
         type_to_string(block_type.get()), type_to_string(func.return_type.get()));
     }
-    // Desugar implict return for codegen ease
-    Ast_Return_Statement implicit_return;
-    implicit_return.expression = func.body.final_expr;
-    func.body.statements.emplace_back(
-      std::make_shared<Ast_Statement>(implicit_return));
-    func.body.final_expr = nullptr;
   }
 
-  // Ast_Statement* first_unreachable_stmt = nullptr;
-  // Ast_Statement func_body(func.body);
-  // bool all_paths_return = AstHelper::check_reachability(func_body, &first_unreachable_stmt);
-  // if (!func.procedure && !all_paths_return) {
-  //   throw_sema_error_at(func.identifer, "function possibly fails to return a value");
-  // }
+  if (first_unreachable_stmt) {
+    emit_warning_at(*first_unreachable_stmt, "unreachable code");
 
-  // if (first_unreachable_stmt) {
-  //   emit_warning_at(*first_unreachable_stmt, "unreachable code");
-  // }
+  AstPrinter p(std::cout);
+  p.print_stmt(*first_unreachable_stmt);
+  }
+
 }
 
 static bool expression_may_have_side_effects(Ast_Expression& expr) {
@@ -156,15 +171,32 @@ static bool expression_may_have_side_effects(Ast_Expression& expr) {
     bit dumb because a function call could not have side effects making
     the expression still useless (sorry haskell)*/
   return match(expr.v)(
-    pattern(as<Ast_Unary_Operation>(arg)) = [](auto const & unary) {
+    pattern(as<Ast_Unary_Operation>(arg)) = [](auto& unary) {
       return expression_may_have_side_effects(*unary.operand);
     },
-    pattern(as<Ast_Binary_Operation>(arg)) = [](auto const & binop) {
+    pattern(as<Ast_Binary_Operation>(arg)) = [](auto& binop) {
       return expression_may_have_side_effects(*binop.left)
         || expression_may_have_side_effects(*binop.right);
     },
-    pattern(anyof(as<Ast_Call>(_), as<Ast_Block>(_), as<Ast_If_Expr>(_))) = []{
+    pattern(as<Ast_Call>(_)) = []{
       return true;
+    },
+    pattern(as<Ast_Block>(arg)) = [](auto& block) {
+      // If the block is just a expression
+      if (block.statements.size() == 1) {
+        if (auto final_expr = block.get_final_expr()) {
+          return expression_may_have_side_effects(*final_expr);
+        }
+      }
+      return block.statements.size() > 0;
+    },
+    pattern(as<Ast_If_Expr>(arg)) = [](auto& if_expr) {
+      bool then_has = expression_may_have_side_effects(*if_expr.then_block);
+      if (if_expr.has_else) {
+        bool else_has = expression_may_have_side_effects(*if_expr.else_block);
+        return then_has || else_has;
+      }
+      return then_has;
     },
     pattern(_) = []() { return false; }
   );
@@ -172,13 +204,15 @@ static bool expression_may_have_side_effects(Ast_Expression& expr) {
 
 void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
   auto expression_type = analyse_expression(*expr_stmt.expression, scope);
-  bool is_call = std::get_if<Ast_Call>(&expr_stmt.expression->v) != nullptr;
-  if (!expression_may_have_side_effects(*expr_stmt.expression)) {
-    emit_warning_at(expr_stmt.expression, "statement has no effect");
-  } else if (!is_call && expression_type) {
-    emit_warning_at(expr_stmt.expression, "result of expression discarded");
-  } else if (expression_type) {
-    throw_sema_error_at(expr_stmt.expression, "return value discarded");
+  if (!expr_stmt.final_expr) {
+    bool is_call = std::get_if<Ast_Call>(&expr_stmt.expression->v) != nullptr;
+    if (!expression_may_have_side_effects(*expr_stmt.expression)) {
+      emit_warning_at(expr_stmt.expression, "statement has no effect");
+    } else if (!is_call && expression_type) {
+      emit_warning_at(expr_stmt.expression, "result of expression discarded");
+    } else if (expression_type) {
+      throw_sema_error_at(expr_stmt.expression, "return value discarded");
+    }
   }
 }
 
@@ -290,7 +324,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
 
   auto body_type = analyse_block(body, scope);
   if (body_type) {
-    throw_sema_error_at(body.final_expr, "loop body should not evaluate to a value");
+    throw_sema_error_at(body.get_final_expr(), "loop body should not evaluate to a value");
   }
 }
 
@@ -331,7 +365,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             type_to_string(then_type.get()), type_to_string(else_type.get()));
         }
       } else if (then_type) {
-        auto& final_expr = std::get<Ast_Block>(if_expr.then_block->v).final_expr;
+        auto final_expr = std::get<Ast_Block>(if_expr.then_block->v).get_final_expr();
         throw_sema_error_at(final_expr,
           "if expression cannot evaluate to {} without a matching else",
           type_to_string(then_type.get()));

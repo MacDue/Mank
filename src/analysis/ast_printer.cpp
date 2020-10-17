@@ -107,12 +107,11 @@ void AstPrinter::print_expr(Ast_Expression& expr) {
 
 void AstPrinter::print_expr(Ast_Block& block) {
   putf("* Block with {} statements", block.statements.size());
+  if (block.has_final_expr) {
+    putf("- Block terminates with expression");
+  }
   for (auto& stmt: block.statements) {
     self->print_stmt(*stmt);
-  }
-  if (block.final_expr) {
-    putf("- Final expr:");
-    self->print_expr(*block.final_expr);
   }
 }
 

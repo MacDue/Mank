@@ -215,8 +215,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope) {
       break;
     }
   }
-  if (block.final_expr) {
-    return codegen_expression(*block.final_expr, block.scope);
+  if (auto final_expr = block.get_final_expr()) {
+    return codegen_expression(*final_expr, block.scope);
   }
   return nullptr;
 }

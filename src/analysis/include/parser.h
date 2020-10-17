@@ -28,7 +28,7 @@ private:
 
   template<typename T>
   void mark_ast_location(SourceLocation start, T& ast) {
-    ast.location = join_source_locations(start, lexer.get_last_token_location());
+    ast.location = join_source_locations(start, lexer.get_last_consumed().location);
   }
 
   template<typename T>

@@ -120,10 +120,7 @@ std::optional<Ast_Block> Parser::parse_block() {
       if (auto final_expr = std::get_if<Ast_Expression_Statement>(
             &parsed_block.statements.back()->v)
       ) {
-        if (final_expr->final_expr) {
-          parsed_block.final_expr = final_expr->expression;
-          parsed_block.statements.pop_back();
-        }
+        parsed_block.has_final_expr = final_expr->final_expr;
       }
     }
   } else {
@@ -201,7 +198,6 @@ Expression_Ptr Parser::parse_if() {
       throw_error_here("expected (braced) then block");
     }
     parsed_if.then_block = std::make_shared<Ast_Expression>(*then_block);
-    this->lexer.save_state();
     if (consume(TokenType::ELSE)) {
       parsed_if.has_else = true;
 
@@ -231,8 +227,6 @@ Expression_Ptr Parser::parse_if() {
         }
         parsed_if.else_block = std::make_shared<Ast_Expression>(*else_block);
       }
-    } else {
-      this->lexer.restore_state();
     }
     return std::make_shared<Ast_Expression>(parsed_if);
   } else {
@@ -288,11 +282,9 @@ Expression_Ptr Parser::parse_postfix_expression() {
   while (true) {
     mark_ast_location(postfix_start, expr);
 
-    lexer.save_state();
     if (peek(TokenType::LEFT_PAREN)) {
       expr = this->parse_call(std::move(expr));
     } else {
-      lexer.restore_state();
       break;
     }
   }
@@ -435,17 +427,12 @@ static Expression_Ptr fix_precedence_and_association(
 
 Expression_Ptr Parser::parse_binary_expression() {
   auto lhs = this->parse_unary();
-  // We want to undo this peek if the next token is
-  // not part of the binary expr (so it's not included in error messages)
-  this->lexer.save_state();
   auto bin_op = this->lexer.peek_next_token().type;
   if (is_binary_op(bin_op)) {
     lexer.consume_token();
     auto rhs = this->parse_expression();
     lhs = fix_precedence_and_association(
       std::move(lhs), std::move(rhs), static_cast<Ast_Operator>(bin_op));
-  } else {
-    this->lexer.restore_state();
   }
   return lhs;
 }

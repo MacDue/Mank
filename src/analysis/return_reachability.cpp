@@ -41,7 +41,10 @@ bool check_reachability(Ast_Statement& statement, Ast_Statement** unreachable_st
       return check_reachability(*expr_stmt.expression, unreachable_stmt);
     },
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto var_decl){
-      return check_reachability(*var_decl.initializer, unreachable_stmt);
+      if (var_decl.initializer) {
+        return check_reachability(*var_decl.initializer, unreachable_stmt);
+      }
+      return false;
     },
     pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop){
       bool start_range_returns = check_reachability(*for_loop.start_range, unreachable_stmt);

@@ -236,6 +236,8 @@ inline Statement_Ptr make_if_stmt(
   return make_expr_stmt(make_if(cond, then_block, else_block));
 }
 
+/* Variable declarations */
+
 inline Statement_Ptr make_var_decl(
   std::string name,
   Type_Ptr type = nullptr,
@@ -253,6 +255,17 @@ inline Statement_Ptr make_var_decl(
   Expression_Ptr initializer
 ) {
   return make_var_decl(name, nullptr, initializer);
+}
+
+/* Assignment statements */
+
+inline Statement_Ptr make_assignment(
+  Expression_Ptr target, Expression_Ptr value
+) {
+  Ast_Assign assign;
+  assign.target = target;
+  assign.expression = value;
+  return to_stmt_ptr(assign);
 }
 
 /* Types */

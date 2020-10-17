@@ -381,7 +381,7 @@ TEST_CASE("Block expressions", "[Parser]") {
   }
 }
 
-TEST_CASE("Variable declarations") {
+TEST_CASE("Variable declarations", "[Parser]") {
 
   SECTION("Declaration with type and no initializer") {
     auto parsed_decl = Parser::parse_from_string(
@@ -423,5 +423,33 @@ TEST_CASE("Variable declarations") {
       make_var_decl("foo"));
 
     MATCH_AST(parsed_decl, expected_decl);
+  }
+}
+
+TEST_CASE("Assignment statements", "[Parser]") {
+
+  SECTION("Simple assign") {
+    // We don't have much more than simple (as assign expressions are a bad idea)
+    auto parsed_assign = Parser::parse_from_string(
+      WPS "foo = 100;" WPE);
+
+    auto expected_assign = wrap_stmt(
+      make_assignment(make_ident("foo"), make_integer(100)));
+
+    MATCH_AST(parsed_assign, expected_assign);
+  }
+
+  /* Invalid but parsable assign (may be used in the future?) */
+  SECTION("Assign to expression") {
+    auto parsed_assign = Parser::parse_from_string(
+      WPS "1 + 2 = 100;" WPE);
+
+    auto expected_assign = wrap_stmt(
+      make_assignment(
+          make_binary(Ast_Operator::PLUS,
+            make_integer(1), make_integer(2)),
+          make_integer(100)));
+
+    MATCH_AST(parsed_assign, expected_assign);
   }
 }

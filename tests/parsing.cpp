@@ -33,7 +33,7 @@ TEST_CASE("Hello world!", "[Parser]") {
   )");
 
   auto expected_result = make_file(
-    make_procedure("main", make_body(
+    make_procedure("main", make_stmt_body(
       make_expr_stmt(
         make_call("print", make_string("Hello World"))))));
 
@@ -51,8 +51,8 @@ TEST_CASE("If statements", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_if = wrap_stmt(
-      make_if(make_boolean(true), make_block(), make_block()));
+    auto expected_if = wrap_final_expr(
+      make_if(make_boolean(true), make_stmt_block(), make_stmt_block()));
 
     MATCH_AST(parsed_if, expected_if);
   }
@@ -64,8 +64,8 @@ TEST_CASE("If statements", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_if = wrap_stmt(
-      make_if(make_boolean(true), make_block()));
+    auto expected_if = wrap_final_expr(
+      make_if(make_boolean(true), make_stmt_block()));
 
     MATCH_AST(parsed_if, expected_if);
   }
@@ -79,10 +79,10 @@ TEST_CASE("If statements", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_if = wrap_stmt(
+    auto expected_if = wrap_final_expr(
       make_if(make_boolean(true),
-        make_block(),
-        make_if(make_boolean(false), make_block())));
+        make_stmt_block(),
+        make_if(make_boolean(false), make_stmt_block())));
 
     MATCH_AST(parsed_if, expected_if);
   }
@@ -98,7 +98,7 @@ TEST_CASE("Procedures", "[Parser]") {
     )");
 
     auto expected_proc = make_file(
-      make_procedure("test", make_body()));
+      make_procedure("test", make_stmt_body()));
 
     MATCH_AST(parsed_proc, expected_proc);
   }
@@ -113,7 +113,7 @@ TEST_CASE("Procedures", "[Parser]") {
     auto expected_proc = make_file(
       make_procedure("test", make_args(
       make_argument(make_unchecked_type("i32"), "foo")),
-        make_body()));
+        make_stmt_body()));
 
     MATCH_AST(parsed_proc, expected_proc);
   }
@@ -130,7 +130,7 @@ TEST_CASE("Procedures", "[Parser]") {
       make_argument(make_unchecked_type("i32"), "foo"),
       make_argument(make_unchecked_type("bool"), "bar"),
       make_argument(make_unchecked_type("float"), "baz")),
-        make_body()));
+        make_stmt_body()));
 
     MATCH_AST(parsed_proc, expected_proc);
   }
@@ -153,7 +153,7 @@ TEST_CASE("Functions", "[Parser]") {
 
     auto expected_fun = make_file(
       make_function(make_unchecked_type("i32"), "meaning_of_life",
-      make_body(make_return(make_integer(42)))));
+      make_stmt_body(make_return(make_integer(42)))));
 
     MATCH_AST(parsed_fun_with_extra_parens, parsed_fun_without_extra_parens);
     MATCH_AST(parsed_fun_without_extra_parens, expected_fun);
@@ -171,7 +171,7 @@ TEST_CASE("Functions", "[Parser]") {
       make_function(make_unchecked_type("bool"), "launch_nukes", make_args(
       make_argument(make_unchecked_type("float"), "lat"),
       make_argument(make_unchecked_type("float"), "long")),
-        make_body(make_return(make_boolean(true)))));
+        make_stmt_body(make_return(make_boolean(true)))));
 
     MATCH_AST(expected_fun, parsed_fun);
   }
@@ -200,7 +200,7 @@ TEST_CASE("Expressions", "[Parser]") {
       true;
     )" WPE);
 
-    auto expected_literals = make_file(make_procedure("test", make_body(
+    auto expected_literals = make_file(make_procedure("test", make_stmt_body(
       make_expr_stmt(make_string("What is a computer?")),
       make_expr_stmt(make_integer(1337)),
       make_expr_stmt(make_float64(1.323000)),
@@ -218,7 +218,7 @@ TEST_CASE("Expressions", "[Parser]") {
       _foo;
     )" WPE);
 
-    auto expected_idents = make_file(make_procedure("test", make_body(
+    auto expected_idents = make_file(make_procedure("test", make_stmt_body(
       make_expr_stmt(make_ident("fooBar")),
       make_expr_stmt(make_ident("foo_bar")),
       make_expr_stmt(make_ident("i_1")),
@@ -234,7 +234,7 @@ TEST_CASE("Expressions", "[Parser]") {
       ¬true;
     )" WPE);
 
-    auto expected_unaries = make_file(make_procedure("test", make_body(
+    auto expected_unaries = make_file(make_procedure("test", make_stmt_body(
       make_expr_stmt(make_unary(Ast_Operator::PLUS, make_integer(1))),
       make_expr_stmt(make_unary(Ast_Operator::MINUS, make_integer(1))),
       make_expr_stmt(make_unary(Ast_Operator::LOGICAL_NOT, make_boolean(true))))));
@@ -251,7 +251,7 @@ TEST_CASE("Expressions", "[Parser]") {
         1 % 3;
       )" WPE);
 
-      auto expected_binaries = make_file(make_procedure("test", make_body(
+      auto expected_binaries = make_file(make_procedure("test", make_stmt_body(
         make_expr_stmt(make_binary(Ast_Operator::PLUS,
           make_integer(1), make_integer(2))),
         make_expr_stmt(make_binary(Ast_Operator::MINUS,
@@ -317,3 +317,66 @@ TEST_CASE("Expressions", "[Parser]") {
   }
 }
 
+TEST_CASE("Block expressions", "[Parser]") {
+
+  SECTION("Blocks with only a final expression") {
+    auto parsed_block = Parser::parse_from_string(
+      WPS "{ 1337 }" WPE);
+
+    auto expected_block = wrap_final_expr(
+      make_block(true,
+        make_expr_stmt(make_integer(1337))));
+
+    MATCH_AST(parsed_block, expected_block);
+  }
+
+  SECTION("Block with brace terminated expressions") {
+    auto parsed_block = Parser::parse_from_string(WPS R"(
+      {
+        if true { 10 } else { 20 }  # Brace terminated expr
+      }
+    )" WPE);
+
+    auto expected_block = wrap_final_expr(
+      make_block(true,
+        make_if_stmt(make_boolean(true),
+          make_block(true, make_expr_stmt(make_integer(10))),
+          make_block(true, make_expr_stmt(make_integer(20))))));
+
+    MATCH_AST(parsed_block, expected_block);
+  }
+
+  SECTION("Block mixing brace terminated and semicolon terminated expressions") {
+    auto parsed_block = Parser::parse_from_string(WPS R"(
+      {
+        if true { 1 } else { 0 }
+        return 20;
+      }
+    )" WPE);
+
+    auto expected_block = wrap_final_expr(
+      make_stmt_block(
+        make_if_stmt(make_boolean(true),
+          make_block(true, make_expr_stmt(make_integer(1))),
+          make_block(true, make_expr_stmt(make_integer(0)))),
+        make_return(make_integer(20))));
+
+    MATCH_AST(parsed_block, expected_block);
+  }
+
+  SECTION("Block with brace terminated expression before final expression") {
+    auto parsed_block = Parser::parse_from_string(WPS R"(
+      {
+        { }
+        42.000000
+      }
+    )" WPE);
+
+    auto expected_block = wrap_final_expr(
+      make_block(true,
+        make_expr_stmt(make_stmt_block()),
+        make_expr_stmt(make_float64(42.000000))));
+
+    MATCH_AST(parsed_block, expected_block);
+  }
+}

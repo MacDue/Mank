@@ -4,6 +4,8 @@
 
 #include "ast.h"
 
+/* Builders */
+
 template <typename TStmt>
 Statement_Ptr to_stmt_ptr(TStmt && stmt) {
   stmt.location = {};
@@ -102,15 +104,26 @@ inline Ast_Function_Declaration make_procedure(
 /* Blocks */
 
 template <typename... TStmt>
-Ast_Block make_body(TStmt && ... stmts) {
+Ast_Block make_body(bool has_final_expr, TStmt && ... stmts) {
   Ast_Block block;
   block.statements = std::vector<Statement_Ptr>{ stmts... };
+  block.has_final_expr = has_final_expr;
   return block;
 }
 
 template <typename... TStmt>
-Statement_Ptr make_block(TStmt && ... stmts) {
-  return to_stmt_ptr(make_body(stmts...));
+Expression_Ptr make_block(bool has_final_expr, TStmt && ... stmts) {
+  return to_expr_ptr(make_body(has_final_expr, stmts...));
+}
+
+template <typename... TStmt>
+Ast_Block make_stmt_body(TStmt && ... stmts) {
+  return make_body(false, stmts...);
+}
+
+template <typename... TStmt>
+Expression_Ptr make_stmt_block(TStmt && ... stmts) {
+  return make_block(false, stmts...);
 }
 
 /* -- Statements -- */
@@ -133,17 +146,23 @@ inline Statement_Ptr make_return(Expression_Ptr value) {
 
 /* If statement */
 
-inline Statement_Ptr make_if(
-  Expression_Ptr cond, Statement_Ptr then_block, Statement_Ptr else_block = nullptr
+inline Expression_Ptr make_if(
+  Expression_Ptr cond, Expression_Ptr then_block, Expression_Ptr else_block = nullptr
 ) {
-  Ast_If_Statement if_stmt;
+  Ast_If_Expr if_stmt;
   if_stmt.cond = cond;
   if_stmt.then_block = then_block;
   if (else_block) {
     if_stmt.has_else = true;
     if_stmt.else_block = else_block;
   }
-  return to_stmt_ptr(if_stmt);
+  return to_expr_ptr(if_stmt);
+}
+
+inline Statement_Ptr make_if_stmt(
+  Expression_Ptr cond, Expression_Ptr then_block, Expression_Ptr else_block = nullptr
+) {
+  return make_expr_stmt(make_if(cond, then_block, else_block));
 }
 
 /* -- Expressions -- */
@@ -217,10 +236,14 @@ inline Expression_Ptr make_binary(
 
 /* Test helpers */
 
-inline Ast_File wrap_stmt(Statement_Ptr stmt) {
-  return make_file(make_procedure("test", make_body(stmt)));
+inline Ast_File wrap_stmt(Statement_Ptr stmt, bool has_final_expr) {
+  return make_file(make_procedure("test", make_body(has_final_expr, stmt)));
 }
 
-inline Ast_File wrap_expr(Expression_Ptr expr) {
-  return wrap_stmt(make_expr_stmt(expr));
+inline Ast_File wrap_expr(Expression_Ptr expr, bool final_expr = false) {
+  return wrap_stmt(make_expr_stmt(expr), final_expr);
+}
+
+inline Ast_File wrap_final_expr(Expression_Ptr expr) {
+  return wrap_expr(expr, true);
 }

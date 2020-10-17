@@ -24,7 +24,7 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
 }
 
 void LLVMCodeGen::create_module() {
-  this->module = std::make_unique<llvm::Module>(
+  this->llvm_module = std::make_unique<llvm::Module>(
     file_ast.filename, llvm_context);
   /* TODO: set machine target */
   /* TODO: set up optimizations */
@@ -92,7 +92,7 @@ llvm::Function* LLVMCodeGen::get_current_function() {
 }
 
 llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
-  if (auto llvm_func = module->getFunction(func.identifer.name)) {
+  if (auto llvm_func = llvm_module->getFunction(func.identifer.name)) {
     return llvm_func;
   } else {
     return codegen_function_header(func);
@@ -117,7 +117,7 @@ llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& f
     func_type,
     llvm::Function::ExternalLinkage,
     func.identifer.name,
-    module.get());
+    llvm_module.get());
 
   uint arg_idx = 0;
   for (auto& arg: llvm_func->args()) {
@@ -643,4 +643,43 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
       return static_cast<llvm::Value*>(nullptr);
     }
   );
+}
+
+/* JIT tools */
+
+llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {
+  assert(llvm_module && "module to jit cannot be null!");
+  if (!jit_engine) {
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+    jit_engine = std::make_unique<llvm::orc::KaleidoscopeJIT>();
+  }
+  llvm_module->setDataLayout(jit_engine->getTargetMachine().createDataLayout());
+  return jit_engine->addModule(std::move(llvm_module));
+}
+
+void* CodeGen::find_jit_symbol(std::string name) {
+  return static_cast<LLVMCodeGen*>(impl.get())->jit_find_symbol(name);
+}
+
+void* LLVMCodeGen::jit_find_symbol(std::string name) {
+  if (!jit_module_handle) {
+    jit_module_handle = jit_current_module();
+  }
+
+  auto symbol_adress = jit_engine->findSymbol(name).getAddress();
+  if (auto err = symbol_adress.takeError()) {
+    llvm::logAllUnhandledErrors(std::move(err), llvm::errs(), "[JIT Error] ");
+    assert(false && "failed to get jit-ed symbol :(");
+  }
+
+  return reinterpret_cast<void*>(symbol_adress.get());
+}
+
+LLVMCodeGen::~LLVMCodeGen() {
+  // Not sure it this is needed
+  if (jit_engine && jit_module_handle) {
+    jit_engine->removeModule(*jit_module_handle);
+  }
 }

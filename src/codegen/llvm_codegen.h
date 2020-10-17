@@ -1,20 +1,28 @@
 #pragma once
 
 #include <string>
+#include <optional>
 
 /* Shut up GCC warning about LLVM code */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
+#pragma GCC diagnostic ignored "-Wredundant-move"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Target/TargetMachine.h>
+#include <llvm/Support/TargetSelect.h>
 
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
+
+// TODO: Replace with my own JIT
+// TODO: Don't jit here make a friend class
+#include "kaleidoscope_jit.h"
 #pragma GCC diagnostic pop
 
 #include "ast.h"
@@ -50,13 +58,18 @@ class LLVMCodeGen: public CodeGenerator {
     Contains functions and globals (it owns the memory for generated IR)
     I think this is like an transactional unit
   */
-  std::unique_ptr<llvm::Module> module;
+  std::unique_ptr<llvm::Module> llvm_module;
+
+  std::optional<llvm::orc::VModuleKey> jit_module_handle;
+  std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit_engine;
 
   Ast_File& file_ast;
 
   bool block_terminates_here();
 
   void create_exit_br(llvm::BasicBlock* target);
+
+  llvm::orc::VModuleKey jit_current_module();
 public:
   LLVMCodeGen(Ast_File& file_ast);
   void create_module();
@@ -89,4 +102,9 @@ public:
   llvm::Value* codegen_expression(Ast_Identifier& ident, Scope& scope);
   llvm::Value* codegen_expression(Ast_Unary_Operation& unary, Scope& scope);
   llvm::Value* codegen_expression(Ast_Binary_Operation& binop, Scope& scope);
+
+  /* JIT tools */
+  void* jit_find_symbol(std::string name);
+
+  ~LLVMCodeGen();
 };

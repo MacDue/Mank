@@ -684,3 +684,7 @@ TEST_CASE("Assign semantics", "[Sema]") {
     REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 }
+
+TEST_CASE("For loop semantics", "[Sema]") {
+  // TODO
+}

@@ -117,20 +117,17 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   return block_type;
 }
 
-#include "ast_printer.h"
-#include <iostream>
-
 void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     func.body.scope.symbols.emplace_back(
       Symbol(arg.name, arg.type, Symbol::INPUT));
   }
   this->expected_return = func.return_type.get();
-  auto block_type = analyse_block(func.body, *func.body.scope.parent);
+  auto body_type = analyse_block(func.body, *func.body.scope.parent);
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
-    if (match_types(block_type.get(), func.return_type.get())) {
+    if (body_type && match_types(body_type.get(), func.return_type.get())) {
       /* Desugar implict return for codegen + return checking ease */
       func.body.has_final_expr = false;
       Ast_Return_Statement implicit_return;
@@ -147,20 +144,17 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   Ast_Statement* first_unreachable_stmt = nullptr;
   bool all_paths_return = AstHelper::check_reachability(func.body, &first_unreachable_stmt);
   if (!func.procedure && !all_paths_return) {
-    if (!func.body.has_final_expr) {
-      throw_sema_error_at(func.identifer, "function possibly fails to return a value");
-    } else {
-      throw_sema_error_at(final_expr,
-        "implicit return of type {} does not match expected type {}",
-        type_to_string(block_type.get()), type_to_string(func.return_type.get()));
-    }
+    throw_sema_error_at(func.identifer, "function possibly fails to return a value");
+  }
+
+  if (func.body.has_final_expr && body_type) {
+    throw_sema_error_at(final_expr,
+      "implicit return of type {} does not match expected type {}",
+      type_to_string(body_type.get()), type_to_string(func.return_type.get()));
   }
 
   if (first_unreachable_stmt) {
     emit_warning_at(*first_unreachable_stmt, "unreachable code");
-
-  AstPrinter p(std::cout);
-  p.print_stmt(*first_unreachable_stmt);
   }
 
 }

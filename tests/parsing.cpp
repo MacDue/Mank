@@ -380,3 +380,48 @@ TEST_CASE("Block expressions", "[Parser]") {
     MATCH_AST(parsed_block, expected_block);
   }
 }
+
+TEST_CASE("Variable declarations") {
+
+  SECTION("Declaration with type and no initializer") {
+    auto parsed_decl = Parser::parse_from_string(
+      WPS "foo: i32;" WPE);
+
+    auto expected_decl = wrap_stmt(
+      make_var_decl("foo", make_type("i32")));
+
+    MATCH_AST(parsed_decl, expected_decl);
+  }
+
+  SECTION("Declaration with type and initializer") {
+    auto parsed_decl = Parser::parse_from_string(
+      WPS "foo: i32 = 100;" WPE);
+
+    auto expected_decl = wrap_stmt(
+      make_var_decl("foo", make_type("i32"), make_integer(100)));
+
+    MATCH_AST(parsed_decl, expected_decl);
+  }
+
+  SECTION("Declaration with initializer and no type") {
+    auto parsed_decl = Parser::parse_from_string(
+      WPS "foo := 100;" WPE);
+
+    auto expected_decl = wrap_stmt(
+      make_var_decl("foo", make_integer(100)));
+
+    MATCH_AST(parsed_decl, expected_decl);
+  }
+
+  /* The following still parses though is invalid semantically (currently) */
+
+  SECTION("Declaration without type or initializer") {
+    auto parsed_decl = Parser::parse_from_string(
+      WPS "foo:;" WPE);
+
+    auto expected_decl = wrap_stmt(
+      make_var_decl("foo"));
+
+    MATCH_AST(parsed_decl, expected_decl);
+  }
+}

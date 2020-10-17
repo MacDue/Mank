@@ -126,25 +126,9 @@ Expression_Ptr make_stmt_block(TStmt && ... stmts) {
   return make_block(false, stmts...);
 }
 
-/* -- Statements -- */
+/* -- Expressions -- */
 
-/* Expression statement */
-
-inline Statement_Ptr make_expr_stmt(Expression_Ptr expr) {
-  Ast_Expression_Statement expr_stmt;
-  expr_stmt.expression = expr;
-  return to_stmt_ptr(expr_stmt);
-}
-
-/* Return statement */
-
-inline Statement_Ptr make_return(Expression_Ptr value) {
-  Ast_Return_Statement return_stmt;
-  return_stmt.expression = value;
-  return to_stmt_ptr(return_stmt);
-}
-
-/* If statement */
+/* If expressions */
 
 inline Expression_Ptr make_if(
   Expression_Ptr cond, Expression_Ptr then_block, Expression_Ptr else_block = nullptr
@@ -158,14 +142,6 @@ inline Expression_Ptr make_if(
   }
   return to_expr_ptr(if_stmt);
 }
-
-inline Statement_Ptr make_if_stmt(
-  Expression_Ptr cond, Expression_Ptr then_block, Expression_Ptr else_block = nullptr
-) {
-  return make_expr_stmt(make_if(cond, then_block, else_block));
-}
-
-/* -- Expressions -- */
 
 /* Literals */
 
@@ -234,9 +210,62 @@ inline Expression_Ptr make_binary(
   return to_expr_ptr(binop);
 }
 
+/* -- Statements -- */
+
+/* Expression statement */
+
+inline Statement_Ptr make_expr_stmt(Expression_Ptr expr) {
+  Ast_Expression_Statement expr_stmt;
+  expr_stmt.expression = expr;
+  return to_stmt_ptr(expr_stmt);
+}
+
+/* Return statement */
+
+inline Statement_Ptr make_return(Expression_Ptr value) {
+  Ast_Return_Statement return_stmt;
+  return_stmt.expression = value;
+  return to_stmt_ptr(return_stmt);
+}
+
+/* If statement */
+
+inline Statement_Ptr make_if_stmt(
+  Expression_Ptr cond, Expression_Ptr then_block, Expression_Ptr else_block = nullptr
+) {
+  return make_expr_stmt(make_if(cond, then_block, else_block));
+}
+
+inline Statement_Ptr make_var_decl(
+  std::string name,
+  Type_Ptr type = nullptr,
+  Expression_Ptr initializer = nullptr
+) {
+  Ast_Variable_Declaration var_decl;
+  var_decl.type = type;
+  var_decl.variable.name = name;
+  var_decl.initializer = initializer;
+  return to_stmt_ptr(var_decl);
+}
+
+inline Statement_Ptr make_var_decl(
+  std::string name,
+  Expression_Ptr initializer
+) {
+  return make_var_decl(name, nullptr, initializer);
+}
+
+/* Types */
+
+inline Type_Ptr make_type(std::string name) {
+  UncheckedType type;
+  type.identifer.name = name;
+  return std::make_shared<Type>(type);
+}
+
 /* Test helpers */
 
-inline Ast_File wrap_stmt(Statement_Ptr stmt, bool has_final_expr) {
+inline Ast_File wrap_stmt(Statement_Ptr stmt, bool has_final_expr = false) {
   return make_file(make_procedure("test", make_body(has_final_expr, stmt)));
 }
 

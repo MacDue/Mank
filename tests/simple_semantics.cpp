@@ -511,3 +511,84 @@ TEST_CASE("Function and procedure semantics", "[Sema]") {
     REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("expected Void"));
   }
 }
+
+TEST_CASE("If expression semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("If expressions with matching else are valid") {
+    auto code = Parser::parse_from_string(R"(
+      fun bool_to_int: i32 (b: bool) {
+        # implict return
+        if b { 1 } else { 0 }
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
+
+  SECTION("If expression must have matching else block") {
+    auto code = Parser::parse_from_string(R"(
+      fun bool_to_int: i32 (b: bool) {
+        if b { 1 } # todo else
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("without a matching else"));
+  }
+
+  SECTION("If expressions with mismatched types are invalid") {
+    auto code = Parser::parse_from_string(R"(
+      fun bool_to_int: i32 (b: bool) {
+        if b { 1 } else { 0.0 }
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("does not match else block"));
+  }
+}
+
+TEST_CASE("Block expressions semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("Blocks can be used in expressions if they have a final expression") {
+    auto code = Parser::parse_from_string(R"(
+      fun quick_maths: i32 {
+        { 2 } + { 2 } - { 1 }
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
+
+  SECTION("Blocks with statements can be used in expressions if the block contains a final expression") {
+    auto code = Parser::parse_from_string(R"(
+      fun is_this_even_legal: i32 (n: i32) {
+        # Evaluates to the sum of 1 to n times 2
+        {
+          # dumb code
+          sum := 0;
+          for i in 1 .. n + 1 {
+            sum = sum + 1;
+          }
+          sum
+        } * 2
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
+
+  SECTION("Blocks used in expressions must have the correct type") {
+    auto code = Parser::parse_from_string(R"(
+      fun when_fun_stops_stop: i32 {
+        { 1.0 } + { 1 }
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("incompatible types"));
+  }
+}

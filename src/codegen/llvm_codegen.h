@@ -66,6 +66,7 @@ public:
   llvm::Type* map_type_to_llvm(Type const * type);
 
   /* Functions */
+  llvm::Function* get_current_function();
   llvm::Function* get_function(Ast_Function_Declaration& func);
   llvm::Function* codegen_function_header(Ast_Function_Declaration& func);
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);

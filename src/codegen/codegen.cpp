@@ -87,6 +87,10 @@ void LLVMCodeGen::create_exit_br(llvm::BasicBlock* target) {
 
 /* Functions */
 
+llvm::Function* LLVMCodeGen::get_current_function() {
+  return ir_builder.GetInsertBlock()->getParent();
+}
+
 llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
   if (auto llvm_func = module->getFunction(func.identifer.name)) {
     return llvm_func;
@@ -208,21 +212,42 @@ void LLVMCodeGen::codegen_statement(Ast_Statement& stmt, Scope& scope) {
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope) {
+  llvm::Function* current_function = get_current_function();
+
   (void) scope; // Not needed
-  for (auto& stmt: block.statements) {
-    codegen_statement(*stmt, block.scope);
+  auto statements_in_block = block.statements.size();
+  if (block.has_final_expr) {
+    statements_in_block -= 1;
+  }
+  for (uint stmt_idx = 0; stmt_idx < statements_in_block; stmt_idx++) {
+    codegen_statement(*block.statements.at(stmt_idx), block.scope);
     if (block_terminates_here()) {
       break;
     }
   }
+
   if (auto final_expr = block.get_final_expr()) {
+    /*
+      This basic block is kind of a hack but it allows for expressions like:
+      {
+        return 10;
+        0
+      }
+      to codegen without error
+      (really the AST should remove unreachable code before codegen -- but I don't do that yet)
+    */
+    llvm::BasicBlock* block_eval = llvm::BasicBlock::Create(
+      llvm_context, "block_eval", current_function);
+    create_exit_br(block_eval);
+    ir_builder.SetInsertPoint(block_eval);
     return codegen_expression(*final_expr, block.scope);
   }
+
   return nullptr;
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope) {
-  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::Function* current_function = get_current_function();
   llvm::Value* condition = codegen_expression(*if_expr.cond, scope);
 
   /* Create and insert the 'then' block into the function */
@@ -307,7 +332,7 @@ void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope) {
-  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::Function* current_function = get_current_function();
 
   /*
     Have to add the symbol again here as it's removed when it goes out of scope,
@@ -340,7 +365,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   body.scope.symbols.emplace_back(Symbol(
     for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
 
-  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::Function* current_function = get_current_function();
   llvm::AllocaInst* loop_value = create_entry_alloca(current_function, &body.scope.symbols.back());
   ir_builder.CreateStore(start_value, loop_value);
 

@@ -592,3 +592,67 @@ TEST_CASE("Block expressions semantics", "[Sema]") {
     REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("incompatible types"));
   }
 }
+
+TEST_CASE("Variable declaration semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("Declarations with types are valid") {
+    auto code = Parser::parse_from_string(R"(
+      proc make_int {
+        my_int:i32 = 10;
+        my_other_int:f64;
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
+
+  SECTION("Declarations without types and initializers are valid") {
+    auto code = Parser::parse_from_string(R"(
+      proc main_int_cool {
+        my_int := 10;
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+
+    // The type should be """infered""" (too simple to really be inferance)
+    auto& func = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+    auto& decl = std::get<Ast_Variable_Declaration>(func.body.statements.at(0)->v);
+    REQUIRE(std::get<PrimativeType>(decl.type->v).tag == PrimativeTypeTag::INTEGER);
+  }
+
+  SECTION("Declarations without types or initializers are invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc ugly {
+        what:; # real nasty look :(
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot infer type of what"));
+  }
+
+  SECTION("Declarations with mistmatched types are invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc misfit {
+        no:i32 = 32.0;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("does not match declaration type"));
+  }
+
+  SECTION("Declarations with void initializers are invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc so_this_is_a_thing {
+        void := {
+          welcome := "to the void";
+        }
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), "cannot initialize variable with type Void");
+  }
+}

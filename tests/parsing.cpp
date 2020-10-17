@@ -453,3 +453,35 @@ TEST_CASE("Assignment statements", "[Parser]") {
     MATCH_AST(parsed_assign, expected_assign);
   }
 }
+
+TEST_CASE("For loops", "[Parser]") {
+
+  SECTION("For loop with loop value type") {
+    auto parsed_for = Parser::parse_from_string(WPS R"(
+      for x: i32 in 0 .. 10 {
+
+      }
+    )" WPE);
+
+    auto expected_for = wrap_stmt(
+      make_for("x", make_type("i32"), make_integer(0), make_integer(10),
+        make_stmt_body()));
+
+    MATCH_AST(parsed_for, expected_for);
+  }
+
+  SECTION("For loop without loop value type") {
+    auto parsed_for = Parser::parse_from_string(WPS R"(
+      for x in 0 .. 10 {
+
+      }
+    )" WPE);
+
+    auto expected_for = wrap_stmt(
+      make_for("x", make_integer(0), make_integer(10),
+       make_stmt_body()));
+
+    MATCH_AST(parsed_for, expected_for);
+  }
+
+}

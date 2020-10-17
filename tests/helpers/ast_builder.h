@@ -268,6 +268,30 @@ inline Statement_Ptr make_assignment(
   return to_stmt_ptr(assign);
 }
 
+/* For loops */
+
+inline Statement_Ptr make_for(
+  std::string loop_value, Type_Ptr value_type,
+  Expression_Ptr start_range, Expression_Ptr end_range,
+  Ast_Block loop_body
+) {
+  Ast_For_Loop for_loop;
+  for_loop.loop_value.name = loop_value;
+  for_loop.value_type = value_type;
+  for_loop.start_range = start_range;
+  for_loop.end_range = end_range;
+  for_loop.body = loop_body;
+  return to_stmt_ptr(for_loop);
+}
+
+inline Statement_Ptr make_for(
+  std::string loop_value,
+  Expression_Ptr start_range, Expression_Ptr end_range,
+  Ast_Block loop_body
+) {
+  return make_for(loop_value, nullptr, start_range, end_range, loop_body);
+}
+
 /* Types */
 
 inline Type_Ptr make_type(std::string name) {

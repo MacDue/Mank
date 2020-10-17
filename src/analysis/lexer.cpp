@@ -22,17 +22,9 @@ static std::string read_entire_file(std::string const & file) {
 
 void Lexer::reset() {
   this->last_token = Token{};
+  this->last_consumed = this->last_token;
   this->current = Position{};
-  this->save_state();
-}
-
-void Lexer::save_state() {
-  this->saved.push(std::make_pair(this->last_token, this->current));
-}
-
-void Lexer::restore_state() {
-  std::tie(this->last_token, this->current) = this->saved.top();
-  this->saved.pop();
+  this->save_position();
 }
 
 void Lexer::load_file(std::string const & file_path) {
@@ -67,11 +59,11 @@ Token Lexer::get_last_consumed() const {
 
 SourceLocation Lexer::peek_next_token_location() {
   (void) this->peek_next_token();
-  return this->get_last_token_location();
+  return this->last_token.location;
 }
 
-SourceLocation Lexer::get_last_token_location() const {
-  return this->last_token.location;
+SourceLocation Lexer::get_last_consumed_location() const {
+  return this->last_consumed.location;
 }
 
 /* Error messages */
@@ -237,12 +229,12 @@ void Lexer::next_token() {
 /* Matchers */
 
 bool Lexer::match(std::string_view value) {
-  this->save_state();
+  this->save_position();
   for (char c: value) {
     if (this->peek_next_char() == c) {
       this->consume_char();
     } else {
-      this->restore_state();
+      this->restore_position();
       return false;
     }
   }
@@ -317,6 +309,14 @@ bool Lexer::match_string_literal() {
 }
 
 /* Helpers */
+
+void Lexer::save_position() {
+  this->saved_position = this->current;
+}
+
+void Lexer::restore_position() {
+  this->current = this->saved_position;
+}
 
 void Lexer::set_token_start() {
   this->last_token.location.start_line = this->current.line;

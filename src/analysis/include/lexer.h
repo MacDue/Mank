@@ -1,8 +1,6 @@
 #pragma once
 
-#include <stack>
 #include <string>
-#include <utility>
 
 #include "constants.h"
 #include "primative_type.h"
@@ -28,10 +26,6 @@ struct Lexer {
 
   void reset();
 
-  /* To allow easy match backtracking */
-  void save_state();
-  void restore_state();
-
   /* Loading sources */
   void load_file(std::string const & file_path);
   void set_input_to_string(std::string source);
@@ -41,7 +35,7 @@ struct Lexer {
   Token get_last_consumed() const;
   void consume_token();
   SourceLocation peek_next_token_location();
-  SourceLocation get_last_token_location() const;
+  SourceLocation get_last_consumed_location() const;
 
   /* Error messages */
   std::string_view extract_lines(SourceLocation loc) const;
@@ -60,6 +54,10 @@ private:
 
   void next_token();
 
+  /* To allow easy match backtracking */
+  void save_position();
+  void restore_position();
+
   /* Matchers */
   bool match(std::string_view value);
   bool match(std::string_view value, TokenType type);
@@ -73,6 +71,6 @@ private:
   void set_token_end();
   std::string_view extract_string(int from, int to) const;
 
-  std::stack<std::pair<Token, Position>> saved;
+  Position saved_position;
 };
 

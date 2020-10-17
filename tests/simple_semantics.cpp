@@ -656,3 +656,31 @@ TEST_CASE("Variable declaration semantics", "[Sema]") {
     REQUIRE_THROWS_WITH(sema.analyse_file(code), "cannot initialize variable with type Void");
   }
 }
+
+TEST_CASE("Assign semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("Assigning to an expression is invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc cool_beans {
+        1 + 1 = 2;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code),
+      "assignment target is not a variable");
+  }
+
+  SECTION("Assigning to an variable is valid") {
+    auto code = Parser::parse_from_string(R"(
+      proc cooler_beans {
+        cool_beans := 0;
+        cool_beans = 1 + 1;
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
+}

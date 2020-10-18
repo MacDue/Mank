@@ -590,7 +590,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
       return ir_builder.CreateICmpSLT(left, right, "int_lt");
     },
     pattern(PrimativeTypeTag::INTEGER, Ast_Operator::GREATER_THAN) = [&]{
-      return ir_builder.CreateICmpUGT(left, right, "int_gt");
+      return ir_builder.CreateICmpSGT(left, right, "int_gt");
     },
     pattern(PrimativeTypeTag::INTEGER, Ast_Operator::BITWISE_AND) = [&]{
       return ir_builder.CreateAnd(left, right, "int_bitwise_and");

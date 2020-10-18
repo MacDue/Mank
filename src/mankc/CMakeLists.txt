@@ -1,7 +1,8 @@
 find_package(Boost COMPONENTS program_options REQUIRED)
 
 include_directories(
-  ../analysis/include
+  ../parser/include
+  ../semantics/include
   ../codegen/include
   ${Boost_INCLUDE_DIR}
 )
@@ -11,7 +12,8 @@ add_executable(mankc
   compiler_message_printer.cpp)
 
 target_link_libraries(mankc
-  MankAnalysis
+  MankParser
+  MankSemantics
   MankCodegen
   ${Boost_LIBRARIES})
 

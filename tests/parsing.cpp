@@ -2,8 +2,8 @@
 #include "catch/catch.hpp"
 
 /* core */
-#include "parser.h"
-#include "ast_printer.h"
+#include "parser/parser.h"
+#include "ast/ast_printer.h"
 
 /* testing */
 #include "helpers/match_ast.h"
@@ -483,5 +483,4 @@ TEST_CASE("For loops", "[Parser]") {
 
     MATCH_AST(parsed_for, expected_for);
   }
-
 }

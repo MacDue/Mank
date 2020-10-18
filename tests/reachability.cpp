@@ -1,8 +1,8 @@
 #include "catch/catch.hpp"
 
 /* core */
-#include "parser.h"
-#include "semantics.h"
+#include "parser/parser.h"
+#include "sema/semantics.h"
 
 #include "helpers/warning_matchers.h"
 

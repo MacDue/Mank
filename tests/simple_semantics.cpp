@@ -1,8 +1,8 @@
 #include "catch/catch.hpp"
 
 /* core */
-#include "parser.h"
-#include "semantics.h"
+#include "parser/parser.h"
+#include "sema/semantics.h"
 
 #include "helpers/warning_matchers.h"
 
@@ -170,7 +170,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
 
     // Should be resolved to integer
     auto& primative_type = std::get<PrimativeType>(binop_type->v);
-    REQUIRE(primative_type.tag == PrimativeTypeTag::INTEGER);
+    REQUIRE(primative_type.tag == PrimativeType::INTEGER);
 
     // Should not non-constant expression
     REQUIRE(!std::get<Ast_Binary_Operation>(binary_expr->v).is_const_expr());
@@ -621,7 +621,7 @@ TEST_CASE("Variable declaration semantics", "[Sema]") {
     // The type should be """infered""" (too simple to really be inferance)
     auto& func = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
     auto& decl = std::get<Ast_Variable_Declaration>(func.body.statements.at(0)->v);
-    REQUIRE(std::get<PrimativeType>(decl.type->v).tag == PrimativeTypeTag::INTEGER);
+    REQUIRE(std::get<PrimativeType>(decl.type->v).tag == PrimativeType::INTEGER);
   }
 
   SECTION("Declarations without types or initializers are invalid") {

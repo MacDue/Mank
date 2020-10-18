@@ -2,7 +2,7 @@
 
 #include <sstream>
 
-#include "ast_printer.h"
+#include "ast/ast_printer.h"
 #include "../catch/catch.hpp"
 
 #define MATCH_AST(expected, given) {                                \

@@ -2,7 +2,7 @@
 #include <sstream>
 #include <utility>
 
-#include "lexer.h"
+#include "parser/lexer.h"
 
 #include "compiler_message_printer.h"
 
@@ -98,4 +98,3 @@ std::ostream& operator<< (std::ostream& os, CompilerMessage const & message) {
   }
   return os;
 }
-

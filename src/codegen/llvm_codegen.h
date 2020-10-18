@@ -25,9 +25,9 @@
 #include "kaleidoscope_jit.h"
 #pragma GCC diagnostic pop
 
-#include "ast.h"
-#include "scope.h"
-#include "code_generator.h"
+#include "ast/ast.h"
+#include "ast/scope.h"
+#include "codegen/code_generator.h"
 
 class LLVMCodeGen: public CodeGenerator {
 
@@ -75,7 +75,7 @@ public:
   void create_module();
 
   /* Types */
-  llvm::Type* map_primative_to_llvm(PrimativeTypeTag primative);
+  llvm::Type* map_primative_to_llvm(PrimativeType::Tag primative);
   llvm::Type* map_type_to_llvm(Type const * type);
 
   /* Functions */

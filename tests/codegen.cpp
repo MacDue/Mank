@@ -1,8 +1,8 @@
 #include "catch/catch.hpp"
 
-#include "parser.h"
-#include "codegen.h"
-#include "semantics.h"
+#include "parser/parser.h"
+#include "sema/semantics.h"
+#include "codegen/codegen.h"
 
 CodeGen compile(std::string source) {
   Ast_File code = Parser::parse_from_string(source);

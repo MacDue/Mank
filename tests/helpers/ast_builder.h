@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "ast.h"
+#include "ast/ast.h"
 
 /* Builders */
 
@@ -145,25 +145,25 @@ inline Expression_Ptr make_if(
 
 /* Literals */
 
-inline Expression_Ptr make_literal(PrimativeTypeTag type, std::string value) {
+inline Expression_Ptr make_literal(PrimativeType::Tag type, std::string value) {
   Ast_Literal literal({}, value, type);
   return to_expr_ptr(literal);
 }
 
 inline Expression_Ptr make_string(std::string value) {
-  return make_literal(PrimativeTypeTag::STRING, value);
+  return make_literal(PrimativeType::STRING, value);
 }
 
 inline Expression_Ptr make_integer(int value) {
-  return make_literal(PrimativeTypeTag::INTEGER, std::to_string(value));
+  return make_literal(PrimativeType::INTEGER, std::to_string(value));
 }
 
 inline Expression_Ptr make_float64(double value) {
-  return make_literal(PrimativeTypeTag::FLOAT64, std::to_string(value));
+  return make_literal(PrimativeType::FLOAT64, std::to_string(value));
 }
 
 inline Expression_Ptr make_boolean(bool value) {
-  return make_literal(PrimativeTypeTag::BOOL, value ? "true" : "false");
+  return make_literal(PrimativeType::BOOL, value ? "true" : "false");
 }
 
 /* Idents */

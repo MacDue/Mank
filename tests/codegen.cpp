@@ -56,8 +56,8 @@ TEST_CASE("Fibonacci showdown", "[Codegen]") {
       }
     )");
 
-    auto fib_fn = codegen.extract_function_from_jit<int(int)>("fib");
-    MATCH_INTEGER_TO_INTEGER_FUNCTION(fib_fn, reference_fibonacci, 20);
+    auto fib = codegen.extract_function_from_jit<int(int)>("fib");
+    MATCH_INTEGER_TO_INTEGER_FUNCTION(fib, reference_fibonacci, 20);
   }
 
   SECTION("Expression based fibonacci") {
@@ -73,8 +73,8 @@ TEST_CASE("Fibonacci showdown", "[Codegen]") {
       }
     )");
 
-    auto fib_fn = codegen.extract_function_from_jit<int(int)>("fib");
-    MATCH_INTEGER_TO_INTEGER_FUNCTION(fib_fn, reference_fibonacci, 20);
+    auto fib = codegen.extract_function_from_jit<int(int)>("fib");
+    MATCH_INTEGER_TO_INTEGER_FUNCTION(fib, reference_fibonacci, 20);
   }
 
   SECTION("Iterative fibonacci") {
@@ -90,7 +90,57 @@ TEST_CASE("Fibonacci showdown", "[Codegen]") {
         a
       })");
 
-    auto fib_fn = codegen.extract_function_from_jit<int(int)>("fib");
-    MATCH_INTEGER_TO_INTEGER_FUNCTION(fib_fn, reference_fibonacci, 1000);
+    auto fib = codegen.extract_function_from_jit<int(int)>("fib");
+    MATCH_INTEGER_TO_INTEGER_FUNCTION(fib, reference_fibonacci, 1000);
   }
+}
+
+TEST_CASE("Peculiar nesting", "[Codegen]") {
+
+  auto codegen = parse_and_compile(R"(
+    fun pointless_computation: i32 (cool_number: i32) {
+      total := 0;
+      for x in
+      {
+        sum := 0;
+        for n in 0 .. cool_number {
+          sum = sum + n;
+        }
+        sum
+      }
+      ..
+      {
+        factorial := 1;
+        for n in 1 .. cool_number + 1 {
+          factorial = factorial * n;
+        }
+        factorial
+      }
+      {
+        total = total + x;
+      }
+      total
+    }
+  )");
+
+  auto pointless_computation = codegen.extract_function_from_jit<int(int)>("pointless_computation");
+  REQUIRE(pointless_computation(8) == 812830662);
+}
+
+TEST_CASE("Declaration shadowing within nested scopes", "[Codegen]") {
+  // This code previously failed to compile
+  // It should run and just return 0
+  auto codegen = parse_and_compile(R"(
+    fun broken_sum: i32 (n: i32) {
+      total := 0;
+      for x in 1 .. n + 1 {
+        # Mistake declaring a new total variable
+        total := total + x;
+      }
+      total
+    }
+  )");
+
+  auto broken_codegen = codegen.extract_function_from_jit<int(int)>("broken_sum");
+  REQUIRE(broken_codegen(100) == 0); // Since there is a mistake in this code
 }

@@ -334,16 +334,28 @@ void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
 void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope) {
   llvm::Function* current_function = get_current_function();
 
+  llvm::Value* initializer = nullptr;
+  if (var_decl.initializer) {
+    initializer = codegen_expression(*var_decl.initializer, scope);
+  }
+
   /*
     Have to add the symbol again here as it's removed when it goes out of scope,
     when checking sementics, otherwise resolving shadowed variables would be
     nightmare.
+
+    It's also very important the symbol is added to the scope after the initializer
+    has been generated or something like:
+
+    x := 0;
+    x := x + 1;
+
+    Could segfault or crash somehow (as it'll try to use the undefined x in the expression)
   */
   scope.symbols.emplace_back(Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
   llvm::AllocaInst* alloca = create_entry_alloca(current_function, &scope.symbols.back());
 
-  if (var_decl.initializer) {
-    llvm::Value* initializer = codegen_expression(*var_decl.initializer, scope);
+  if (initializer) {
     ir_builder.CreateStore(initializer, alloca);
   }
 }

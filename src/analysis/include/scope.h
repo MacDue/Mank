@@ -56,10 +56,11 @@ struct Scope {
 
   // TODO: Rethink symbol tables. Probably a better way.
   void destroy_locals() {
-    std::remove_if(this->symbols.begin(), this->symbols.end(),
-    [](auto const & symbol){
-      return symbol.kind == Symbol::LOCAL;
-    });
+    this->symbols.erase(
+      std::remove_if(this->symbols.begin(), this->symbols.end(),
+      [](auto const & symbol){
+        return symbol.kind == Symbol::LOCAL;
+      }), this->symbols.end());
   }
 };
 

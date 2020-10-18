@@ -4,28 +4,25 @@
 #include "codegen.h"
 #include "semantics.h"
 
-CodeGen parse_and_compile(std::string source) {
+CodeGen compile(std::string source) {
   Ast_File code = Parser::parse_from_string(source);
   Semantics().analyse_file(code);
   CodeGen codegen(code);
-  // codegen.jit_compile_code();
   return codegen;
 }
 
 TEST_CASE("Simple addition", "[Codegen]") {
-  auto codegen = parse_and_compile(R"(
+  auto codegen = compile(R"(
     fun add: i32 (a: i32, b: i32) {
       a + b
     }
   )");
 
   auto add_fn = codegen.extract_function_from_jit<int(int, int)>("add");
-
   REQUIRE(add_fn(1, 1) == 2);
 }
 
 int reference_fibonacci(int n) {
-  // This
   int a = 0;
   int b = 1;
   for (int i = 0; i < n; i++) {
@@ -37,14 +34,14 @@ int reference_fibonacci(int n) {
 }
 
 #define MATCH_INTEGER_TO_INTEGER_FUNCTION(fn, referece, terms) \
-  for (int i = 0; i < terms; i++) {   \
-    INFO("i = " << i);                \
-    REQUIRE(fn(i) == referece(i));    \
+  for (int i = 0; i < terms; i++) {  \
+    INFO("i = " << i);               \
+    REQUIRE(fn(i) == referece(i));   \
   }
 
 TEST_CASE("Fibonacci showdown", "[Codegen]") {
   SECTION("C style recursive fibonacci") {
-    auto codegen = parse_and_compile(R"(
+    auto codegen = compile(R"(
       fun fib: i32 (n: i32) {
         if (n == 0) {
           return 0;
@@ -61,7 +58,7 @@ TEST_CASE("Fibonacci showdown", "[Codegen]") {
   }
 
   SECTION("Expression based fibonacci") {
-    auto codegen = parse_and_compile(R"(
+    auto codegen = compile(R"(
       fun fib: i32 (n: i32) {
         if n == 0 {
           0
@@ -78,7 +75,7 @@ TEST_CASE("Fibonacci showdown", "[Codegen]") {
   }
 
   SECTION("Iterative fibonacci") {
-    auto codegen = parse_and_compile(R"(
+    auto codegen = compile(R"(
       fun fib: i32 (n: i32) {
         a := 0;
         b := 1;
@@ -97,7 +94,7 @@ TEST_CASE("Fibonacci showdown", "[Codegen]") {
 
 TEST_CASE("Peculiar nesting", "[Codegen]") {
 
-  auto codegen = parse_and_compile(R"(
+  auto codegen = compile(R"(
     fun pointless_computation: i32 (cool_number: i32) {
       total := 0;
       for x in
@@ -130,7 +127,7 @@ TEST_CASE("Peculiar nesting", "[Codegen]") {
 TEST_CASE("Declaration shadowing within nested scopes", "[Codegen]") {
   // This code previously failed to compile
   // It should run and just return 0
-  auto codegen = parse_and_compile(R"(
+  auto codegen = compile(R"(
     fun broken_sum: i32 (n: i32) {
       total := 0;
       for x in 1 .. n + 1 {
@@ -148,7 +145,7 @@ TEST_CASE("Declaration shadowing within nested scopes", "[Codegen]") {
 TEST_CASE("Calling other functions", "[Codegen]") {
 
   SECTION("Simple clamp") {
-    auto codegen = parse_and_compile(R"(
+    auto codegen = compile(R"(
       fun clamp: i32 (n: i32, lo: i32, hi: i32) {
         return max(lo, min(n, hi));
       }
@@ -166,9 +163,47 @@ TEST_CASE("Calling other functions", "[Codegen]") {
     REQUIRE(max(0, -20) == 0);
 
     auto clamp = codegen.extract_function_from_jit<int(int, int, int)>("clamp");
-
     REQUIRE(clamp(10, 0, 5) == 5);
     REQUIRE(clamp(-20, 0, 5) == 0);
     REQUIRE(clamp(3, 0, 5) == 3);
+  }
+}
+
+TEST_CASE("Type identity functions", "[Codegen]") {
+  /* Just testing that each type minimally works */
+
+  SECTION("i32") {
+    auto codegen = compile(
+      "fun id: i32 (x: i32) { x }");
+
+    auto id = codegen.extract_function_from_jit<int(int)>("id");
+    REQUIRE(id(-23) == -23);
+    REQUIRE(id(100'000) == 100'000);
+  }
+
+  SECTION("f64") {
+    auto codegen = compile(
+      "fun id: f64 (x: f64) { x }");
+
+    auto id = codegen.extract_function_from_jit<double(double)>("id");
+    REQUIRE(id(666.123) == 666.123);
+  }
+
+  SECTION("f32") {
+    auto codegen = compile(
+      "fun id: f32 (x: f32) { x }");
+
+    auto id = codegen.extract_function_from_jit<float(float)>("id");
+    REQUIRE(id(32.21f) == 32.21f);
+    REQUIRE(id(-42.12f) == -42.12f);
+  }
+
+  SECTION("bool") {
+    auto codegen = compile(
+      "fun id: bool (x: bool) { x }");
+
+    auto id = codegen.extract_function_from_jit<bool(bool)>("id");
+    REQUIRE(id(true) == true);
+    REQUIRE(id(false) == false);
   }
 }

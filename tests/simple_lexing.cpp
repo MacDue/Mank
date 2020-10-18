@@ -3,7 +3,7 @@
 
 #include "catch/catch.hpp"
 
-#include "lexer.h"
+#include "parser/lexer.h"
 
 #define next_token_type(lexer) (lexer).peek_next_token().type
 #define LOG_SOURCE(source) INFO("Source is \"" << (source) << '"')
@@ -150,7 +150,7 @@ TEST_CASE("Lex string literals", "[Lexer]") {
     lexer.set_input_to_string(source_literal);
     auto token = lexer.peek_next_token();
     REQUIRE(token.type == TokenType::LITERAL);
-    REQUIRE(token.literal_type == PrimativeTypeTag::STRING);
+    REQUIRE(token.literal_type == PrimativeType::STRING);
     REQUIRE(token.raw_token == source_literal);
     expect_eof(lexer);
   }
@@ -161,11 +161,11 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
 
   // Note: prefexes +/- are treated as unary expressions
   std::array valid_numerical_literals_and_expected_type {
-    std::make_pair("42", PrimativeTypeTag::INTEGER),
-    std::make_pair("10000.", PrimativeTypeTag::FLOAT64),
-    std::make_pair("3.14", PrimativeTypeTag::FLOAT64),
+    std::make_pair("42", PrimativeType::INTEGER),
+    std::make_pair("10000.", PrimativeType::FLOAT64),
+    std::make_pair("3.14", PrimativeType::FLOAT64),
     // Note the literals are not parsed yet (that is done later)
-    std::make_pair("999999999999999999999999", PrimativeTypeTag::INTEGER),
+    std::make_pair("999999999999999999999999", PrimativeType::INTEGER),
   };
 
   for (auto [numeric_literal, expected_literal_type]: valid_numerical_literals_and_expected_type) {
@@ -181,7 +181,7 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
 TEST_CASE("Lexing simple function header", "[Lexer]") {
   Lexer lexer;
 
-  lexer.set_input_to_string("proc main(argc: int, test: int)");
+  lexer.set_input_to_string("proc main(argc: int, test: int) { 1 }");
 
   std::array expected_token_stream {
     TokenType::PROCEDURE,
@@ -195,6 +195,9 @@ TEST_CASE("Lexing simple function header", "[Lexer]") {
     TokenType::COLON,
     TokenType::IDENT,
     TokenType::RIGHT_PAREN,
+    TokenType::LEFT_BRACE,
+    TokenType::LITERAL,
+    TokenType::RIGHT_BRACE,
     TokenType::LEX_EOF
   };
 

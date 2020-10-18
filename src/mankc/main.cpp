@@ -4,11 +4,10 @@
 #include <iostream>
 #include <boost/program_options.hpp>
 
-#include "parser.h"
-#include "semantics.h"
-#include "ast_printer.h"
-
-#include "codegen.h"
+#include "parser/parser.h"
+#include "sema/semantics.h"
+#include "codegen/codegen.h"
+#include "ast/ast_printer.h"
 
 #include "compiler_message_printer.h"
 

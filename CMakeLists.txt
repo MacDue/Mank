@@ -8,6 +8,14 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wpessimizing-move -Wno-init-list-lifetime")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+include_directories(
+  ./src/ast/include
+  ./src/parser/include
+  ./src/semantics/include
+  ./src/codegen/include
+  ./src/util/include
+)
+
 add_subdirectory(src)
 add_subdirectory(deps/litexx)
 add_subdirectory(deps/formatxx)

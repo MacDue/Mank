@@ -5,9 +5,10 @@
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
 
-#include "codegen.h"
+#include "ast/types.h"
 #include "llvm_codegen.h"
-#include "token_helpers.h"
+#include "codegen/codegen.h"
+#include "parser/token_helpers.h"
 
 CodeGen::CodeGen(Ast_File& file_ast)
   : impl{std::make_unique<LLVMCodeGen>(file_ast)} {}
@@ -24,7 +25,7 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
 }
 
 void LLVMCodeGen::create_module() {
-  this->module = std::make_unique<llvm::Module>(
+  this->llvm_module = std::make_unique<llvm::Module>(
     file_ast.filename, llvm_context);
   /* TODO: set machine target */
   /* TODO: set up optimizations */
@@ -32,17 +33,17 @@ void LLVMCodeGen::create_module() {
 
 /* Types */
 
-llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeTypeTag primative) {
+llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeType::Tag primative) {
   switch (primative) {
-    case PrimativeTypeTag::INTEGER:
+    case PrimativeType::INTEGER:
       return llvm::Type::getInt32Ty(llvm_context);
-    case PrimativeTypeTag::FLOAT32:
+    case PrimativeType::FLOAT32:
       return llvm::Type::getFloatTy(llvm_context);
-    case PrimativeTypeTag::FLOAT64:
+    case PrimativeType::FLOAT64:
       return llvm::Type::getDoubleTy(llvm_context);
-    case PrimativeTypeTag::STRING:
+    case PrimativeType::STRING:
       return llvm::Type::getInt8PtrTy(llvm_context);
-    case PrimativeTypeTag::BOOL:
+    case PrimativeType::BOOL:
       return llvm::Type::getInt1Ty(llvm_context);
     default:
       assert(false && "fix me! mapping unknown primative to LLVM");
@@ -87,8 +88,12 @@ void LLVMCodeGen::create_exit_br(llvm::BasicBlock* target) {
 
 /* Functions */
 
+llvm::Function* LLVMCodeGen::get_current_function() {
+  return ir_builder.GetInsertBlock()->getParent();
+}
+
 llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
-  if (auto llvm_func = module->getFunction(func.identifer.name)) {
+  if (auto llvm_func = llvm_module->getFunction(func.identifer.name)) {
     return llvm_func;
   } else {
     return codegen_function_header(func);
@@ -113,7 +118,7 @@ llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& f
     func_type,
     llvm::Function::ExternalLinkage,
     func.identifer.name,
-    module.get());
+    llvm_module.get());
 
   uint arg_idx = 0;
   for (auto& arg: llvm_func->args()) {
@@ -180,7 +185,7 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
   }
   return_symbol->meta = std::make_shared<SymbolMetaReturn>(return_alloca, function_return);
 
-  codegen_statement(func.body, func.body.scope);
+  codegen_expression(func.body, func.body.scope);
   create_exit_br(function_return);
 
   llvm_func->getBasicBlockList().push_back(function_return);
@@ -205,56 +210,6 @@ void LLVMCodeGen::codegen_statement(Ast_Statement& stmt, Scope& scope) {
   std::visit([&](auto& stmt) {
     codegen_statement(stmt, scope);
   }, stmt.v);
-}
-
-void LLVMCodeGen::codegen_statement(Ast_Block& block, Scope& scope) {
-  (void) scope; // Not needed
-  for (auto& stmt: block.statements) {
-    codegen_statement(*stmt, block.scope);
-    if (block_terminates_here()) {
-      break;
-    }
-  }
-}
-
-void LLVMCodeGen::codegen_statement(Ast_If_Statement& if_stmt, Scope& scope) {
-  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
-  llvm::Value* condition = codegen_expression(*if_stmt.cond, scope);
-
-  /* Create and insert the 'then' block into the function */
-  llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
-    llvm_context, "then_block", current_function);
-
-  llvm::BasicBlock* else_block = nullptr;
-
-  llvm::BasicBlock* end_block = llvm::BasicBlock::Create(
-    llvm_context, "if_end");
-
-  if (if_stmt.has_else) {
-    else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
-    ir_builder.CreateCondBr(condition, then_block, else_block);
-  } else {
-    ir_builder.CreateCondBr(condition, then_block, end_block);
-  }
-
-  /* then */
-  ir_builder.SetInsertPoint(then_block);
-  codegen_statement(*if_stmt.then_block, scope);
-  create_exit_br(end_block);
-
-  /* else */
-  if (if_stmt.has_else) {
-    // Now add the else block!
-
-    current_function->getBasicBlockList().push_back(else_block);
-    ir_builder.SetInsertPoint(else_block);
-    codegen_statement(*if_stmt.else_block, scope);
-    create_exit_br(end_block);
-  }
-
-  /* end */
-  current_function->getBasicBlockList().push_back(end_block);
-  ir_builder.SetInsertPoint(end_block);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
@@ -288,18 +243,30 @@ void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope) {
-  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::Function* current_function = get_current_function();
+
+  llvm::Value* initializer = nullptr;
+  if (var_decl.initializer) {
+    initializer = codegen_expression(*var_decl.initializer, scope);
+  }
 
   /*
     Have to add the symbol again here as it's removed when it goes out of scope,
     when checking sementics, otherwise resolving shadowed variables would be
     nightmare.
+
+    It's also very important the symbol is added to the scope after the initializer
+    has been generated or something like:
+
+    x := 0;
+    x := x + 1;
+
+    Could segfault or crash somehow (as it'll try to use the undefined x in the expression)
   */
   scope.symbols.emplace_back(Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
   llvm::AllocaInst* alloca = create_entry_alloca(current_function, &scope.symbols.back());
 
-  if (var_decl.initializer) {
-    llvm::Value* initializer = codegen_expression(*var_decl.initializer, scope);
+  if (initializer) {
     ir_builder.CreateStore(initializer, alloca);
   }
 }
@@ -317,11 +284,11 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   llvm::Value* start_value = codegen_expression(*for_loop.start_range, scope);
   llvm::Value* end_value = codegen_expression(*for_loop.end_range, scope);
 
-  auto& body = std::get<Ast_Block>(for_loop.body->v);
+  auto& body = for_loop.body;
   body.scope.symbols.emplace_back(Symbol(
     for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
 
-  llvm::Function* current_function = ir_builder.GetInsertBlock()->getParent();
+  llvm::Function* current_function = get_current_function();
   llvm::AllocaInst* loop_value = create_entry_alloca(current_function, &body.scope.symbols.back());
   ir_builder.CreateStore(start_value, loop_value);
 
@@ -357,7 +324,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   current_function->getBasicBlockList().push_back(for_body);
   ir_builder.SetInsertPoint(for_body);
 
-  codegen_statement(body, scope);
+  codegen_expression(body, scope);
 
   llvm::BasicBlock* for_inc = llvm::BasicBlock::Create(
     llvm_context, "for_inc", current_function);
@@ -369,7 +336,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   // FIXME: Temp hack till I figure out proper ranges!
   auto& primative_loop_type = std::get<PrimativeType>(loop_range_type->v);
   Ast_Literal loop_inc_literal({},
-    primative_loop_type.tag == PrimativeTypeTag::BOOL ? "true" : "1", primative_loop_type.tag);
+    primative_loop_type.tag == PrimativeType::BOOL ? "true" : "1", primative_loop_type.tag);
 
   Ast_Binary_Operation next_loop_value = loop_cond;
   next_loop_value.right = std::make_shared<Ast_Expression>(loop_inc_literal);
@@ -397,6 +364,96 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope)
   }, expr.v);
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope) {
+  llvm::Function* current_function = get_current_function();
+
+  (void) scope; // Not needed
+  auto statements_in_block = block.statements.size();
+  if (block.has_final_expr) {
+    statements_in_block -= 1;
+  }
+  for (uint stmt_idx = 0; stmt_idx < statements_in_block; stmt_idx++) {
+    codegen_statement(*block.statements.at(stmt_idx), block.scope);
+    if (block_terminates_here()) {
+      break;
+    }
+  }
+
+  if (auto final_expr = block.get_final_expr()) {
+    /*
+      This basic block is kind of a hack but it allows for expressions like:
+      {
+        return 10;
+        0
+      }
+      to codegen without error
+      (really the AST should remove unreachable code before codegen -- but I don't do that yet)
+    */
+    llvm::BasicBlock* block_eval = llvm::BasicBlock::Create(
+      llvm_context, "block_eval", current_function);
+    create_exit_br(block_eval);
+    ir_builder.SetInsertPoint(block_eval);
+    return codegen_expression(*final_expr, block.scope);
+  }
+
+  return nullptr;
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope) {
+  llvm::Function* current_function = get_current_function();
+  llvm::Value* condition = codegen_expression(*if_expr.cond, scope);
+
+  /* Create and insert the 'then' block into the function */
+  llvm::BasicBlock* then_block = llvm::BasicBlock::Create(
+    llvm_context, "then_block", current_function);
+
+  llvm::BasicBlock* else_block = nullptr;
+
+  llvm::BasicBlock* end_block = llvm::BasicBlock::Create(
+    llvm_context, "if_end");
+
+  if (if_expr.has_else) {
+    else_block = llvm::BasicBlock::Create(llvm_context, "else_block");
+    ir_builder.CreateCondBr(condition, then_block, else_block);
+  } else {
+    ir_builder.CreateCondBr(condition, then_block, end_block);
+  }
+
+  /* then */
+  ir_builder.SetInsertPoint(then_block);
+  llvm::Value* then_value = codegen_expression(*if_expr.then_block, scope);
+  create_exit_br(end_block);
+  // So the incoming edges into the Phi node are correct
+  // As nesting ifs change the current basic block.
+  then_block = ir_builder.GetInsertBlock();
+
+  /* else */
+  llvm::Value* else_value = nullptr;
+  if (if_expr.has_else) {
+    // Now add the else block!
+
+    current_function->getBasicBlockList().push_back(else_block);
+    ir_builder.SetInsertPoint(else_block);
+    else_value = codegen_expression(*if_expr.else_block, scope);
+    create_exit_br(end_block);
+    else_block = ir_builder.GetInsertBlock();
+  }
+
+  /* end */
+  current_function->getBasicBlockList().push_back(end_block);
+  ir_builder.SetInsertPoint(end_block);
+
+  if (then_value && else_value) {
+    auto if_type = extract_type(if_expr.then_block->type);
+    llvm::PHINode* phi = ir_builder.CreatePHI(
+      map_type_to_llvm(if_type.get()), 2, "if_expr_selection");
+    phi->addIncoming(then_value, then_block);
+    phi->addIncoming(else_value, else_block);
+    return phi;
+  }
+  return nullptr;
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
   auto& called_function_ident = std::get<Ast_Identifier>(call.callee->v);
 
@@ -419,22 +476,22 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {
   (void) scope; // Not needed
   switch (literal.literal_type) {
-    case PrimativeTypeTag::INTEGER:
+    case PrimativeType::INTEGER:
       return llvm::ConstantInt::get(llvm_context,
         llvm::APInt(
           /*bits:*/ literal.size_bytes(),
           /*value:*/ literal.as_int32(),
           /*signed:*/ true));
-    case PrimativeTypeTag::FLOAT32:
+    case PrimativeType::FLOAT32:
       return llvm::ConstantFP::get(llvm_context,
         llvm::APFloat(/*value:*/ literal.as_float32()));
-    case PrimativeTypeTag::FLOAT64:
+    case PrimativeType::FLOAT64:
       return llvm::ConstantFP::get(llvm_context,
           llvm::APFloat(/*value:*/ literal.as_float64()));
-    case PrimativeTypeTag::STRING:
+    case PrimativeType::STRING:
       assert(false && "string literal codegen not implemented");
       return nullptr;
-    case PrimativeTypeTag::BOOL:
+    case PrimativeType::BOOL:
       return llvm::ConstantInt::get(llvm_context,
         llvm::APInt(/*bits*/ literal.size_bytes(),
                     /*value: */ literal.as_bool(),
@@ -468,30 +525,30 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
   auto& unary_primative = std::get<PrimativeType>(unary_type->v);
 
   return match(unary_primative.tag, unary.operation)(
-    pattern(anyof(PrimativeTypeTag::INTEGER, PrimativeTypeTag::FLOAT64), Ast_Operator::PLUS) = [&]{
+    pattern(anyof(PrimativeType::INTEGER, PrimativeType::FLOAT64), Ast_Operator::PLUS) = [&]{
       return operand;
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::MINUS) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::MINUS) = [&]{
       return ir_builder.CreateSub(
         llvm::ConstantInt::get(llvm_context,
-          llvm::APInt(primative_size(PrimativeTypeTag::INTEGER), 0, true)),
+          llvm::APInt(PrimativeType::type_size(PrimativeType::INTEGER), 0, true)),
         operand,
         "int_minus");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::BITWISE_NOT) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::BITWISE_NOT) = [&]{
       return ir_builder.CreateXor(
         operand,
         llvm::ConstantInt::get(llvm_context,
-          llvm::APInt(primative_size(PrimativeTypeTag::INTEGER), -1, true)),
+          llvm::APInt(PrimativeType::type_size(PrimativeType::INTEGER), -1, true)),
         "int_bitwise_not");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::MINUS) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::MINUS) = [&]{
       return ir_builder.CreateFSub(
         llvm::ConstantFP::get(llvm_context, llvm::APFloat(0.0)),
         operand,
         "float_minus");
     },
-    pattern(PrimativeTypeTag::BOOL, Ast_Operator::LOGICAL_NOT) = [&]{
+    pattern(PrimativeType::BOOL, Ast_Operator::LOGICAL_NOT) = [&]{
       return ir_builder.CreateNot(operand, "bool_logical_not");
     },
     pattern(_, _) = [&]{
@@ -515,43 +572,43 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
 
   return match(binop_primative.tag, binop.operation)(
     /* Basic integer operations */
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::PLUS) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::PLUS) = [&]{
       return ir_builder.CreateAdd(left, right, "int_add");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::MINUS) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::MINUS) = [&]{
       return ir_builder.CreateSub(left, right, "int_sub");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::DIVIDE) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::DIVIDE) = [&]{
       return ir_builder.CreateSDiv(left, right, "int_div");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::TIMES) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::TIMES) = [&]{
       return ir_builder.CreateMul(left, right, "int_mult");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::MODULO) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::MODULO) = [&]{
       return ir_builder.CreateSRem(left, right, "int_mod");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::LESS_THAN) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::LESS_THAN) = [&]{
       return ir_builder.CreateICmpSLT(left, right, "int_lt");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::GREATER_THAN) = [&]{
-      return ir_builder.CreateICmpUGT(left, right, "int_gt");
+    pattern(PrimativeType::INTEGER, Ast_Operator::GREATER_THAN) = [&]{
+      return ir_builder.CreateICmpSGT(left, right, "int_gt");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::BITWISE_AND) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::BITWISE_AND) = [&]{
       return ir_builder.CreateAnd(left, right, "int_bitwise_and");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::BITWISE_OR) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::BITWISE_OR) = [&]{
       return ir_builder.CreateOr(left, right, "int_bitwise_or");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::GREATER_EQUAL) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::GREATER_EQUAL) = [&]{
       return ir_builder.CreateICmpSGE(left, right, "int_ge");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::LESS_EQUAL) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::LESS_EQUAL) = [&]{
       return ir_builder.CreateICmpSLE(left, right, "int_le");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::EQUAL_TO) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::EQUAL_TO) = [&]{
       return ir_builder.CreateICmpEQ(left, right, "int_eq");
     },
-    pattern(PrimativeTypeTag::INTEGER, Ast_Operator::NOT_EQUAL_TO) = [&]{
+    pattern(PrimativeType::INTEGER, Ast_Operator::NOT_EQUAL_TO) = [&]{
       return ir_builder.CreateICmpNE(left, right, "int_ne");
     },
     /*
@@ -560,34 +617,34 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
       Read: https://stackoverflow.com/a/38516544/3818491
       Something to do with NaN (just using unordered operations for now)
     */
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::PLUS) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::PLUS) = [&]{
       return ir_builder.CreateFAdd(left, right, "float_add");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::MINUS) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::MINUS) = [&]{
       return ir_builder.CreateFSub(left, right, "float_sub");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::DIVIDE) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::DIVIDE) = [&]{
       return ir_builder.CreateFDiv(left, right, "float_div");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::TIMES) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::TIMES) = [&]{
       return ir_builder.CreateFMul(left, right, "float_mult");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::LESS_THAN) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::LESS_THAN) = [&]{
       return ir_builder.CreateFCmpULT(left, right, "float_lt");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::GREATER_THAN) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::GREATER_THAN) = [&]{
       return ir_builder.CreateFCmpUGT(left, right, "float_gt");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::GREATER_EQUAL) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::GREATER_EQUAL) = [&]{
       return ir_builder.CreateFCmpUGE(left, right, "float_ge");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::LESS_EQUAL) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::LESS_EQUAL) = [&]{
       return ir_builder.CreateFCmpULE(left, right, "float_le");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::EQUAL_TO) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::EQUAL_TO) = [&]{
       return ir_builder.CreateFCmpUEQ(left, right, "float_eq");
     },
-    pattern(PrimativeTypeTag::FLOAT64, Ast_Operator::NOT_EQUAL_TO) = [&]{
+    pattern(PrimativeType::FLOAT64, Ast_Operator::NOT_EQUAL_TO) = [&]{
       return ir_builder.CreateFCmpUNE(left, right, "float_ne");
     },
     pattern(_, _) = [&]{
@@ -599,4 +656,43 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
       return static_cast<llvm::Value*>(nullptr);
     }
   );
+}
+
+/* JIT tools */
+
+llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {
+  assert(llvm_module && "module to jit cannot be null!");
+  if (!jit_engine) {
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+    jit_engine = std::make_unique<llvm::orc::KaleidoscopeJIT>();
+  }
+  llvm_module->setDataLayout(jit_engine->getTargetMachine().createDataLayout());
+  return jit_engine->addModule(std::move(llvm_module));
+}
+
+void* CodeGen::find_jit_symbol(std::string name) {
+  return static_cast<LLVMCodeGen*>(impl.get())->jit_find_symbol(name);
+}
+
+void* LLVMCodeGen::jit_find_symbol(std::string name) {
+  if (!jit_module_handle) {
+    jit_module_handle = jit_current_module();
+  }
+
+  auto symbol_adress = jit_engine->findSymbol(name).getAddress();
+  if (auto err = symbol_adress.takeError()) {
+    llvm::logAllUnhandledErrors(std::move(err), llvm::errs(), "[JIT Error] ");
+    assert(false && "failed to get jit-ed symbol :(");
+  }
+
+  return reinterpret_cast<void*>(symbol_adress.get());
+}
+
+LLVMCodeGen::~LLVMCodeGen() {
+  // Not sure it this is needed
+  if (jit_engine && jit_module_handle) {
+    jit_engine->removeModule(*jit_module_handle);
+  }
 }

@@ -2,8 +2,8 @@
 
 #include <ostream>
 
-#include "compiler_errors.h"
-#include "compiler_message.h"
+#include "errors/compiler_errors.h"
+#include "errors/compiler_message.h"
 
 std::ostream& operator<< (std::ostream& os, CompilerMessage const & message);
 

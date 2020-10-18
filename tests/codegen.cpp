@@ -144,3 +144,31 @@ TEST_CASE("Declaration shadowing within nested scopes", "[Codegen]") {
   auto broken_codegen = codegen.extract_function_from_jit<int(int)>("broken_sum");
   REQUIRE(broken_codegen(100) == 0); // Since there is a mistake in this code
 }
+
+TEST_CASE("Calling other functions", "[Codegen]") {
+
+  SECTION("Simple clamp") {
+    auto codegen = parse_and_compile(R"(
+      fun clamp: i32 (n: i32, lo: i32, hi: i32) {
+        return max(lo, min(n, hi));
+      }
+
+      fun max: i32 (a: i32, b: i32) {
+        if a > b { a } else { b }
+      }
+
+      fun min: i32 (a: i32, b: i32) {
+        if a < b { a } else { b }
+      }
+    )");
+
+    auto max = codegen.extract_function_from_jit<int(int, int)>("max");
+    REQUIRE(max(0, -20) == 0);
+
+    auto clamp = codegen.extract_function_from_jit<int(int, int, int)>("clamp");
+
+    REQUIRE(clamp(10, 0, 5) == 5);
+    REQUIRE(clamp(-20, 0, 5) == 0);
+    REQUIRE(clamp(3, 0, 5) == 3);
+  }
+}

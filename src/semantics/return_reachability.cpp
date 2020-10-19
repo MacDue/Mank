@@ -89,9 +89,10 @@ bool check_reachability(Ast_Expression& block_like, Ast_Statement** unreachable_
           }
         */
 
-        // If can only return on _all_ paths if it has an else block, which also returns.
-        bool if_returns = check_reachability(*if_stmt.then_block, unreachable_stmt)
-            && if_stmt.has_else && check_reachability(*if_stmt.else_block, unreachable_stmt);
+        // Do these separately as we still want warnings in the else block even if the
+        // then block does not return.
+        bool then_returns = check_reachability(*if_stmt.then_block, unreachable_stmt);
+        bool else_returns = if_stmt.has_else && check_reachability(*if_stmt.else_block, unreachable_stmt);
 
         /*
           Depending on the constant evaluation mark the then/else blocks unreachable.
@@ -109,7 +110,8 @@ bool check_reachability(Ast_Expression& block_like, Ast_Statement** unreachable_
           }
         }
 
-        return if_returns;
+        // If can only return on _all_ paths if it has an else block, which also returns.
+        return then_returns && else_returns;
       }, if_stmt.cond->v);
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {

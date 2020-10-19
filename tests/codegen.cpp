@@ -147,7 +147,7 @@ TEST_CASE("Calling other functions", "[Codegen]") {
   SECTION("Simple clamp") {
     auto codegen = compile(R"(
       fun clamp: i32 (n: i32, lo: i32, hi: i32) {
-        return max(lo, min(n, hi));
+        max(lo, min(n, hi))
       }
 
       fun max: i32 (a: i32, b: i32) {

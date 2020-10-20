@@ -22,15 +22,16 @@ static inline Statement_Ptr first_statement_in_block(Expression_Ptr& expr) {
 }
 
 bool check_reachability(Ast_Block& block, Ast_Statement** unreachable_stmt) {
-  bool block_returns = false;
   for (uint stmt_idx = 0; stmt_idx < block.statements.size(); stmt_idx++) {
     auto& stmt = block.statements.at(stmt_idx);
-    block_returns |= check_reachability(*stmt, unreachable_stmt);
-    if (block_returns && stmt_idx + 1 < block.statements.size()) {
-      LAST_UNREACHABLE_STMT(block.statements.at(stmt_idx + 1));
+    if (check_reachability(*stmt, unreachable_stmt)) {
+      if (stmt_idx + 1 < block.statements.size()) {
+        LAST_UNREACHABLE_STMT(block.statements.at(stmt_idx + 1));
+      }
+      return true;
     }
   }
-  return block_returns;
+  return false;
 }
 
 bool check_reachability(Ast_Statement& statement, Ast_Statement** unreachable_stmt) {
@@ -56,6 +57,10 @@ bool check_reachability(Ast_Statement& statement, Ast_Statement** unreachable_st
       }
 
       return start_range_returns || end_range_returns || body_returns;
+    },
+    pattern(_) = []{
+      assert(false && "fix me! unknown statement in reachability checking");
+      return false;
     }
   );
 }
@@ -67,59 +72,59 @@ bool check_reachability(Ast_Expression& block_like, Ast_Statement** unreachable_
       return check_reachability(block, unreachable_stmt);
     },
     pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_stmt) {
-      return std::visit([&](Ast_Const_Expr& const_expr){
-        /*
-          When deciding if a if statement returns the constant evaluation should not
-          be used. As it can make it confusing, as when the constant eval improves,
-          previously rejected functions can be accepted.
+      /*
+        When deciding if a if statement returns the constant evaluation should not
+        be used. As it can make it confusing, as when the constant eval improves,
+        previously rejected functions can be accepted.
 
-          Things can also get arbitrarily complex.
-          e.g.
+        Things can also get arbitrarily complex.
+        e.g.
 
-          fun fermats_last_theorm: bool (x: i32, y: i32, z: i32, n: i32) {
-            if n > 2 {
-              if x^n + y^n == z^n {
-                # A sufficiently advanced compiler could prove this is
-                # unreachable and hence not matter there's no return.
-              }
-              return false;
-            } else {
-              return true;
+        fun fermats_last_theorm: bool (x: i32, y: i32, z: i32, n: i32) {
+          if n > 2 {
+            if x^n + y^n == z^n {
+              # A sufficiently advanced compiler could prove this is
+              # unreachable and hence not matter there's no return.
             }
-          }
-        */
-
-        // Do these separately as we still want warnings in the else block even if the
-        // then block does not return.
-        bool then_returns = check_reachability(*if_stmt.then_block, unreachable_stmt);
-        bool else_returns = if_stmt.has_else && check_reachability(*if_stmt.else_block, unreachable_stmt);
-
-        /*
-          Depending on the constant evaluation mark the then/else blocks unreachable.
-          This should be done after the pior calls to reachability so the topmost
-          unreachable statement is marked first.
-        */
-        if (const_expr.is_const_expr()) {
-          bool cond_value = std::get<bool>(const_expr.const_expr_value);
-          if (cond_value) {
-            if (if_stmt.has_else) {
-              LAST_UNREACHABLE_STMT(first_statement_in_block(if_stmt.else_block));
-            }
+            return false;
           } else {
-            LAST_UNREACHABLE_STMT(first_statement_in_block(if_stmt.then_block));
+            return true;
           }
         }
+      */
 
-        // If can only return on _all_ paths if it has an else block, which also returns.
-        return then_returns && else_returns;
-      }, if_stmt.cond->v);
+      // Do these separately as we still want warnings in the else block even if the
+      // then block does not return.
+      bool then_returns = check_reachability(*if_stmt.then_block, unreachable_stmt);
+      bool else_returns = if_stmt.has_else && check_reachability(*if_stmt.else_block, unreachable_stmt);
+
+      /*
+        Depending on the constant evaluation mark the then/else blocks unreachable.
+        This should be done after the pior calls to reachability so the topmost
+        unreachable statement is marked first.
+      */
+      auto& const_expr = variant_cast<Ast_Const_Expr>(if_stmt.cond->v);
+      if (const_expr.is_const_expr()) {
+        bool cond_value = std::get<bool>(const_expr.const_expr_value);
+        if (cond_value) {
+          if (if_stmt.has_else) {
+            LAST_UNREACHABLE_STMT(first_statement_in_block(if_stmt.else_block));
+          }
+        } else {
+          LAST_UNREACHABLE_STMT(first_statement_in_block(if_stmt.then_block));
+        }
+      }
+
+      // If can only return on _all_ paths if it has an else block, which also returns.
+      return then_returns && else_returns;
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
-      bool call_returns = false;
       for (auto& arg: call.arguments) {
-        call_returns |= check_reachability(*arg, unreachable_stmt);
+        if (check_reachability(*arg, unreachable_stmt)) {
+          return true;
+        }
       }
-      return call_returns;
+      return false;
     },
     pattern(as<Ast_Unary_Operation>(arg)) = [&](auto& unary) {
       return check_reachability(*unary.operand, unreachable_stmt);
@@ -128,7 +133,13 @@ bool check_reachability(Ast_Expression& block_like, Ast_Statement** unreachable_
       return check_reachability(*binary.left, unreachable_stmt)
         || check_reachability(*binary.right, unreachable_stmt);
     },
-    pattern(_) = []{ return false; });
+    pattern(anyof(as<Ast_Literal>(_), as<Ast_Identifier>(_))) = []{
+      return false;
+    },
+    pattern(_) = []{
+      assert(false && "fix me! unknown expression in reachability checking");
+      return false;
+    });
 }
 
 }

@@ -143,7 +143,7 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   }
 
   Ast_Statement* first_unreachable_stmt = nullptr;
-  bool all_paths_return = AstHelper::check_reachability(func.body, &first_unreachable_stmt);
+  bool all_paths_return = AstHelper::all_paths_return(func.body, &first_unreachable_stmt);
   if (!func.procedure && !all_paths_return) {
     throw_sema_error_at(func.identifer, "function possibly fails to return a value");
   }

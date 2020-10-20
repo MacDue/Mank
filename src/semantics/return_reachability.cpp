@@ -21,10 +21,10 @@ static inline Statement_Ptr first_statement_in_block(Expression_Ptr& expr) {
   return first_statement_in_block(std::get<Ast_Block>(expr->v));
 }
 
-bool check_reachability(Ast_Block& block, Ast_Statement** unreachable_stmt) {
+bool all_paths_return(Ast_Block& block, Ast_Statement** unreachable_stmt) {
   for (uint stmt_idx = 0; stmt_idx < block.statements.size(); stmt_idx++) {
     auto& stmt = block.statements.at(stmt_idx);
-    if (check_reachability(*stmt, unreachable_stmt)) {
+    if (all_paths_return(*stmt, unreachable_stmt)) {
       if (stmt_idx + 1 < block.statements.size()) {
         LAST_UNREACHABLE_STMT(block.statements.at(stmt_idx + 1));
       }
@@ -34,23 +34,23 @@ bool check_reachability(Ast_Block& block, Ast_Statement** unreachable_stmt) {
   return false;
 }
 
-bool check_reachability(Ast_Statement& statement, Ast_Statement** unreachable_stmt) {
+bool all_paths_return(Ast_Statement& statement, Ast_Statement** unreachable_stmt) {
   using namespace mpark::patterns;
   return match(statement.v)(
     pattern(as<Ast_Return_Statement>(_)) = []{ return true; },
     pattern(anyof(as<Ast_Expression_Statement>(arg), as<Ast_Assign>(arg))) = [&](auto& expr_stmt){
-      return check_reachability(*expr_stmt.expression, unreachable_stmt);
+      return all_paths_return(*expr_stmt.expression, unreachable_stmt);
     },
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto var_decl){
       if (var_decl.initializer) {
-        return check_reachability(*var_decl.initializer, unreachable_stmt);
+        return all_paths_return(*var_decl.initializer, unreachable_stmt);
       }
       return false;
     },
     pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop){
-      bool start_range_returns = check_reachability(*for_loop.start_range, unreachable_stmt);
-      bool end_range_returns = check_reachability(*for_loop.end_range, unreachable_stmt);
-      bool body_returns = check_reachability(for_loop.body, unreachable_stmt);
+      bool start_range_returns = all_paths_return(*for_loop.start_range, unreachable_stmt);
+      bool end_range_returns = all_paths_return(*for_loop.end_range, unreachable_stmt);
+      bool body_returns = all_paths_return(for_loop.body, unreachable_stmt);
 
       if (start_range_returns || end_range_returns) {
         LAST_UNREACHABLE_STMT(first_statement_in_block(for_loop.body));
@@ -65,11 +65,11 @@ bool check_reachability(Ast_Statement& statement, Ast_Statement** unreachable_st
   );
 }
 
-bool check_reachability(Ast_Expression& block_like, Ast_Statement** unreachable_stmt) {
+bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_stmt) {
   using namespace mpark::patterns;
   return match(block_like.v)(
     pattern(as<Ast_Block>(arg)) = [&](auto& block) {
-      return check_reachability(block, unreachable_stmt);
+      return all_paths_return(block, unreachable_stmt);
     },
     pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_stmt) {
       /*
@@ -95,8 +95,8 @@ bool check_reachability(Ast_Expression& block_like, Ast_Statement** unreachable_
 
       // Do these separately as we still want warnings in the else block even if the
       // then block does not return.
-      bool then_returns = check_reachability(*if_stmt.then_block, unreachable_stmt);
-      bool else_returns = if_stmt.has_else && check_reachability(*if_stmt.else_block, unreachable_stmt);
+      bool then_returns = all_paths_return(*if_stmt.then_block, unreachable_stmt);
+      bool else_returns = if_stmt.has_else && all_paths_return(*if_stmt.else_block, unreachable_stmt);
 
       /*
         Depending on the constant evaluation mark the then/else blocks unreachable.
@@ -120,18 +120,18 @@ bool check_reachability(Ast_Expression& block_like, Ast_Statement** unreachable_
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
       for (auto& arg: call.arguments) {
-        if (check_reachability(*arg, unreachable_stmt)) {
+        if (all_paths_return(*arg, unreachable_stmt)) {
           return true;
         }
       }
       return false;
     },
     pattern(as<Ast_Unary_Operation>(arg)) = [&](auto& unary) {
-      return check_reachability(*unary.operand, unreachable_stmt);
+      return all_paths_return(*unary.operand, unreachable_stmt);
     },
     pattern(as<Ast_Binary_Operation>(arg)) = [&](auto binary) {
-      return check_reachability(*binary.left, unreachable_stmt)
-        || check_reachability(*binary.right, unreachable_stmt);
+      return all_paths_return(*binary.left, unreachable_stmt)
+        || all_paths_return(*binary.right, unreachable_stmt);
     },
     pattern(anyof(as<Ast_Literal>(_), as<Ast_Identifier>(_))) = []{
       return false;

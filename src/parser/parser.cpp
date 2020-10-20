@@ -33,6 +33,10 @@ SourceLocation join_source_locations(SourceLocation start, SourceLocation end) {
 /* Top level constructs */
 
 Ast_File Parser::parse_file() {
+  /*
+    white_space = ? any whitespace ? ;
+    file = { function } ;
+  */
   Ast_File parsed_file;
   parsed_file.filename = this->lexer.input_source_name();
   Token next_token;
@@ -49,6 +53,13 @@ Ast_File Parser::parse_file() {
 }
 
 Function_Ptr Parser::parse_function() {
+  /*
+    type_annotation = ":", identifier ;
+    function_header = "fun", white_space, identifier, type_annotation, [parameter_list]
+                    | "proc", white_space, identifier,  [parameter_list] ;
+    parameter_list = "(", {identifier, type_annotation}, ")" ;
+    function = function_header, block ;
+  */
   Ast_Function_Declaration parsed_function;
   if (consume(TokenType::FUNCTION) || (parsed_function.procedure = consume(TokenType::PROCEDURE))) {
 
@@ -108,6 +119,9 @@ Function_Ptr Parser::parse_function() {
 }
 
 std::optional<Ast_Block> Parser::parse_block() {
+  /*
+    block = "{" {statement} [expr] "}" ;
+  */
   auto block_start = this->current_location();
   Ast_Block parsed_block;
   if (consume(TokenType::LEFT_BRACE)) {
@@ -132,6 +146,19 @@ std::optional<Ast_Block> Parser::parse_block() {
 /* Statements */
 
 Statement_Ptr Parser::parse_statement() {
+  /*
+    statement = expr_stmt
+              | return
+              | for_loop
+              | variable_declaration
+              | assignment ;
+    expr_stmt = expr, terminating_symbol ;
+    return = "return", expr, ";" ;
+    variable_declaration = identifier, ":", [identifier], ["=", expr], ";" ;
+    assignment = identifier, "=", expr ;
+
+    terminating_symbol = ";" | ? "}" ? (* the "}" is the previous token rather than the next *)
+  */
   auto stmt_start = this->current_location();
   Statement_Ptr stmt;
   consume(TokenType::SEMICOLON);
@@ -187,6 +214,10 @@ Statement_Ptr Parser::parse_statement() {
 }
 
 Statement_Ptr Parser::parse_for_loop() {
+  /*
+    for_loop = "for", white_space, identifier, [type_annotation], white_space,
+               "in", expr, "..", expr, block ;
+  */
   if (consume(TokenType::FOR)) {
     Ast_For_Loop for_loop;
     auto loop_value = this->parse_identifier();
@@ -223,6 +254,17 @@ Statement_Ptr Parser::parse_for_loop() {
 /* Expressions */
 
 Expression_Ptr Parser::parse_expression() {
+  /*
+    (* this ebnf is abridged to avoid describing precedence which is easier done with a table *)
+    expression = literal
+               | identifier
+               | call
+               | if
+               | block
+               | unary_operation
+               | binary_operation
+               | parenthesised_expression ;
+  */
   auto expr_start = this->current_location();
   auto expr = this->parse_binary_expression();
   return mark_ast_location(expr_start, expr);
@@ -244,6 +286,10 @@ Expression_Ptr Parser::parse_postfix_expression() {
 }
 
 Expression_Ptr Parser::parse_call(Expression_Ptr target) {
+  /*
+    call = expression, "(", [expression_list], ")" ;
+    expression_list = expression, {",", expression} ;
+  */
   expect(TokenType::LEFT_PAREN);
   Ast_Call parsed_call;
   parsed_call.callee = std::move(target);
@@ -274,6 +320,9 @@ Expression_Ptr Parser::parse_primary_expression() {
 }
 
 Expression_Ptr Parser::parse_parenthesised_expression() {
+  /*
+    parenthesised_expression = "(" expression ")" ;
+  */
   using namespace mpark::patterns;
   expect(TokenType::LEFT_PAREN);
   auto expr = this->parse_expression();
@@ -287,6 +336,9 @@ Expression_Ptr Parser::parse_parenthesised_expression() {
 }
 
 Expression_Ptr Parser::parse_if() {
+  /*
+    if = "if", expression, block, ("else", block) | ("else", white_space, if) ;
+  */
   Ast_If_Expr parsed_if;
   if (consume(TokenType::IF)) {
     auto condition = this->parse_expression();
@@ -427,6 +479,10 @@ static Expression_Ptr fix_precedence_and_association(
 }
 
 Expression_Ptr Parser::parse_binary_expression() {
+  /*
+    binary_operation = expression, operation, expression ;
+    operation = (* use your imagination *) ;
+  */
   auto lhs = this->parse_unary();
   auto bin_op = this->lexer.peek_next_token().type;
   if (is_binary_op(bin_op)) {
@@ -439,6 +495,9 @@ Expression_Ptr Parser::parse_binary_expression() {
 }
 
 Expression_Ptr Parser::parse_unary() {
+  /*
+    unary_operation = operation, expression ;
+  */
   auto unary_start = this->current_location();
   auto unary_op = this->lexer.peek_next_token().type;
   if (!is_unary_op(unary_op)) {
@@ -454,6 +513,11 @@ Expression_Ptr Parser::parse_unary() {
 }
 
 Expression_Ptr Parser::parse_literal() {
+  /*
+    literal = string_literal
+            = integer
+            = floating_point ;
+  */
   auto& token = this->lexer.peek_next_token();
 
   std::string literal_value(token.raw_token);

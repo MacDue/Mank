@@ -1,5 +1,7 @@
 #include <mpark/patterns.hpp>
 
+#include "ast/ast_builder.h"
+
 #include "parser/parser.h"
 #include "parser/token_helpers.h"
 
@@ -169,7 +171,7 @@ Statement_Ptr Parser::parse_statement() {
       return_stmt.expression = expr;
     }
     expect(TokenType::SEMICOLON);
-    stmt = std::make_shared<Ast_Statement>(return_stmt);
+    stmt = to_stmt_ptr(return_stmt);
   } else if (peek(TokenType::FOR)) {
     stmt = this->parse_for_loop();
   } else if (auto expr = this->parse_expression()) {
@@ -178,7 +180,7 @@ Statement_Ptr Parser::parse_statement() {
       Ast_Assign assign;
       assign.target = expr;
       assign.expression = this->parse_expression();
-      stmt = std::make_shared<Ast_Statement>(assign);
+      stmt = to_stmt_ptr(assign);
     } else if (consume(TokenType::COLON)) {
       Ast_Variable_Declaration var_decl;
       if (auto ident = std::get_if<Ast_Identifier>(&expr->v)) {
@@ -193,12 +195,12 @@ Statement_Ptr Parser::parse_statement() {
       if (consume(TokenType::ASSIGN)) {
         var_decl.initializer = this->parse_expression();
       }
-      stmt = std::make_shared<Ast_Statement>(var_decl);
+      stmt = to_stmt_ptr(var_decl);
     } else {
       simple_expression = true;
       Ast_Expression_Statement expr_stmt;
       expr_stmt.expression = expr;
-      stmt = std::make_shared<Ast_Statement>(expr_stmt);
+      stmt = to_stmt_ptr(expr_stmt);
     }
     // Hack for final expressions of blocks
     bool seen_terminator = was_previously_terminating_symbol();
@@ -245,7 +247,7 @@ Statement_Ptr Parser::parse_for_loop() {
     }
     for_loop.body = *body;
 
-    return std::make_shared<Ast_Statement>(for_loop);
+    return to_stmt_ptr(for_loop);
   } else {
     return nullptr; // impossible
   }
@@ -300,20 +302,20 @@ Expression_Ptr Parser::parse_call(Expression_Ptr target) {
     }
   }
   expect(TokenType::RIGHT_PAREN);
-  return std::make_shared<Ast_Expression>(parsed_call);
+  return to_expr_ptr(parsed_call);
 }
 
 Expression_Ptr Parser::parse_primary_expression() {
   if (peek(TokenType::LITERAL) || peek(TokenType::TRUE) || peek(TokenType::FALSE)) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
-    return std::make_shared<Ast_Expression>(*this->parse_identifier());
+    return to_expr_ptr(*this->parse_identifier());
   } else if (peek(TokenType::LEFT_PAREN)) {
     return this->parse_parenthesised_expression();
   } else if (peek(TokenType::IF)) {
     return this->parse_if();
   } else if (auto block = parse_block()) {
-    return std::make_shared<Ast_Expression>(*block);
+    return to_expr_ptr(*block);
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }
@@ -350,7 +352,7 @@ Expression_Ptr Parser::parse_if() {
     if (!then_block) {
       throw_error_here("expected (braced) then block");
     }
-    parsed_if.then_block = std::make_shared<Ast_Expression>(*then_block);
+    parsed_if.then_block = to_expr_ptr(*then_block);
     if (consume(TokenType::ELSE)) {
       parsed_if.has_else = true;
 
@@ -378,10 +380,10 @@ Expression_Ptr Parser::parse_if() {
         if (!else_block) {
           throw_error_here("expected (braced) else block");
         }
-        parsed_if.else_block = std::make_shared<Ast_Expression>(*else_block);
+        parsed_if.else_block = to_expr_ptr(*else_block);
       }
     }
-    return std::make_shared<Ast_Expression>(parsed_if);
+    return to_expr_ptr(parsed_if);
   } else {
     return nullptr;
   }
@@ -474,7 +476,7 @@ static Expression_Ptr fix_precedence_and_association(
       new_binop.left = std::move(lhs);
       new_binop.right = std::move(rhs);
       new_binop.operation = op;
-      return std::make_shared<Ast_Expression>(new_binop);
+      return to_expr_ptr(new_binop);
     });
 }
 
@@ -508,7 +510,7 @@ Expression_Ptr Parser::parse_unary() {
   this->lexer.consume_token();
   // For nested unary expressions e.g. -------------10 (if you want that?)
   parsed_unary.operand = this->parse_unary();
-  auto unary = std::make_shared<Ast_Expression>(parsed_unary);
+  auto unary = to_expr_ptr(parsed_unary);
   return mark_ast_location(unary_start, unary);
 }
 
@@ -536,7 +538,7 @@ Expression_Ptr Parser::parse_literal() {
   }
 
   this->lexer.consume_token();
-  return std::make_shared<Ast_Expression>(parsed_literal);
+  return to_expr_ptr(parsed_literal);
 }
 
 std::optional<Ast_Identifier> Parser::parse_identifier() {

@@ -3,11 +3,11 @@
 
 /* core */
 #include "parser/parser.h"
+#include "ast/ast_builder.h"
 #include "ast/ast_printer.h"
 
 /* testing */
 #include "helpers/match_ast.h"
-#include "helpers/ast_builder.h"
 
 /*
   wrap procedure start/end

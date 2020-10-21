@@ -138,12 +138,12 @@ void require_constant_binary_expr_value(Ast_File& code, T expected_value) {
 
   auto& binary_expr = std::get<Ast_Binary_Operation>(binary_expr_ptr->v);
     // We don't yet know
-  REQUIRE(!binary_expr.is_const_expr());
+  REQUIRE(!binary_expr.get_meta().is_const());
 
   // Should be found to be a constant integer value
   REQUIRE_NOTHROW(Semantics().analyse_file(code));
-  REQUIRE(binary_expr.is_const_expr());
-  REQUIRE(std::get<T>(binary_expr.const_expr_value) == expected_value);
+  REQUIRE(binary_expr.get_meta().is_const());
+  REQUIRE(std::get<T>(binary_expr.const_value()) == expected_value);
 }
 
 TEST_CASE("Binary expressions", "[Sema]") {
@@ -161,11 +161,11 @@ TEST_CASE("Binary expressions", "[Sema]") {
     auto binary_expr = EXTRACT_FIRST_BINARY_EXPR("caculate_scarey_maths");
 
     // Start with no type
-    REQUIRE(binary_expr->type.expired());
+    REQUIRE(binary_expr->meta.type.expired());
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
 
-    auto binop_type = extract_type(binary_expr->type);
+    auto binop_type = extract_type(binary_expr->meta.type);
     REQUIRE(std::holds_alternative<PrimativeType>(binop_type->v));
 
     // Should be resolved to integer
@@ -173,7 +173,7 @@ TEST_CASE("Binary expressions", "[Sema]") {
     REQUIRE(primative_type.tag == PrimativeType::INTEGER);
 
     // Should not non-constant expression
-    REQUIRE(!std::get<Ast_Binary_Operation>(binary_expr->v).is_const_expr());
+    REQUIRE(!std::get<Ast_Binary_Operation>(binary_expr->v).get_meta().is_const());
   }
 
   SECTION("Constant integer expressions resolve to a value") {

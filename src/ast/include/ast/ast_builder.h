@@ -146,7 +146,9 @@ inline Expression_Ptr make_if(
 /* Literals */
 
 inline Expression_Ptr make_literal(PrimativeType::Tag type, std::string value) {
-  Ast_Literal literal({}, value, type);
+  Ast_Literal literal;
+  literal.literal_type = type;
+  literal.value = value;
   return to_expr_ptr(literal);
 }
 

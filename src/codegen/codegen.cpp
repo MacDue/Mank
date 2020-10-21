@@ -8,6 +8,7 @@
 #include "ast/types.h"
 #include "llvm_codegen.h"
 #include "codegen/codegen.h"
+#include "ast/ast_builder.h"
 #include "parser/token_helpers.h"
 
 CodeGen::CodeGen(Ast_File& file_ast)
@@ -311,15 +312,17 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   ir_builder.CreateBr(for_check);
   ir_builder.SetInsertPoint(for_check);
 
+  /* For loop check -- should stop or keep looping */
   Ast_Binary_Operation loop_cond;
   loop_cond.operation = Ast_Operator::LESS_THAN;
-  loop_cond.left = std::make_shared<Ast_Expression>(for_loop.loop_value);
-  loop_cond.right = std::make_shared<Ast_Expression>(Ast_Identifier({}, LOOP_RANGE_END));
+  loop_cond.left = to_expr_ptr(for_loop.loop_value);
+  loop_cond.right = make_ident(LOOP_RANGE_END);
   loop_cond.left->meta.type = loop_cond.right->meta.type = for_loop.start_range->meta.type;
 
   llvm::Value* loop_check = codegen_expression(loop_cond, body.scope);
   ir_builder.CreateCondBr(loop_check, for_body, for_end);
 
+  /* For loop body */
   // Probably could safely add directly
   current_function->getBasicBlockList().push_back(for_body);
   ir_builder.SetInsertPoint(for_body);
@@ -333,23 +336,26 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
 
   ir_builder.SetInsertPoint(for_inc);
 
+  /* For loop increment */
   // FIXME: Temp hack till I figure out proper ranges!
   auto& primative_loop_type = std::get<PrimativeType>(loop_range_type->v);
-  Ast_Literal loop_inc_literal;
-  loop_inc_literal.literal_type = primative_loop_type.tag;
+  auto loop_inc_literal = make_literal(primative_loop_type.tag, "");
+  loop_inc_literal->meta.const_value = 1;
 
-  Ast_Binary_Operation next_loop_value = loop_cond;
-  next_loop_value.right = std::make_shared<Ast_Expression>(loop_inc_literal);
+  Ast_Binary_Operation next_loop_value;
   next_loop_value.operation = Ast_Operator::PLUS;
-  loop_inc_literal.update_const_value(1);
+  next_loop_value.left = to_expr_ptr(for_loop.loop_value);
+  next_loop_value.right = loop_inc_literal;
+  next_loop_value.left->meta.type = next_loop_value.right->meta.type = for_loop.start_range->meta.type;
 
   Ast_Assign inc_loop;
-  inc_loop.target = std::make_shared<Ast_Expression>(for_loop.loop_value);
-  inc_loop.expression = std::make_shared<Ast_Expression>(next_loop_value);
+  inc_loop.target = to_expr_ptr(for_loop.loop_value);
+  inc_loop.expression = to_expr_ptr(next_loop_value);
 
   codegen_statement(inc_loop, body.scope);
   // End FIXME
 
+  // Loop back to the start
   ir_builder.CreateBr(for_check);
   body.scope.destroy_locals();
 

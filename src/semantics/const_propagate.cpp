@@ -2,9 +2,12 @@
 #include <type_traits>
 
 #include <mpark/patterns.hpp>
-#include <formatxx/std_string.h>
 
 #include "ast/ast.h"
+#include "sema/sema_errors.h"
+#include "sema/const_propagate.h"
+
+namespace AstHelper {
 
 /* Dumb stuff I don't want to see! */
 #define WHEN_TYPE(runtime_check, const_check, op)  { \
@@ -15,47 +18,12 @@
       };                                             \
     } else {                                         \
       WHEN(false) {                                  \
-        return const_expr_value;                     \
+        return PrimativeValue(false);                \
       };                                             \
     }                                                \
   }
 
 #define CHECK(check, number) check<decltype(number)>
-
-/*
-  Constant expression eval!
-
-  The idea behind these const eval functions are that it'll only eval
-  if the lhs & rhs (or operand) are both constants.
-
-  Otherwise it'll just pass through the monostate (which just means it's non-constant).
-
-  I think this is a monad lol
-*/
-
-bool Ast_Const_Expr::is_zero() {
-  return std::visit([](auto value) {
-    if constexpr (std::is_arithmetic_v<decltype(value)>) {
-       return value == 0;
-    }
-    return false;
-  }, const_expr_value);
-}
-
-PrimativeValue Ast_Const_Expr::const_eval_unary(Ast_Operator op) {
-  using namespace mpark::patterns;
-  return match(const_expr_value, op)(
-    pattern(vis(arg), Ast_Operator::MINUS) = [&](auto number){
-      WHEN_TYPE(true, CHECK(std::is_arithmetic_v, number), -number);
-    },
-    pattern(as<int>(arg), Ast_Operator::BITWISE_NOT) = [](auto integer) {
-      return PrimativeValue(~integer);
-    },
-    pattern(as<bool>(arg), Ast_Operator::LOGICAL_NOT) = [](auto boolean) {
-      return PrimativeValue(!boolean);
-    },
-    pattern(_, _) = [&](){ return PrimativeValue(); });
-}
 
 static bool is_comparison_op(Ast_Operator op) {
   switch (op) {
@@ -85,11 +53,24 @@ static bool is_integer_op(Ast_Operator op) {
   }
 }
 
-PrimativeValue Ast_Const_Expr::const_eval_binary(Ast_Operator op, Ast_Const_Expr& rhs_expr) {
+/*
+  Constant expression eval!
+
+  The idea behind these const eval functions are that it'll only eval
+  if the lhs & rhs (or operand) are both constants.
+
+  Otherwise it'll just pass through the monostate (which just means it's non-constant).
+
+  I think this is a monad lol
+*/
+
+void ConstantVisitor::after(Ast_Binary_Operation& binop) {
   using namespace mpark::patterns;
-  auto& lhs = const_expr_value;
-  auto& rhs = rhs_expr.const_expr_value;
-  return match(lhs, rhs)(
+  auto op = binop.operation;
+  auto& lhs = binop.left->meta.const_value;
+  auto& rhs = binop.right->meta.const_value;
+  binop.update_const_value(
+    match(lhs, rhs)(
       pattern(vis(arg), vis(arg)) = [&](auto lhs, auto rhs){
       WHEN_TYPE(is_integer_op(op), CHECK(std::is_integral_v, lhs) && CHECK(std::is_integral_v, rhs), [&]{
         switch (op) {
@@ -120,6 +101,9 @@ PrimativeValue Ast_Const_Expr::const_eval_binary(Ast_Operator op, Ast_Const_Expr
           case Ast_Operator::TIMES:
             return lhs * rhs;
           case Ast_Operator::DIVIDE:
+            if (rhs == 0) {
+              throw_sema_error_at(binop, "division by zero");
+            }
             return lhs / rhs;
           default:
             assert(false && "fix me! unknown numeric operator in constant binary expr eval");
@@ -147,5 +131,44 @@ PrimativeValue Ast_Const_Expr::const_eval_binary(Ast_Operator op, Ast_Const_Expr
       }());
     },
     pattern(_, _) = [&]{ return PrimativeValue(); }
-  );
+  ));
+}
+
+void ConstantVisitor::after(Ast_Unary_Operation& unary) {
+  using namespace mpark::patterns;
+  unary.update_const_value(
+    match(unary.operand->meta.const_value, unary.operation)(
+      pattern(vis(arg), Ast_Operator::MINUS) = [&](auto number){
+        WHEN_TYPE(true, CHECK(std::is_arithmetic_v, number), -number);
+      },
+      pattern(as<int>(arg), Ast_Operator::BITWISE_NOT) = [](auto integer) {
+        return PrimativeValue(~integer);
+      },
+      pattern(as<bool>(arg), Ast_Operator::LOGICAL_NOT) = [](auto boolean) {
+        return PrimativeValue(!boolean);
+      },
+      pattern(_, _) = [&](){ return PrimativeValue(); }));
+}
+
+void ConstantVisitor::visit(Ast_Literal& literal) {
+  auto& value = literal.value;
+  switch (literal.literal_type) {
+    case PrimativeType::INTEGER:
+      literal.update_const_value(std::stoi(value));
+      break;
+    case PrimativeType::FLOAT64:
+      literal.update_const_value(std::stod(value));
+      break;
+    case PrimativeType::FLOAT32:
+      literal.update_const_value(std::stof(value));
+      break;
+    case PrimativeType::BOOL:
+      literal.update_const_value(value == "true" ? true : false);
+      break;
+    case PrimativeType::STRING:
+      break;
+    default:
+      assert(false && "fix me! unknown primative type");
+  }
+}
 }

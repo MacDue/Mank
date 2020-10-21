@@ -6,6 +6,7 @@
 #include "ast/types.h"
 #include "sema/semantics.h"
 #include "sema/sema_errors.h"
+#include "sema/const_propagate.h"
 #include "sema/return_reachability.h"
 
 #define make_primative_type(type_tag) \
@@ -112,7 +113,7 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   }
   Type_Ptr block_type;
   if (auto final_expr = block.get_final_expr()) {
-    block_type = extract_type_nullable(final_expr->type);
+    block_type = extract_type_nullable(final_expr->meta.type);
   }
   block.scope.destroy_locals();
   return block_type;
@@ -141,6 +142,9 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
         std::make_shared<Ast_Statement>(implicit_return));
     }
   }
+
+  // Propagate constants before checking reachability so dead code can be marked
+  AstHelper::constant_propagate(func.body);
 
   Ast_Statement* first_unreachable_stmt = nullptr;
   bool all_paths_return = AstHelper::all_paths_return(func.body, &first_unreachable_stmt);
@@ -300,7 +304,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   }
 
   auto end_range_type = analyse_expression(*for_loop.end_range, scope);
-  for_loop.end_range->type = end_range_type;
+  for_loop.end_range->meta.type = end_range_type;
   if (!match_types(start_range_type.get(), end_range_type.get())) {
     throw_sema_error_at(for_loop.end_range,
       "end range type {} does not match start range type {}",
@@ -388,15 +392,14 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       return Type_Ptr(nullptr);
     }
   );
-  expr.type = expr_type;
+  expr.meta.type = expr_type;
   return expr_type;
 }
 
 Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
   auto operand_type = analyse_expression(*unary.operand, scope);
-  unary.const_expr_value = unary.operand->const_eval_unary(unary.operation);
-
   PrimativeType* primative_type = std::get_if<PrimativeType>(&operand_type->v);
+
   if (primative_type)
   switch (unary.operation) {
     case Ast_Operator::MINUS:
@@ -442,13 +445,6 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::DIVIDE
     )) = [&]{
       WHEN(primative_type->is_numeric_type()) {
-        if (binop.operation == Ast_Operator::DIVIDE) {
-          std::visit([&](Ast_Const_Expr& const_expr){
-            if (const_expr.is_zero()) {
-              throw_sema_error_at(binop, "division by zero");
-            }
-          }, binop.right->v);
-        }
         return left_type;
       };
     },
@@ -474,8 +470,6 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       return Type_Ptr(nullptr);
     }
   );
-  // Must be done after checking to avoid dvision by zeros!
-  binop.const_expr_value = binop.left->const_eval_binary(binop.operation, *binop.right);
   return binop_type;
 }
 
@@ -518,7 +512,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
     }
   }
 
-  call.callee->type = called_function->type;
+  call.callee->meta.type = called_function->type;
   // FINALLY we've checked everything in the call!
   return function_type.return_type;
 }

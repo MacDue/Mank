@@ -520,18 +520,20 @@ Expression_Ptr Parser::parse_literal() {
   */
   auto& token = this->lexer.peek_next_token();
 
-  std::string literal_value(token.raw_token);
-  PrimativeType::Tag literal_type;
+  Ast_Literal parsed_literal;
+  parsed_literal.location = token.location;
+  parsed_literal.value = std::string(token.raw_token);
+
   if (token.type != TokenType::TRUE && token.type != TokenType::FALSE) {
-    literal_type = token.literal_type;
+    parsed_literal.literal_type = token.literal_type;
     if (token.literal_type == PrimativeType::STRING) {
       // Remove ""s
-      literal_value = literal_value.substr(1, literal_value.length() - 2);
+      parsed_literal.value
+        = parsed_literal.value.substr(1, parsed_literal.value.length() - 2);
     }
   } else {
-    literal_type = PrimativeType::BOOL;
+    parsed_literal.literal_type = PrimativeType::BOOL;
   }
-  Ast_Literal parsed_literal(token.location, literal_value, literal_type);
 
   this->lexer.consume_token();
   return std::make_shared<Ast_Expression>(parsed_literal);

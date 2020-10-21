@@ -61,48 +61,24 @@ bool PrimativeType::is_boolean_type() const {
 
 /* AST Literal */
 
-Ast_Literal::Ast_Literal(SourceLocation location,
-  std::string value, PrimativeType::Tag type
-): Ast_Const_Expr(location), literal_type{type}, value{value}
-{
-  switch (type) {
-  case PrimativeType::INTEGER:
-    this->const_expr_value = std::stoi(value);
-    break;
-  case PrimativeType::FLOAT64:
-    this->const_expr_value = std::stod(value);
-    break;
-  case PrimativeType::FLOAT32:
-    this->const_expr_value = std::stof(value);
-    break;
-  case PrimativeType::BOOL:
-    this->const_expr_value = value == "true" ? true : false;
-    break;
-  case PrimativeType::STRING:
-    break;
-  default:
-    assert(false && "fix me! unknown primative type");
-  }
-}
-
 int32_t Ast_Literal::as_int32() {
   assert(literal_type == PrimativeType::INTEGER);
-  return std::get<int32_t>(this->const_expr_value);
+  return std::get<int32_t>(this->const_value());
 }
 
 double Ast_Literal::as_float64() {
   assert(literal_type == PrimativeType::FLOAT64);
-  return std::get<double>(this->const_expr_value);
+  return std::get<double>(this->const_value());
 }
 
 float Ast_Literal::as_float32() {
   assert(literal_type == PrimativeType::FLOAT32);
-  return std::get<float>(this->const_expr_value);
+  return std::get<float>(this->const_value());
 }
 
 bool Ast_Literal::as_bool() {
   assert(literal_type == PrimativeType::BOOL);
-  return std::get<bool>(this->const_expr_value);
+  return std::get<bool>(this->const_value());
 }
 
 int Ast_Literal::size_bytes() {

@@ -71,7 +71,7 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
     pattern(as<Ast_Block>(arg)) = [&](auto& block) {
       return all_paths_return(block, unreachable_stmt);
     },
-    pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_stmt) {
+    pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_expr) {
       /*
         When deciding if a if statement returns the constant evaluation should not
         be used. As it can make it confusing, as when the constant eval improves,
@@ -95,23 +95,22 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
 
       // Do these separately as we still want warnings in the else block even if the
       // then block does not return.
-      bool then_returns = all_paths_return(*if_stmt.then_block, unreachable_stmt);
-      bool else_returns = if_stmt.has_else && all_paths_return(*if_stmt.else_block, unreachable_stmt);
+      bool then_returns = all_paths_return(*if_expr.then_block, unreachable_stmt);
+      bool else_returns = if_expr.has_else && all_paths_return(*if_expr.else_block, unreachable_stmt);
 
       /*
         Depending on the constant evaluation mark the then/else blocks unreachable.
         This should be done after the pior calls to reachability so the topmost
         unreachable statement is marked first.
       */
-      auto& const_expr = variant_cast<Ast_Const_Expr>(if_stmt.cond->v);
-      if (const_expr.is_const_expr()) {
-        bool cond_value = std::get<bool>(const_expr.const_expr_value);
+      if (auto const_value = if_expr.cond->meta.get_const_value()) {
+        bool cond_value = std::get<bool>(*const_value);
         if (cond_value) {
-          if (if_stmt.has_else) {
-            LAST_UNREACHABLE_STMT(first_statement_in_block(if_stmt.else_block));
+          if (if_expr.has_else) {
+            LAST_UNREACHABLE_STMT(first_statement_in_block(if_expr.else_block));
           }
         } else {
-          LAST_UNREACHABLE_STMT(first_statement_in_block(if_stmt.then_block));
+          LAST_UNREACHABLE_STMT(first_statement_in_block(if_expr.then_block));
         }
       }
 

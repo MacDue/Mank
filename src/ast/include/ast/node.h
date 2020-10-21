@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <variant>
+#include <cassert>
 
 #include "parser/constants.h"
 
@@ -50,27 +51,74 @@ enum class Ast_Operator {
   #include "parser/operators.def"
 };
 
-struct Ast_Const_Expr: Ast_Node {
-  using Ast_Node::Ast_Node;
-  // Defaults to monostate if expression is not const
-  PrimativeValue const_expr_value;
+/* Expression meta stuff */
 
-  inline bool is_const_expr() {
-    return !std::holds_alternative<std::monostate>(const_expr_value);
+struct Expression_Meta {
+  /*
+    The expression must not own it's resolved type or it can create cycles!
+
+    for example in a recursive function:
+
+    fun wee: i32 {
+      return wee(); # the callee type will be `fun wee: i32``
+                    # that ast node is within wee so we have a cycle.
+    }
+
+    I _think_ all will be owned by something else:
+      - Primatives (static data)
+      - Functions (owned by function node)
+      - More complex types will probably be nodes within the AST already
+  */
+  std::weak_ptr<Type> type;
+
+  PrimativeValue const_value;
+
+  inline bool is_const() {
+    return !std::holds_alternative<std::monostate>(const_value);
   }
 
-  bool is_zero();
-
-  PrimativeValue const_eval_unary(Ast_Operator op);
-  PrimativeValue const_eval_binary(Ast_Operator op,  Ast_Const_Expr& rhs);
+  PrimativeValue* get_const_value() {
+    if (is_const()) {
+      return &const_value;
+    }
+    return nullptr;
+  }
 };
 
-struct Ast_Identifier: Ast_Const_Expr {
+class Ast_Expression_Node: public Ast_Node {
+  Expression_Meta* meta = nullptr;
+  friend class Ast_Expression;
+public:
+  using Ast_Node::Ast_Node;
+
+  inline Expression_Meta& get_meta() {
+    assert(meta != nullptr && "fix me! expression missing needed meta data");
+    return *meta;
+  }
+
+  inline auto get_type() {
+    return get_meta().type;
+  }
+
+  inline void update_type(Type_Ptr type) {
+    get_meta().type = type;
+  }
+
+  inline PrimativeValue const_value() {
+    return get_meta().const_value;
+  }
+
+  inline void update_const_value(PrimativeValue value) {
+    get_meta().const_value = value;
+  }
+};
+
+struct Ast_Identifier: Ast_Expression_Node {
   std::string name;
 
   Ast_Identifier() = default;
   Ast_Identifier(SourceLocation location, std::string name)
-    : Ast_Const_Expr(location), name{name} {}
+    : Ast_Expression_Node(location), name{name} {}
   Ast_Identifier(std::string name)
     : Ast_Identifier({} /* dummy */, name) {};
 };

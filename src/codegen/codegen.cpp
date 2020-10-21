@@ -292,7 +292,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   llvm::AllocaInst* loop_value = create_entry_alloca(current_function, &body.scope.symbols.back());
   ir_builder.CreateStore(start_value, loop_value);
 
-  auto loop_range_type = extract_type(for_loop.end_range->type);
+  auto loop_range_type = extract_type(for_loop.end_range->meta.type);
   body.scope.symbols.emplace_back(Symbol(
     SymbolName(LOOP_RANGE_END), loop_range_type, Symbol::LOCAL));
   llvm::AllocaInst* range_end = create_entry_alloca(current_function, &body.scope.symbols.back());
@@ -315,7 +315,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   loop_cond.operation = Ast_Operator::LESS_THAN;
   loop_cond.left = std::make_shared<Ast_Expression>(for_loop.loop_value);
   loop_cond.right = std::make_shared<Ast_Expression>(Ast_Identifier({}, LOOP_RANGE_END));
-  loop_cond.left->type = loop_cond.right->type = for_loop.start_range->type;
+  loop_cond.left->meta.type = loop_cond.right->meta.type = for_loop.start_range->meta.type;
 
   llvm::Value* loop_check = codegen_expression(loop_cond, body.scope);
   ir_builder.CreateCondBr(loop_check, for_body, for_end);
@@ -335,12 +335,13 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
 
   // FIXME: Temp hack till I figure out proper ranges!
   auto& primative_loop_type = std::get<PrimativeType>(loop_range_type->v);
-  Ast_Literal loop_inc_literal({},
-    primative_loop_type.tag == PrimativeType::BOOL ? "true" : "1", primative_loop_type.tag);
+  Ast_Literal loop_inc_literal;
+  loop_inc_literal.literal_type = primative_loop_type.tag;
 
   Ast_Binary_Operation next_loop_value = loop_cond;
   next_loop_value.right = std::make_shared<Ast_Expression>(loop_inc_literal);
   next_loop_value.operation = Ast_Operator::PLUS;
+  loop_inc_literal.update_const_value(1);
 
   Ast_Assign inc_loop;
   inc_loop.target = std::make_shared<Ast_Expression>(for_loop.loop_value);
@@ -444,7 +445,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope)
   ir_builder.SetInsertPoint(end_block);
 
   if (then_value && else_value) {
-    auto if_type = extract_type(if_expr.then_block->type);
+    auto if_type = extract_type(if_expr.then_block->meta.type);
     llvm::PHINode* phi = ir_builder.CreatePHI(
       map_type_to_llvm(if_type.get()), 2, "if_expr_selection");
     phi->addIncoming(then_value, then_block);
@@ -521,7 +522,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
   using namespace mpark::patterns;
   llvm::Value* operand = codegen_expression(*unary.operand, scope);
-  auto unary_type = extract_type(unary.operand->type);
+  auto unary_type = extract_type(unary.operand->meta.type);
   auto& unary_primative = std::get<PrimativeType>(unary_type->v);
 
   return match(unary_primative.tag, unary.operation)(
@@ -564,7 +565,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
-  auto binop_type = extract_type(binop.left->type);
+  auto binop_type = extract_type(binop.left->meta.type);
   auto& binop_primative = std::get<PrimativeType>(binop_type->v);
 
   llvm::Value* left = codegen_expression(*binop.left, scope);

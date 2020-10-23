@@ -24,8 +24,10 @@ template<typename... TFunction>
 Ast_File make_file(TFunction && ... function) {
   Ast_File file;
   file.filename = "<built_ast>";
-  file.functions.push_back(
-    std::make_shared<Type>(function)...);
+  if constexpr (sizeof...(function) > 0) {
+    file.functions.push_back(
+      std::make_shared<Type>(function)...);
+  }
   return file;
 }
 
@@ -49,6 +51,14 @@ inline Type_Ptr make_unchecked_type(std::string type_name) {
   UncheckedType unchecked;
   unchecked.identifer.name = type_name;
   return std::make_shared<Type>(unchecked);
+}
+
+template <typename... TMembers>
+Type_Ptr make_pod(std::string name, TMembers && ... members) {
+  Ast_Pod_Declaration pod;
+  pod.identifer.name = name;
+  pod.members = std::vector<Ast_Argument> { members... };
+  return std::make_shared<Type>(pod);
 }
 
 /* Functions */

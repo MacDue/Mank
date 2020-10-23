@@ -484,3 +484,34 @@ TEST_CASE("For loops", "[Parser]") {
     MATCH_AST(parsed_for, expected_for);
   }
 }
+
+TEST_CASE("Pods", "[Parser]") {
+  auto parsed_pods = Parser::parse_from_string(R"(
+    pod Apple {
+      a: i32,
+      b: f64,
+      c: bool
+    }
+
+    pod Empty {}
+
+    pod One { a: bool }
+  )");
+
+  auto expected_pods = make_file();
+  expected_pods.pods.emplace_back(
+    make_pod("Apple",
+      make_argument(
+        make_unchecked_type("i32"), "a"),
+      make_argument(
+        make_unchecked_type("f64"), "b"),
+      make_argument(
+        make_unchecked_type("bool"), "c")));
+  expected_pods.pods.emplace_back(
+     make_pod("Empty"));
+  expected_pods.pods.emplace_back(
+    make_pod("One",
+      make_argument(make_unchecked_type("bool"), "a")));
+
+  MATCH_AST(parsed_pods, expected_pods);
+}

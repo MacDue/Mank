@@ -45,6 +45,7 @@ struct Ast_Binary_Operation: Ast_Expression_Node {
 struct Ast_Field_Access: Ast_Expression_Node {
   Expression_Ptr object;
   Ast_Identifier field;
+  int field_index = -1;
 };
 
 using Ast_Expression_Type = std::variant<

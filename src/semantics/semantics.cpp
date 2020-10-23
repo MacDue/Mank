@@ -237,11 +237,38 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
   }
 }
 
+void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
+  using namespace mpark::patterns;
+
+  auto target_type = match(assign.target->v)(
+    pattern(anyof(as<Ast_Identifier>(_), as<Ast_Field_Access>(_))) = [&]{
+      return analyse_expression(*assign.target, scope);
+    },
+    pattern(_) = [&]{
+      throw_sema_error_at(assign.target, "assignment target is not assignable");
+      return Type_Ptr(nullptr);
+    }
+  );
+
+  auto expr_type = analyse_expression(*assign.expression, scope);
+
+  if (!match_types(target_type.get(), expr_type.get())) {
+    throw_sema_error_at(assign, "cannot assign variable of type {} to {}",
+      type_to_string(target_type.get()), type_to_string(expr_type.get()));
+  }
+}
+
 void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
   using namespace mpark::patterns;
   match(stmt.v)(
     pattern(as<Ast_Expression_Statement>(arg)) = [&](auto& expr_stmt){
       analyse_expression_statement(expr_stmt, scope);
+    },
+    pattern(as<Ast_Assign>(arg)) = [&](auto& assign){
+      analyse_assignment(assign, scope);
+    },
+    pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop) {
+      analyse_for_loop(for_loop, scope);
     },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
       Type_Ptr expr_type;
@@ -254,19 +281,6 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         throw_sema_error_at(return_stmt.expression,
           "invalid return type, expected {}, was {}",
           type_to_string(expected_return), type_to_string(expr_type.get()));
-      }
-    },
-    pattern(as<Ast_Assign>(arg)) = [&](auto& assign){
-      auto* variable_name = std::get_if<Ast_Identifier>(&assign.target->v);
-      if (!variable_name) {
-        throw_sema_error_at(assign.target, "assignment target is not a variable");
-      }
-      auto target_type = analyse_expression(*assign.target, scope);
-      auto expr_type = analyse_expression(*assign.expression, scope);
-
-      if (!match_types(target_type.get(), expr_type.get())) {
-        throw_sema_error_at(assign, "cannot assign variable of type {} to {}",
-          type_to_string(target_type.get()), type_to_string(expr_type.get()));
       }
     },
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto& var_decl) {
@@ -302,9 +316,6 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
 
       scope.symbols.emplace_back(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
-    },
-    pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop) {
-      analyse_for_loop(for_loop, scope);
     }
   );
 }
@@ -409,6 +420,24 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_Binary_Operation>(arg)) = [&](auto& binop) {
       return analyse_binary_expression(binop, scope);
+    },
+    pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) {
+      auto object_type = analyse_expression(*access.object, scope);
+      if (object_type) {
+        if (auto pod_type = std::get_if<Ast_Pod_Declaration>(&object_type->v)) {
+          auto accessed = std::find_if(pod_type->fields.begin(), pod_type->fields.end(),
+            [&](auto& field) {
+              return field.name.name == access.field.name;
+            });
+          if (accessed == pod_type->fields.end()) {
+            throw_sema_error_at(access.field, "{} has no field named \"{}\"",
+              pod_type->identifier.name, access.field.name);
+          }
+          access.field_index = std::distance(accessed, pod_type->fields.end());
+          return accessed->type;
+        }
+      }
+      throw_sema_error_at(access.object, "not a pod type");
     },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");

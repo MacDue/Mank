@@ -18,6 +18,7 @@ private:
   void analyse_pod(Ast_Pod_Declaration& pod, Scope& scope);
   void analyse_function_header(Ast_Function_Declaration& func);
   void analyse_function_body(Ast_Function_Declaration& func);
+  void analyse_assignment(Ast_Assign& assign, Scope& scope);
   void analyse_statement(Ast_Statement& stmt, Scope& scope);
   void analyse_expression_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);
   void analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope);

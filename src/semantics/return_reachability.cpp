@@ -135,6 +135,9 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
     pattern(anyof(as<Ast_Literal>(_), as<Ast_Identifier>(_))) = []{
       return false;
     },
+    pattern(as<Ast_Field_Access>(arg)) = [&](auto& access){
+      return all_paths_return(*access.object, unreachable_stmt);
+    },
     pattern(_) = []{
       assert(false && "fix me! unknown expression in reachability checking");
       return false;

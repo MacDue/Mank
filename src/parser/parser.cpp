@@ -47,11 +47,28 @@ Ast_File Parser::parse_file() {
       || next_token.type == TokenType::PROCEDURE
     ) {
       parsed_file.functions.emplace_back(this->parse_function());
+    } else if (next_token.type == TokenType::POD) {
+      parsed_file.pods.emplace_back(this->parse_pod());
     } else {
-      throw_error_here("unexpected \"{}\", expecting a function or procedure");
+      throw_error_here("unexpected \"{}\", expecting a function, procedure or pod type");
     }
   }
   return parsed_file;
+}
+
+Type_Ptr Parser::parse_pod() {
+  /*
+    pod = "pod", identifier, [braced_parameter_list] ;
+  */
+  Ast_Pod_Declaration parsed_pod;
+  expect(TokenType::POD); // should already have been matched
+  auto pod_name = this->parse_identifier();
+  if (!pod_name) {
+    throw_error_here("expected pod name");
+  }
+  parsed_pod.members = this->parse_arguments(
+    TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
+  return std::make_shared<Type>(parsed_pod);
 }
 
 Function_Ptr Parser::parse_function() {
@@ -81,31 +98,8 @@ Function_Ptr Parser::parse_function() {
       }
     }
 
-    if (consume(TokenType::LEFT_PAREN)) {
-      /* Parameters */
-      while (!peek(TokenType::RIGHT_PAREN)) {
-        auto arg_name = this->parse_identifier();
-        if (!arg_name) {
-          throw_error_here("{} argument expected",
-            parsed_function.procedure ? "procedure" : "function");
-        }
-        /* arg type */
-        expect(TokenType::COLON);
-        auto arg_type = this->parse_type();
-        if (!arg_type) {
-          throw_error_here("type name expected");
-        }
-
-        parsed_function.arguments.emplace_back(Ast_Argument {
-          .type = arg_type,
-          .name = *arg_name
-        });
-
-        if (!consume(TokenType::COMMA)) {
-          break;
-        }
-      }
-      expect(TokenType::RIGHT_PAREN);
+    if (peek(TokenType::LEFT_PAREN)) {
+      parsed_function.arguments = this->parse_arguments();
     }
 
     auto body = this->parse_block();
@@ -118,6 +112,36 @@ Function_Ptr Parser::parse_function() {
     // Should be unreachable
     throw_error_here("unexpected \"{}\"m expecting function or procedure");
   }
+}
+
+std::vector<Ast_Argument> Parser::parse_arguments(
+  TokenType left_delim, TokenType right_delim
+) {
+  std::vector<Ast_Argument> arguments;
+  expect(left_delim);
+  while (!peek(right_delim)) {
+    auto arg_name = this->parse_identifier();
+    if (!arg_name) {
+      throw_error_here("identifier expected");
+    }
+    /* arg type */
+    expect(TokenType::COLON);
+    auto arg_type = this->parse_type();
+    if (!arg_type) {
+      throw_error_here("type name expected");
+    }
+
+    arguments.emplace_back(Ast_Argument {
+      .type = arg_type,
+      .name = *arg_name
+    });
+
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(right_delim);
+  return arguments;
 }
 
 std::optional<Ast_Block> Parser::parse_block() {

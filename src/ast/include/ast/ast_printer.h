@@ -61,7 +61,10 @@ class AstPrinter {
       tab_width{tab_width},
       current_depth{current_depth} {}
 
+    void print_args(std::vector<Ast_Argument> args);
+
     void print_file(Ast_File& file);
+    void print_pod(Ast_Pod_Declaration& pod);
     void print_function(Ast_Function_Declaration& func);
 
     void print_stmt(Ast_Statement& stmt);

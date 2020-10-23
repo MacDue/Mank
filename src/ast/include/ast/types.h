@@ -13,7 +13,8 @@ struct UncheckedType {
 using Type_Type = std::variant<
   UncheckedType,
   PrimativeType,
-  Ast_Function_Declaration>;
+  Ast_Function_Declaration,
+  Ast_Pod_Declaration>;
 
 struct Type {
   Type_Type v;

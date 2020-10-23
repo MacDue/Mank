@@ -12,6 +12,7 @@
 /* Top level constructs */
 struct Ast_File;
 struct Ast_Function_Declaration;
+struct Ast_Pod_Declaration;
 
 /* Expressions */
 struct Ast_Expression;

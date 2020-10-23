@@ -10,6 +10,7 @@ struct Ast_File: Ast_Node {
   Scope scope;
   std::string filename;
   std::vector<Function_Ptr> functions;
+  std::vector<Type_Ptr> pods;
 };
 
 struct Ast_Function_Declaration: Ast_Node {
@@ -20,4 +21,9 @@ struct Ast_Function_Declaration: Ast_Node {
   std::vector<Ast_Argument> arguments;
   Type_Ptr return_type;
   Ast_Block body;
+};
+
+struct Ast_Pod_Declaration: Ast_Node {
+  Ast_Identifier identifer;
+  std::vector<Ast_Argument> members;
 };

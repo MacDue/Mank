@@ -11,11 +11,23 @@ std::string type_to_string(Type& type) {
   using namespace std::string_literals;
   using namespace mpark::patterns;
   return match(type.v)(
-    pattern(as<UncheckedType>(arg)) = [](auto & unchecked_type) {
+    pattern(as<UncheckedType>(arg)) = [](auto& unchecked_type) {
       return formatxx::format_string("unchecked type - {}", unchecked_type.identifer.name);
     },
-    pattern(as<PrimativeType>(arg)) = [](auto & primative_type) {
+    pattern(as<PrimativeType>(arg)) = [](auto& primative_type) {
       return std::string(primative_type.name());
+    },
+    pattern(as<Ast_Pod_Declaration>(arg)) = [](auto& pod_type) {
+      // std::string pod_str = "pod {";
+      // for (auto it = pod_type.members.begin(); it != pod_type.members.end(); it++) {
+      //   if (it != pod_type.members.begin()) {
+      //     pod_str += " , ";
+      //   }
+      //   pod_str += type_to_string(*it->type);
+      // }
+      // pod_str += "}";
+      // return pod_str;
+      return formatxx::format_string("pod {}", pod_type.identifer.name);
     },
     pattern(_) = []{
       return "???"s;

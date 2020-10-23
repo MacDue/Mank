@@ -12,13 +12,34 @@
 /* Constructs */
 
 void AstPrinter::print_file(Ast_File& file) {
-  putf("* File with {} functions", file.functions.size());
+  putf("* File with {} pods, and {} functions",
+    file.pods.size(), file.functions.size());
   if (!hide_lex_details) {
     putf("- Source name: {}", file.filename);
+  }
+  for (auto& pod: file.pods) {
+    self->print_pod(std::get<Ast_Pod_Declaration>(pod->v));
+    putf("");
   }
   for (auto& func: file.functions) {
     self->print_function(std::get<Ast_Function_Declaration>(func->v));
     putf("");
+  }
+}
+
+void AstPrinter::print_args(std::vector<Ast_Argument> args) {
+  for (auto& arg: args) {
+    indent(); putf(" {} : {}", arg.name.name, type_to_string(*arg.type));
+  }
+}
+
+void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
+  putf("* Pod {}", pod.identifer.name);
+  if (pod.members.size() > 0) {
+    putf("- Members:");
+    self->print_args(pod.members);
+  } else {
+    putf("- No members");
   }
 }
 
@@ -33,9 +54,7 @@ void AstPrinter::print_function(Ast_Function_Declaration& func) {
   }
   if (func.arguments.size() > 0) {
     putf("- Arguments:");
-    for (auto& arg: func.arguments) {
-      indent(); putf(" {} : {}", arg.name.name, type_to_string(*arg.type));
-    }
+    self->print_args(func.arguments);
   }
   if (!func.external) {
     putf("- Body:");

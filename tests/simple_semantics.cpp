@@ -670,7 +670,7 @@ TEST_CASE("Assign semantics", "[Sema]") {
     )");
 
     REQUIRE_THROWS_WITH(sema.analyse_file(code),
-      "assignment target is not a variable");
+      "assignment target is not assignable");
   }
 
   SECTION("Assigning to an variable is valid") {

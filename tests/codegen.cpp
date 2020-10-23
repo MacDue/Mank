@@ -207,3 +207,36 @@ TEST_CASE("Type identity functions", "[Codegen]") {
     REQUIRE(id(false) == false);
   }
 }
+
+TEST_CASE("Abstract bean factory", "[Codegen]") {
+  auto codegen = compile(R"(
+    pod AbstractBean {
+      coolness: i32,
+      abstractness: f64
+    }
+
+    fun abstract_bean_factory: AbstractBean (bean_kind: i32) {
+      bean: AbstractBean;
+      if bean_kind == 0 {
+        bean.coolness = 5;
+        bean.abstractness = 0.4;
+      } else if bean_kind == 1 {
+        bean.coolness = 1000;
+        bean.abstractness = 1000000.1;
+      } else {
+        bean.coolness = -100000;
+        bean.abstractness = 0.0;
+      }
+      return bean;
+    }
+
+    fun get_bean_type_coolness: i32 (bean_kind: i32) {
+      abstract_bean_factory(bean_kind).coolness
+    }
+  )");
+
+  auto get_bean_type_coolness = codegen.extract_function_from_jit<int(int)>("get_bean_type_coolness");
+  REQUIRE(get_bean_type_coolness(0) == 5);
+  REQUIRE(get_bean_type_coolness(1) == 1000);
+  REQUIRE(get_bean_type_coolness(-1) == -100000);
+}

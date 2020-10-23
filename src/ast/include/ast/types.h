@@ -6,7 +6,7 @@
 #include "ast/primative_types.h"
 
 struct UncheckedType {
-  Ast_Identifier identifer;
+  Ast_Identifier identifier;
 };
 
 // (Great name! The type of the type that represents our types...)

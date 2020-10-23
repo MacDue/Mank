@@ -66,7 +66,7 @@ Type_Ptr Parser::parse_pod() {
   if (!pod_name) {
     throw_error_here("expected pod name");
   }
-  parsed_pod.identifer = *pod_name;
+  parsed_pod.identifier = *pod_name;
   parsed_pod.fields = this->parse_arguments(
     TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
   return std::make_shared<Type>(parsed_pod);
@@ -87,7 +87,7 @@ Function_Ptr Parser::parse_function() {
     if (!ident) {
       throw_error_here("\"{}\" is not a valid function name");
     }
-    parsed_function.identifer = *ident;
+    parsed_function.identifier = *ident;
     if (!parsed_function.procedure) {
       /* return type */
       expect(TokenType::COLON);

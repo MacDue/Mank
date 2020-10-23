@@ -12,7 +12,7 @@ std::string type_to_string(Type& type) {
   using namespace mpark::patterns;
   return match(type.v)(
     pattern(as<UncheckedType>(arg)) = [](auto& unchecked_type) {
-      return formatxx::format_string("unchecked type - {}", unchecked_type.identifer.name);
+      return formatxx::format_string("unchecked type - {}", unchecked_type.identifier.name);
     },
     pattern(as<PrimativeType>(arg)) = [](auto& primative_type) {
       return std::string(primative_type.name());
@@ -27,7 +27,7 @@ std::string type_to_string(Type& type) {
       // }
       // pod_str += "}";
       // return pod_str;
-      return formatxx::format_string("pod {}", pod_type.identifer.name);
+      return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
     pattern(_) = []{
       return "???"s;

@@ -34,7 +34,7 @@ void AstPrinter::print_args(std::vector<Ast_Argument> args) {
 }
 
 void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
-  putf("* Pod {}", pod.identifer.name);
+  putf("* Pod {}", pod.identifier.name);
   if (pod.fields.size() > 0) {
     putf("- Fields:");
     self->print_args(pod.fields);
@@ -46,7 +46,7 @@ void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
 void AstPrinter::print_function(Ast_Function_Declaration& func) {
   putf("* {} {}",
     func.procedure ? "Procedure" : "Function",
-    func.identifer.name);
+    func.identifier.name);
   putf("- External: {}", func.external);
   putf("- C function: {}", func.external);
   if (!func.procedure) {

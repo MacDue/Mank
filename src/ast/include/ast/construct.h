@@ -17,13 +17,13 @@ struct Ast_Function_Declaration: Ast_Node {
   bool external = false;
   bool c_function = false;
   bool procedure = false;
-  Ast_Identifier identifer;
+  Ast_Identifier identifier;
   std::vector<Ast_Argument> arguments;
   Type_Ptr return_type;
   Ast_Block body;
 };
 
 struct Ast_Pod_Declaration: Ast_Node {
-  Ast_Identifier identifer;
+  Ast_Identifier identifier;
   std::vector<Ast_Argument> fields;
 };

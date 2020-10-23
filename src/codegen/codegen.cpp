@@ -94,7 +94,7 @@ llvm::Function* LLVMCodeGen::get_current_function() {
 }
 
 llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
-  if (auto llvm_func = llvm_module->getFunction(func.identifer.name)) {
+  if (auto llvm_func = llvm_module->getFunction(func.identifier.name)) {
     return llvm_func;
   } else {
     return codegen_function_header(func);
@@ -118,7 +118,7 @@ llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& f
   llvm::Function* llvm_func = llvm::Function::Create(
     func_type,
     llvm::Function::ExternalLinkage,
-    func.identifer.name,
+    func.identifier.name,
     llvm_module.get());
 
   uint arg_idx = 0;

@@ -49,14 +49,14 @@ std::vector<Ast_Argument> make_args(TArgs && ... args) {
 
 inline Type_Ptr make_unchecked_type(std::string type_name) {
   UncheckedType unchecked;
-  unchecked.identifer.name = type_name;
+  unchecked.identifier.name = type_name;
   return std::make_shared<Type>(unchecked);
 }
 
 template <typename... TFields>
 Type_Ptr make_pod(std::string name, TFields && ... fields) {
   Ast_Pod_Declaration pod;
-  pod.identifer.name = name;
+  pod.identifier.name = name;
   pod.fields = std::vector<Ast_Argument> { fields... };
   return std::make_shared<Type>(pod);
 }
@@ -71,7 +71,7 @@ inline Ast_Function_Declaration make_function(
   Ast_Block&& body
 ) {
   Ast_Function_Declaration function;
-  function.identifer.name = name;
+  function.identifier.name = name;
   function.procedure = procedure;
   function.return_type = return_type;
   function.arguments = args;
@@ -308,7 +308,7 @@ inline Statement_Ptr make_for(
 
 inline Type_Ptr make_type(std::string name) {
   UncheckedType type;
-  type.identifer.name = name;
+  type.identifier.name = name;
   return std::make_shared<Type>(type);
 }
 

@@ -55,7 +55,7 @@ void Semantics::analyse_file(Ast_File& file) {
   for (auto& pod_type: file.pods) {
     auto& pod = std::get<Ast_Pod_Declaration>(pod_type->v);
     file.scope.symbols.emplace_back(
-      Symbol(pod.identifer, pod_type, Symbol::TYPE));
+      Symbol(pod.identifier, pod_type, Symbol::TYPE));
   }
 
   /* Check pods */
@@ -67,7 +67,7 @@ void Semantics::analyse_file(Ast_File& file) {
   for (auto& func_type: file.functions) {
     auto& func = std::get<Ast_Function_Declaration>(func_type->v);
     file.scope.symbols.emplace_back(
-      Symbol(func.identifer, func_type, Symbol::FUNCTION));
+      Symbol(func.identifier, func_type, Symbol::FUNCTION));
     func.body.scope.parent = &global_scope;
     analyse_function_header(func);
   }
@@ -85,10 +85,10 @@ static std::pair<Type_Ptr, std::optional<Ast_Identifier>>
   using namespace mpark::patterns;
   return match(unresolved.v)(
     pattern(as<UncheckedType>(arg)) = [&](auto const & unchecked) {
-      Symbol* symbol = scope.lookup_first_name(unchecked.identifer);
+      Symbol* symbol = scope.lookup_first_name(unchecked.identifier);
       auto resolved_type = symbol && symbol->kind == Symbol::TYPE
         ? symbol->type : nullptr;
-      return std::make_pair(resolved_type, std::optional{unchecked.identifer});
+      return std::make_pair(resolved_type, std::optional{unchecked.identifier});
     },
     pattern(_) = [&] {
       return std::make_pair(Type_Ptr(nullptr), std::optional<Ast_Identifier>{});
@@ -172,7 +172,7 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   Ast_Statement* first_unreachable_stmt = nullptr;
   bool all_paths_return = AstHelper::all_paths_return(func.body, &first_unreachable_stmt);
   if (!func.procedure && !all_paths_return) {
-    throw_sema_error_at(func.identifer, "function possibly fails to return a value");
+    throw_sema_error_at(func.identifier, "function possibly fails to return a value");
   }
 
   if (func.body.has_final_expr && body_type) {
@@ -521,7 +521,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
 
   if (function_type.arguments.size() != call.arguments.size()) {
     throw_sema_error_at(call.callee, "{} expects {} arguments not {}",
-      function_type.identifer.name, function_type.arguments.size(), call.arguments.size());
+      function_type.identifier.name, function_type.arguments.size(), call.arguments.size());
   }
 
   for (uint arg_idx = 0; arg_idx < function_type.arguments.size(); arg_idx++) {

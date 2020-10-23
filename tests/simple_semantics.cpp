@@ -127,7 +127,7 @@ TEST_CASE("Calling functions", "[Sema]") {
 
 #define EXTRACT_FIRST_BINARY_EXPR(expected_name) ({                                            \
     auto& fun_function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);          \
-    REQUIRE(fun_function.identifer.name == expected_name);                                     \
+    REQUIRE(fun_function.identifier.name == expected_name);                                     \
     auto& return_stmt = std::get<Ast_Return_Statement>(fun_function.body.statements.at(0)->v); \
     return_stmt.expression;                                                                    \
   })

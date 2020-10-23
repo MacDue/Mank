@@ -23,6 +23,8 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
     auto& func = std::get<Ast_Function_Declaration>(func_type->v);
     this->codegen_function_body(func);
   }
+
+  llvm_module->print(llvm::errs(), nullptr);
 }
 
 void LLVMCodeGen::create_module() {
@@ -226,9 +228,6 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
   }
 
   ir_builder.CreateRet(return_value);
-
-  llvm_func->print(llvm::errs());
-  llvm::errs() << '\n';
 
   assert("function should be valid IR" && !llvm::verifyFunction(*llvm_func, &llvm::errs()));
 }

@@ -174,6 +174,13 @@ void AstPrinter::print_expr(Ast_Identifier& ident) {
   putf("- {}", ident.name);
 }
 
+void AstPrinter::print_expr(Ast_Field_Access& access) {
+  putf("* Field access");
+  putf("- Field: {}", access.field.name);
+  putf("- Object:");
+  self->print_expr(*access.object);
+}
+
 static char const * operation_to_string(Ast_Operator operation) {
   return token_type_to_string(static_cast<TokenType>(operation));
 }

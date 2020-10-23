@@ -126,3 +126,10 @@ void BaseAstVisitor::operator()(Ast_Binary_Operation& binop) {
   std::visit(recur, binop.right->v);
   after(binop);
 }
+
+void BaseAstVisitor::operator()(Ast_Field_Access& access) {
+  before(access);
+  after(access);
+  std::visit(recur, access.object->v);
+  after(access);
+}

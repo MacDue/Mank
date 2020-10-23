@@ -68,6 +68,7 @@ private:
   Expression_Ptr parse_expression();
   Expression_Ptr parse_postfix_expression();
   Expression_Ptr parse_call(Expression_Ptr target);
+  Expression_Ptr parse_access(Expression_Ptr object);
   Expression_Ptr parse_primary_expression();
   Expression_Ptr parse_parenthesised_expression();
   Expression_Ptr parse_if();

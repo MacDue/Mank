@@ -60,7 +60,8 @@ struct BaseAstVisitor: public AstVisitor<
   Ast_Literal,
   Ast_Identifier,
   Ast_Unary_Operation,
-  Ast_Binary_Operation
+  Ast_Binary_Operation,
+  Ast_Field_Access
 > {
   void operator()(Ast_File& file) override;
   void operator()(Ast_Function_Declaration& func) override;
@@ -78,4 +79,5 @@ struct BaseAstVisitor: public AstVisitor<
   void operator()(Ast_Identifier& ident) override;
   void operator()(Ast_Unary_Operation& unary) override;
   void operator()(Ast_Binary_Operation& binop) override;
+  void operator()(Ast_Field_Access& access) override;
 };

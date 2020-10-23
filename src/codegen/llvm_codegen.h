@@ -102,6 +102,7 @@ public:
   llvm::Value* codegen_expression(Ast_Identifier& ident, Scope& scope);
   llvm::Value* codegen_expression(Ast_Unary_Operation& unary, Scope& scope);
   llvm::Value* codegen_expression(Ast_Binary_Operation& binop, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Field_Access& access, Scope& scope);
 
   /* JIT tools */
   void* jit_find_symbol(std::string name);

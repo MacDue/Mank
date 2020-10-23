@@ -665,6 +665,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
   );
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
+  assert(false && "field access codegen not implemented");
+  return nullptr;
+}
+
 /* JIT tools */
 
 llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {

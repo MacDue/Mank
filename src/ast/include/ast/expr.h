@@ -42,6 +42,11 @@ struct Ast_Binary_Operation: Ast_Expression_Node {
   bool parenthesised = false;
 };
 
+struct Ast_Field_Access: Ast_Expression_Node {
+  Expression_Ptr object;
+  Ast_Identifier field;
+};
+
 using Ast_Expression_Type = std::variant<
   Ast_Block,
   Ast_If_Expr,
@@ -49,7 +54,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Literal,
   Ast_Identifier,
   Ast_Unary_Operation,
-  Ast_Binary_Operation>;
+  Ast_Binary_Operation,
+  Ast_Field_Access>;
 
 struct Ast_Expression {
   Ast_Expression_Type v;

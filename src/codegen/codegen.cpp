@@ -51,7 +51,29 @@ llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeType::Tag primative) {
   }
 }
 
-llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type) {
+std::vector<llvm::Type*> LLVMCodeGen::map_arg_types_to_llvm(
+  std::vector<Ast_Argument> const & args,
+  Scope& scope
+) {
+  std::vector<llvm::Type*> arg_types;
+  arg_types.reserve(args.size());
+
+  std::transform(args.begin(), args.end(), std::back_inserter(arg_types),
+    [&](auto const & arg) {
+      return map_type_to_llvm(arg.type.get(), scope);
+    });
+
+  return arg_types;
+}
+
+llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope) {
+  std::vector<llvm::Type*> field_types = map_arg_types_to_llvm(pod_type.fields, scope);
+  return llvm::StructType::create(llvm_context,
+    field_types,
+    pod_type.identifier.name);
+}
+
+llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
   using namespace mpark::patterns;
   if (!type) {
     return llvm::Type::getVoidTy(llvm_context);
@@ -59,6 +81,15 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type) {
   return match(type->v)(
     pattern(as<PrimativeType>(arg)) = [&](auto const & primative){
       return map_primative_to_llvm(primative.tag);
+    },
+    pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto const & pod_type) {
+      Symbol* pod_symbol = scope.lookup_first_name(pod_type.identifier);
+      assert(pod_symbol && pod_symbol->kind == Symbol::TYPE);
+      if (!pod_symbol->meta) {
+        pod_symbol->meta = std::make_shared<SymbolMetaCompoundType>(
+          map_pod_to_llvm(pod_type, scope));
+      }
+      return static_cast<SymbolMetaCompoundType*>(pod_symbol->meta.get())->type;
     },
     pattern(_) = []{
       assert(false && "not implemented");
@@ -102,18 +133,10 @@ llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
 }
 
 llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& func) {
-  std::vector<llvm::Type*> arg_types;
-  arg_types.reserve(func.arguments.size());
-
-  std::transform(func.arguments.begin(), func.arguments.end(), std::back_inserter(arg_types),
-    [&](auto const & arg) {
-      return map_type_to_llvm(arg.type.get());
-    });
-
-  llvm::Type* return_type = map_type_to_llvm(func.return_type.get());
+  llvm::Type* return_type = map_type_to_llvm(func.return_type.get(), func.body.scope);
 
   llvm::FunctionType* func_type = llvm::FunctionType::get(
-    return_type, arg_types, /*vararg:*/ false);
+    return_type, map_arg_types_to_llvm(func.arguments, func.body.scope), /*vararg:*/ false);
 
   llvm::Function* llvm_func = llvm::Function::Create(
     func_type,
@@ -130,7 +153,9 @@ llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& f
   return llvm_func;
 }
 
-llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol* symbol) {
+llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(
+  llvm::Function* func, Scope& scope, Type* type, std::string name
+) {
   /*
     Create an alloca for a (local) symbol at a functions entry.
     When using allocas for locals you must put them in the entry block
@@ -140,14 +165,18 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol*
     &func->getEntryBlock(),
     func->getEntryBlock().begin());
 
+  llvm::Type* llvm_type = map_type_to_llvm(type, scope);
+  llvm::AllocaInst* alloca = entry_ir_builder.CreateAlloca(
+    llvm_type, /*array size:*/ 0, name);
+
+  return alloca;
+}
+
+llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol* symbol) {
   assert("must be a local symbol" && symbol->is_local());
-
-  llvm::Type* llvm_type = map_type_to_llvm(symbol->type.get());
-  llvm::AllocaInst* alloca =  entry_ir_builder.CreateAlloca(
-      llvm_type, /*array size:*/ 0, symbol->name.name);
-
+  llvm::AllocaInst* alloca = create_entry_alloca(
+    func, *symbol->scope, symbol->type.get(), symbol->name.name);
   symbol->meta = std::make_shared<SymbolMetaLocal>(alloca);
-
   return alloca;
 }
 
@@ -176,11 +205,10 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
 
   llvm::AllocaInst* return_alloca = nullptr;
   // Create function return value
-  func.body.scope.symbols.emplace_back(Symbol(
+  auto* return_symbol = &func.body.scope.add(Symbol(
     SymbolName(FUNCTION_RETURN_LOCAL),
     func.return_type,
     Symbol::LOCAL));
-  auto return_symbol = &func.body.scope.symbols.back();
   if (/* functions */ !func.procedure) {
     return_alloca = create_entry_alloca(llvm_func, return_symbol);
   }
@@ -232,15 +260,30 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
-  auto& variable_name = std::get<Ast_Identifier>(assign.target->v);
-  Symbol* variable = scope.lookup_first_name(variable_name);
+  using namespace mpark::patterns;
 
-  assert(variable->is_local());
-
-  auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
+  llvm::Value* target_ptr = match(assign.target->v)(
+    pattern(as<Ast_Identifier>(arg)) = [&](auto& variable_name) -> llvm::Value* {
+      Symbol* variable = scope.lookup_first_name(variable_name);
+      assert(variable->is_local());
+      auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
+      return variable_meta->alloca;
+    },
+    pattern(as<Ast_Field_Access>(arg)) = [&](auto& field) -> llvm::Value* {
+      // Only support simple field accesses right now (checked in sema)
+      assert(field.field_index >= 0);
+      auto& pod_variable = std::get<Ast_Identifier>(field.object->v);
+      Symbol* pod = scope.lookup_first_name(pod_variable);
+      assert(pod->is_local());
+      auto pod_meta = static_cast<SymbolMetaLocal*>(pod->meta.get());
+      auto pod_type = extract_type(field.object->meta.type);
+      return ir_builder.CreateConstGEP2_32(map_type_to_llvm(pod_type.get(), scope),
+        pod_meta->alloca, 0, field.field_index);
+    }
+  );
 
   llvm::Value* expression_value = codegen_expression(*assign.expression, scope);
-  ir_builder.CreateStore(expression_value, variable_meta->alloca);
+  ir_builder.CreateStore(expression_value, target_ptr);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope) {
@@ -264,8 +307,8 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
 
     Could segfault or crash somehow (as it'll try to use the undefined x in the expression)
   */
-  scope.symbols.emplace_back(Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
-  llvm::AllocaInst* alloca = create_entry_alloca(current_function, &scope.symbols.back());
+  auto& local_symbol = scope.add(Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
+  llvm::AllocaInst* alloca = create_entry_alloca(current_function, &local_symbol);
 
   if (initializer) {
     ir_builder.CreateStore(initializer, alloca);
@@ -286,17 +329,17 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   llvm::Value* end_value = codegen_expression(*for_loop.end_range, scope);
 
   auto& body = for_loop.body;
-  body.scope.symbols.emplace_back(Symbol(
+  auto& loop_value_symbol = body.scope.add(Symbol(
     for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
 
   llvm::Function* current_function = get_current_function();
-  llvm::AllocaInst* loop_value = create_entry_alloca(current_function, &body.scope.symbols.back());
+  llvm::AllocaInst* loop_value = create_entry_alloca(current_function, &loop_value_symbol);
   ir_builder.CreateStore(start_value, loop_value);
 
   auto loop_range_type = extract_type(for_loop.end_range->meta.type);
-  body.scope.symbols.emplace_back(Symbol(
+  auto& loop_end_range_symbol = body.scope.add(Symbol(
     SymbolName(LOOP_RANGE_END), loop_range_type, Symbol::LOCAL));
-  llvm::AllocaInst* range_end = create_entry_alloca(current_function, &body.scope.symbols.back());
+  llvm::AllocaInst* range_end = create_entry_alloca(current_function, &loop_end_range_symbol);
 
   ir_builder.CreateStore(end_value, range_end);
 
@@ -453,7 +496,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope)
   if (then_value && else_value) {
     auto if_type = extract_type(if_expr.then_block->meta.type);
     llvm::PHINode* phi = ir_builder.CreatePHI(
-      map_type_to_llvm(if_type.get()), 2, "if_expr_selection");
+      map_type_to_llvm(if_type.get(), scope), 2, "if_expr_selection");
     phi->addIncoming(then_value, then_block);
     phi->addIncoming(else_value, else_block);
     return phi;
@@ -666,8 +709,34 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
-  assert(false && "field access codegen not implemented");
-  return nullptr;
+  using namespace mpark::patterns;
+  auto pod_type = extract_type(access.object->meta.type);
+
+  llvm::Value* pod_ptr = match(access.object->v)(
+    pattern(as<Ast_Identifier>(arg)) = [&](auto& variable_name) -> llvm::Value* {
+      Symbol* pod_var = scope.lookup_first_name(variable_name);
+      assert(pod_var && pod_var->is_local());
+      auto meta = static_cast<SymbolMetaLocal*>(pod_var->meta.get());
+      return meta->alloca;
+    },
+    pattern(as<Ast_Field_Access>(_)) = []() -> llvm::Value* {
+      assert(false && "todo getting values in nested structures");
+      return nullptr;
+    },
+    pattern(_) = [&]() -> llvm::Value* {
+      // _assuming_ this is an rvalue (such as a call return / expr return)
+      llvm::Value* pod_temp = codegen_expression(*access.object, scope);
+      llvm::Function* current_function = get_current_function();
+      llvm::AllocaInst* temp = create_entry_alloca(
+        current_function, scope, pod_type.get(), "temp");
+      ir_builder.CreateStore(pod_temp, temp);
+      return temp;
+    });
+
+  llvm::Value* field_ptr = ir_builder.CreateConstGEP2_32(map_type_to_llvm(pod_type.get(), scope),
+    pod_ptr, 0, access.field_index);
+
+  return ir_builder.CreateLoad(field_ptr);
 }
 
 /* JIT tools */

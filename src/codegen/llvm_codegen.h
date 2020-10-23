@@ -45,6 +45,13 @@ class LLVMCodeGen: public CodeGenerator {
       : SymbolMetaLocal(return_value), return_block{return_block} {}
   };
 
+  struct SymbolMetaCompoundType : SymbolMeta {
+    llvm::Type* type;
+
+    SymbolMetaCompoundType(llvm::Type* type)
+      : type{type} {}
+  };
+
   /*
     Owns core llvm datastructures (such as type & constants tables)
   */
@@ -75,13 +82,18 @@ public:
   void create_module();
 
   /* Types */
+  std::vector<llvm::Type*> map_arg_types_to_llvm(
+    std::vector<Ast_Argument> const & args, Scope& scope);
+  llvm::Type* map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope);
   llvm::Type* map_primative_to_llvm(PrimativeType::Tag primative);
-  llvm::Type* map_type_to_llvm(Type const * type);
+  llvm::Type* map_type_to_llvm(Type const * type, Scope& scope);
 
   /* Functions */
   llvm::Function* get_current_function();
   llvm::Function* get_function(Ast_Function_Declaration& func);
   llvm::Function* codegen_function_header(Ast_Function_Declaration& func);
+  llvm::AllocaInst* create_entry_alloca(
+    llvm::Function* func, Scope& scope, Type* type, std::string name);
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);
   void codegen_function_body(Ast_Function_Declaration& func);
 

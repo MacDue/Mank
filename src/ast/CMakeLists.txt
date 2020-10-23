@@ -4,4 +4,5 @@ add_library(MankAST
   ast_printer.cpp
   primative_types.cpp
   default_ast_visitor.cpp
+  scope.cpp
 )

@@ -47,14 +47,14 @@ void Semantics::analyse_file(Ast_File& file) {
   };
 
   for (auto [type_name, type] : primative_types) {
-    global_scope.symbols.emplace_back(
+    global_scope.add(
       Symbol(SymbolName(type_name), *type, Symbol::TYPE));
   }
 
   /* Add symbols for (yet to be checked) pods */
   for (auto& pod_type: file.pods) {
     auto& pod = std::get<Ast_Pod_Declaration>(pod_type->v);
-    file.scope.symbols.emplace_back(
+    file.scope.add(
       Symbol(pod.identifier, pod_type, Symbol::TYPE));
   }
 
@@ -66,7 +66,7 @@ void Semantics::analyse_file(Ast_File& file) {
   /* Add function headers into scope, resolve function return/param types */
   for (auto& func_type: file.functions) {
     auto& func = std::get<Ast_Function_Declaration>(func_type->v);
-    file.scope.symbols.emplace_back(
+    file.scope.add(
       Symbol(func.identifier, func_type, Symbol::FUNCTION));
     func.body.scope.parent = &global_scope;
     analyse_function_header(func);
@@ -144,7 +144,7 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
 
 void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
-    func.body.scope.symbols.emplace_back(
+    func.body.scope.add(
       Symbol(arg.name, arg.type, Symbol::INPUT));
   }
   this->expected_return = func.return_type.get();
@@ -241,7 +241,14 @@ void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
   using namespace mpark::patterns;
 
   auto target_type = match(assign.target->v)(
-    pattern(anyof(as<Ast_Identifier>(_), as<Ast_Field_Access>(_))) = [&]{
+    pattern(as<Ast_Identifier>(_)) = [&]{
+      return analyse_expression(*assign.target, scope);
+    },
+    pattern(as<Ast_Field_Access>(arg)) = [&](auto access) {
+      if (!std::get_if<Ast_Identifier>(&access.object->v)) {
+        throw_sema_error_at(assign.target,
+          "complex and nested field assigment is not implemented");
+      }
       return analyse_expression(*assign.target, scope);
     },
     pattern(_) = [&]{
@@ -314,7 +321,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         emit_warning_at(var_decl.variable, "declaration shadows existing symbol");
       }
 
-      scope.symbols.emplace_back(
+      scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
     }
   );
@@ -351,7 +358,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   }
 
   auto& body = for_loop.body;
-  body.scope.symbols.emplace_back(Symbol(
+  body.scope.add(Symbol(
     for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
 
   auto body_type = analyse_block(body, scope);
@@ -433,7 +440,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             throw_sema_error_at(access.field, "{} has no field named \"{}\"",
               pod_type->identifier.name, access.field.name);
           }
-          access.field_index = std::distance(accessed, pod_type->fields.end());
+          access.field_index = std::distance(pod_type->fields.begin(), accessed);
           return accessed->type;
         }
       }

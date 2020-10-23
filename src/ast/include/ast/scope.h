@@ -11,6 +11,8 @@ struct SymbolMeta {
   virtual ~SymbolMeta() {};
 };
 
+struct Scope;
+
 struct Symbol {
   SymbolName name;
   Type_Ptr type;
@@ -23,43 +25,31 @@ struct Symbol {
     TYPE,
   } kind;
 
+  /* transitively -- as the AST shared (which holds scope nodes) -- this really _should_ be unique */
+  std::shared_ptr<SymbolMeta> meta;
+
+  struct Scope* scope = nullptr; // set when added to a scope
+
   inline bool is_local() {
     return kind == INPUT || kind == LOCAL;
   }
 
-  /* transitively -- as the AST shared (which holds scope nodes) -- this really _should_ be unique */
-  std::shared_ptr<SymbolMeta> meta;
   Symbol(SymbolName name, Type_Ptr type, Kind kind)
     : name{name}, type{type}, kind{kind} {};
 };
 
-struct Scope {
-  Scope* parent = nullptr;
+class Scope {
   std::vector<Symbol> symbols;
+public:
+  Scope* parent = nullptr;
 
-  Symbol* lookup_first_name(SymbolName const & name) {
+  Symbol& add(Symbol symbol);
+
+  inline Symbol* lookup_first_name(SymbolName const & name) {
     return lookup_first(name.name);
   }
 
-  Symbol* lookup_first(std::string_view name) {
-    for (Scope* scope = this; scope != nullptr; scope = scope->parent) {
-      auto found = std::find_if(scope->symbols.rbegin(), scope->symbols.rend(),
-        [&](auto const & symbol) {
-          return symbol.name.name == name;
-        });
-      if (found != scope->symbols.rend()) {
-        return &(*found);
-      }
-    }
-    return nullptr;
-  }
+  Symbol* lookup_first(std::string_view name);
 
-  // TODO: Rethink symbol tables. Probably a better way.
-  void destroy_locals() {
-    this->symbols.erase(
-      std::remove_if(this->symbols.begin(), this->symbols.end(),
-      [](auto const & symbol){
-        return symbol.kind == Symbol::LOCAL;
-      }), this->symbols.end());
-  }
+  void destroy_locals();
 };

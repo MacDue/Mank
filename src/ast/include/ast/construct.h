@@ -25,5 +25,5 @@ struct Ast_Function_Declaration: Ast_Node {
 
 struct Ast_Pod_Declaration: Ast_Node {
   Ast_Identifier identifer;
-  std::vector<Ast_Argument> members;
+  std::vector<Ast_Argument> fields;
 };

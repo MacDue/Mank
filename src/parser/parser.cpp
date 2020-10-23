@@ -67,7 +67,7 @@ Type_Ptr Parser::parse_pod() {
     throw_error_here("expected pod name");
   }
   parsed_pod.identifer = *pod_name;
-  parsed_pod.members = this->parse_arguments(
+  parsed_pod.fields = this->parse_arguments(
     TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
   return std::make_shared<Type>(parsed_pod);
 }

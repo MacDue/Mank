@@ -35,11 +35,11 @@ void AstPrinter::print_args(std::vector<Ast_Argument> args) {
 
 void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
   putf("* Pod {}", pod.identifer.name);
-  if (pod.members.size() > 0) {
-    putf("- Members:");
-    self->print_args(pod.members);
+  if (pod.fields.size() > 0) {
+    putf("- Fields:");
+    self->print_args(pod.fields);
   } else {
-    putf("- No members");
+    putf("- No fields");
   }
 }
 

@@ -53,11 +53,11 @@ inline Type_Ptr make_unchecked_type(std::string type_name) {
   return std::make_shared<Type>(unchecked);
 }
 
-template <typename... TMembers>
-Type_Ptr make_pod(std::string name, TMembers && ... members) {
+template <typename... TFields>
+Type_Ptr make_pod(std::string name, TFields && ... fields) {
   Ast_Pod_Declaration pod;
   pod.identifer.name = name;
-  pod.members = std::vector<Ast_Argument> { members... };
+  pod.fields = std::vector<Ast_Argument> { fields... };
   return std::make_shared<Type>(pod);
 }
 

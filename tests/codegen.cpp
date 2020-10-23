@@ -233,10 +233,19 @@ TEST_CASE("Abstract bean factory", "[Codegen]") {
     fun get_bean_type_coolness: i32 (bean_kind: i32) {
       abstract_bean_factory(bean_kind).coolness
     }
+
+    fun get_bean_type_abstractness: f64 (bean_kind: i32) {
+      abstract_bean_factory(bean_kind).abstractness
+    }
   )");
 
   auto get_bean_type_coolness = codegen.extract_function_from_jit<int(int)>("get_bean_type_coolness");
   REQUIRE(get_bean_type_coolness(0) == 5);
   REQUIRE(get_bean_type_coolness(1) == 1000);
   REQUIRE(get_bean_type_coolness(-1) == -100000);
+
+  auto get_bean_type_abstractness = codegen.extract_function_from_jit<double(int)>("get_bean_type_abstractness");
+  REQUIRE(get_bean_type_abstractness(0) == 0.4);
+  REQUIRE(get_bean_type_abstractness(1) == 1000000.1);
+  REQUIRE(get_bean_type_abstractness(-1) == 0.0);
 }

@@ -51,6 +51,18 @@ void Semantics::analyse_file(Ast_File& file) {
       Symbol(SymbolName(type_name), *type, Symbol::TYPE));
   }
 
+  /* Add symbols for (yet to be checked) pods */
+  for (auto& pod_type: file.pods) {
+    auto& pod = std::get<Ast_Pod_Declaration>(pod_type->v);
+    file.scope.symbols.emplace_back(
+      Symbol(pod.identifer, pod_type, Symbol::TYPE));
+  }
+
+  /* Check pods */
+  for (auto& pod_type: file.pods) {
+    analyse_pod(std::get<Ast_Pod_Declaration>(pod_type->v), global_scope);
+  }
+
   /* Add function headers into scope, resolve function return/param types */
   for (auto& func_type: file.functions) {
     auto& func = std::get<Ast_Function_Declaration>(func_type->v);
@@ -92,6 +104,17 @@ static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_for
     throw_sema_error_at(*type_slot, error_format);
   } else {
     IMPOSSIBLE();
+  }
+}
+
+void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
+  // TODO: Nested pods and recursive pod checking
+  for (auto& field: pod.fields) {
+    resolve_type_or_fail(scope, field.type, "undeclared field type {}");
+    if (std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
+      throw_sema_error_at(field.name, "nested pods are not yet implemented");
+      field.type = nullptr;
+    }
   }
 }
 

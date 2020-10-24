@@ -46,6 +46,7 @@ void BaseAstVisitor::operator()(Ast_Return_Statement& return_stmt) {
 void BaseAstVisitor::operator()(Ast_Assign& assign) {
   before(assign);
   visit(assign);
+  std::visit(recur, assign.target->v);
   std::visit(recur, assign.expression->v);
   after(assign);
 }
@@ -129,7 +130,7 @@ void BaseAstVisitor::operator()(Ast_Binary_Operation& binop) {
 
 void BaseAstVisitor::operator()(Ast_Field_Access& access) {
   before(access);
-  after(access);
+  visit(access);
   std::visit(recur, access.object->v);
   after(access);
 }

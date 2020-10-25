@@ -18,7 +18,8 @@ struct CompilerOptions {
     show_help = false,
     print_ast = false,
     check_sema = false,
-    code_gen = false;
+    code_gen = false,
+    suppress_warnings = false;
 };
 
 #define ARG_GIVEN(name) vm.count(name)
@@ -33,6 +34,7 @@ static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
     ("print-ast", "print AST of the input source")
     ("check-sema", "check the semantics of the input")
     ("codegen", "generate LLVM IR")
+    ("suppress-warnings", "don't output warnings")
     ("input-file", po::value<std::vector<std::string>>(), "input file");
 
   po::positional_options_description p;
@@ -52,6 +54,7 @@ static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
   selected_options.print_ast = ARG_GIVEN("print-ast");
   selected_options.code_gen = ARG_GIVEN("codegen");
   selected_options.check_sema = selected_options.code_gen || ARG_GIVEN("check-sema");
+  selected_options.suppress_warnings = ARG_GIVEN("suppress-warnings");
 
   if (vm.count("input-file")) {
     selected_options.input_files = vm["input-file"].as<std::vector<std::string>>();
@@ -94,9 +97,11 @@ int main(int argc, char* argv[]) {
     }
 
     // TODO: the error/warnings should alreadg have a reference to the lexer
-    for (auto& warning: sema.get_warnings()) {
-      warning.source_lexer = &lexer;
-      std::cerr << warning;
+    if (!selected_options.suppress_warnings) {
+      for (auto& warning: sema.get_warnings()) {
+        warning.source_lexer = &lexer;
+        std::cerr << warning;
+      }
     }
 
     if (sema_error) {

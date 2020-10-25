@@ -1,0 +1,173 @@
+
+
+pod Array {
+  _0: i32,
+  _1: i32,
+  _2: i32,
+  _3: i32,
+  _4: i32,
+  _5: i32,
+  _6: i32,
+  _7: i32,
+  _8: i32,
+  _9: i32
+}
+
+fun make_array: Array
+  (_0: i32, _1: i32, _2: i32, _3: i32, _4: i32, _5: i32, _6: i32, _7: i32, _8: i32, _9: i32)
+{
+  array: Array;
+  array._0 = _0;
+  array._1 = _1;
+  array._2 = _2;
+  array._3 = _3;
+  array._4 = _4;
+  array._5 = _5;
+  array._6 = _6;
+  array._7 = _7;
+  array._8 = _8;
+  array._9 = _9;
+  array
+}
+
+fun get_index: i32 (array: Array, index: i32) {
+  if index == 0 {
+    array._0
+  } else if index == 1 {
+    array._1
+  } else if index == 2 {
+    array._2
+  } else if index == 3 {
+    array._3
+  } else if index == 4 {
+    array._4
+  } else if index == 5 {
+    array._5
+  } else if index == 6 {
+    array._6
+  } else if index == 7 {
+    array._7
+  } else if index == 8 {
+    array._8
+  } else if index == 9 {
+    array._9
+  } else {
+    if index < 0 {
+      get_index(array, 0)
+    } else {
+      get_index(array, 9)
+    }
+  }
+}
+
+fun set_index: Array (array: Array, index: i32, value: i32) {
+  if index == 0 {
+    array._0 = value;
+  } else if index == 1 {
+    array._1 = value;
+  } else if index == 2 {
+    array._2 = value;
+  } else if index == 3 {
+    array._3 = value;
+  } else if index == 4 {
+    array._4 = value;
+  } else if index == 5 {
+    array._5 = value;
+  } else if index == 6 {
+    array._6 = value;
+  } else if index == 7 {
+    array._7 = value;
+  } else if index == 8 {
+    array._8 = value;
+  } else if index == 9 {
+    array._9 = value;
+  } else {
+    if index < 0 {
+      array = set_index(array, 0, value);
+    } else {
+      array = set_index(array, 9, value);
+    }
+  }
+  array
+}
+
+fun is_ordered: bool (array: Array) {
+  for i in 1 .. 10 {
+    if get_index(array, i - 1) > get_index(array, i) {
+      return false;
+    }
+  }
+  return true;
+}
+
+fun insert_sort: Array (array: Array) {
+  for j in 1 .. 10 {
+    key := get_index(array, j);
+    i := j - 1;
+
+    for _ in 0 .. i + 1 {
+      current := get_index(array, i);
+      if (current > key) {
+        array = set_index(array, i + 1, current);
+        i = i - 1;
+      }
+    }
+    array = set_index(array, i + 1, key);
+  }
+  array
+}
+
+fun merge_sort: Array (array: Array, lo: i32, hi: i32) {
+  size := hi - lo;
+  if (size > 1) {
+    mid := size / 2;
+    left := merge_sort(array, lo, lo + mid);
+    right := merge_sort(array, lo + mid, hi);
+    merge(left, lo, lo + mid, right, lo + mid, hi)
+  } else {
+    array
+  }
+}
+
+fun merge: Array (
+  left: Array, llo: i32, lhi: i32,
+  right: Array, rlo: i32, rhi: i32
+) {
+  out: Array;
+  size := rhi - llo;
+  out_idx := llo;
+  for i in 0 .. size {
+    # && not implemented yet :(
+    if llo < lhi {
+      left_value := get_index(left, llo);
+      if rlo < rhi {
+        right_value := get_index(right, rlo);
+        if left_value < right_value {
+          out = set_index(out, out_idx, left_value);
+          llo = llo + 1;
+        } else {
+          out = set_index(out, out_idx, right_value);
+          rlo = rlo + 1;
+        }
+      } else {
+        out = set_index(out, out_idx, left_value);
+        llo = llo + 1;
+      }
+    } else {
+      right_value := get_index(right, rlo);
+      out = set_index(out, out_idx, right_value);
+      rlo = rlo + 1;
+    }
+    out_idx = out_idx + 1;
+  }
+  out
+}
+
+fun sort_main: i32 (index: i32) {
+  # array := make_array(10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
+ # array := make_array(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+  array := make_array(9297, -9902, 4021, 4674, -9178, 7293, -4768, 8923, -1648, -6210);
+  #array = insert_sort(array);
+  array = merge_sort(array, 0, 10);
+  return get_index(array, index);
+}

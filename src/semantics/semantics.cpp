@@ -176,7 +176,7 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
-    if (body_type && match_types(body_type.get(), func.return_type.get())) {
+    if (match_types(body_type.get(), func.return_type.get())) {
       /* Desugar implict return for codegen + return checking ease */
       func.body.has_final_expr = false;
       Ast_Return_Statement implicit_return;
@@ -187,22 +187,20 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       func.body.statements.pop_back();
       func.body.statements.emplace_back(
         std::make_shared<Ast_Statement>(implicit_return));
+    } else if (body_type) {
+      // If the type is not void (like an if statement or something)
+      throw_sema_error_at(final_expr,
+        "implicit return of type {} does not match expected type {}",
+        type_to_string(body_type.get()), type_to_string(func.return_type.get()));
     }
   }
 
   // Propagate constants before checking reachability so dead code can be marked
   AstHelper::constant_propagate(func.body);
-
   Ast_Statement* first_unreachable_stmt = nullptr;
   bool all_paths_return = AstHelper::all_paths_return(func.body, &first_unreachable_stmt);
   if (!func.procedure && !all_paths_return) {
     throw_sema_error_at(func.identifier, "function possibly fails to return a value");
-  }
-
-  if (func.body.has_final_expr && body_type) {
-    throw_sema_error_at(final_expr,
-      "implicit return of type {} does not match expected type {}",
-      type_to_string(body_type.get()), type_to_string(func.return_type.get()));
   }
 
   if (first_unreachable_stmt) {

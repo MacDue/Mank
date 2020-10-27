@@ -268,16 +268,18 @@ void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
       auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
       return variable_meta->alloca;
     },
-    pattern(as<Ast_Field_Access>(arg)) = [&](auto& field) -> llvm::Value* {
-      // Only support simple field accesses right now (checked in sema)
-      assert(field.field_index >= 0);
-      auto& pod_variable = std::get<Ast_Identifier>(field.object->v);
-      Symbol* pod = scope.lookup_first_name(pod_variable);
+    pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) -> llvm::Value* {
+      std::vector<uint> idx_list;
+      auto& source_object = flatten_nested_pod_accesses(access, idx_list);
+
+      auto pod_variable = std::get_if<Ast_Identifier>(&source_object.v);
+      assert(pod_variable && "source object must be a variable!");
+
+      Symbol* pod = scope.lookup_first_name(*pod_variable);
       assert(pod->is_local());
+
       auto pod_meta = static_cast<SymbolMetaLocal*>(pod->meta.get());
-      auto pod_type = extract_type(field.object->meta.type);
-      return ir_builder.CreateConstGEP2_32(map_type_to_llvm(pod_type.get(), scope),
-        pod_meta->alloca, 0, field.field_index);
+      return ir_builder.CreateGEP(pod_meta->alloca, make_idx_list_for_gep(idx_list));
     }
   );
 
@@ -707,35 +709,60 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
   );
 }
 
+Ast_Expression& LLVMCodeGen::flatten_nested_pod_accesses(
+  Ast_Field_Access& access, std::vector<uint>& idx_list
+) {
+  Ast_Expression* base_expr;
+  if (auto pior_access = std::get_if<Ast_Field_Access>(&access.object->v)) {
+    base_expr = &flatten_nested_pod_accesses(*pior_access, idx_list);
+  } else {
+    base_expr = access.object.get();
+  }
+  idx_list.push_back(access.field_index);
+  return *base_expr;
+}
+
+std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
+  std::vector<uint> const & idx_list
+) {
+  auto create_llvm_idx = [&](uint value){
+    auto constexpr FIELD_IDX_BITS = 32;
+    return llvm::ConstantInt::get(llvm_context,
+      llvm::APInt(FIELD_IDX_BITS, value, value));
+  };
+
+  // For some reason there's no GEP that takes a list of uint (unlike extractvalue)
+  // So we have to map uint -> llvm::Value* (just constant ints)
+  std::vector<llvm::Value*> llvm_idx_list;
+  llvm_idx_list.reserve(idx_list.size() + 1);
+  llvm_idx_list.push_back(create_llvm_idx(0)); // First base index for GEP
+  std::transform(idx_list.begin(), idx_list.end(), std::back_inserter(llvm_idx_list),
+    create_llvm_idx);
+
+  return llvm_idx_list;
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
   using namespace mpark::patterns;
   auto pod_type = extract_type(access.object->meta.type);
 
-  llvm::Value* pod_ptr = match(access.object->v)(
+  std::vector<uint> idx_list;
+  auto& source_object = flatten_nested_pod_accesses(access, idx_list);
+
+  return match(source_object.v)(
     pattern(as<Ast_Identifier>(arg)) = [&](auto& variable_name) -> llvm::Value* {
       Symbol* pod_var = scope.lookup_first_name(variable_name);
       assert(pod_var && pod_var->is_local());
       auto meta = static_cast<SymbolMetaLocal*>(pod_var->meta.get());
-      return meta->alloca;
-    },
-    pattern(as<Ast_Field_Access>(_)) = []() -> llvm::Value* {
-      assert(false && "todo getting values in nested structures");
-      return nullptr;
+      llvm::Value* field_ptr = ir_builder.CreateGEP(meta->alloca,
+        make_idx_list_for_gep(idx_list));
+      return ir_builder.CreateLoad(field_ptr);
     },
     pattern(_) = [&]() -> llvm::Value* {
       // _assuming_ this is an rvalue (such as a call return / expr return)
-      llvm::Value* pod_temp = codegen_expression(*access.object, scope);
-      llvm::Function* current_function = get_current_function();
-      llvm::AllocaInst* temp = create_entry_alloca(
-        current_function, scope, pod_type.get(), "temp");
-      ir_builder.CreateStore(pod_temp, temp);
-      return temp;
+      llvm::Value* pod_temp = codegen_expression(source_object, scope);
+      return ir_builder.CreateExtractValue(pod_temp, idx_list);
     });
-
-  llvm::Value* field_ptr = ir_builder.CreateConstGEP2_32(map_type_to_llvm(pod_type.get(), scope),
-    pod_ptr, 0, access.field_index);
-
-  return ir_builder.CreateLoad(field_ptr);
 }
 
 /* JIT tools */

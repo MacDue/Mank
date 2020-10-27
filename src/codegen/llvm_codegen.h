@@ -81,6 +81,11 @@ public:
   LLVMCodeGen(Ast_File& file_ast);
   void create_module();
 
+  Ast_Expression& flatten_nested_pod_accesses(
+    Ast_Field_Access& access, std::vector<uint>& idx_list);
+  std::vector<llvm::Value*> make_idx_list_for_gep(
+    std::vector<uint> const & idx_list);
+
   /* Types */
   std::vector<llvm::Type*> map_arg_types_to_llvm(
     std::vector<Ast_Argument> const & args, Scope& scope);

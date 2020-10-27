@@ -107,13 +107,37 @@ static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_for
   }
 }
 
+static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& nested_field) {
+  /*
+    0 if not recursive, 1 if directly recursive, indirection steps otherwise
+    Simply counts how many steps into the structure we go till the top level pod is reached.
+  */
+  if (&pod == &nested_field) {
+    return 1;
+  } else {
+    for (auto& field: nested_field.fields) {
+      if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
+        if (auto steps = pod_is_recursive(pod, *pod_field)) {
+          return 1 + steps;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
 void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
-  // TODO: Nested pods and recursive pod checking
   for (auto& field: pod.fields) {
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
-    if (std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
-      throw_sema_error_at(field.name, "nested pods are not yet implemented");
-      field.type = nullptr;
+    if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
+      if (auto steps = pod_is_recursive(pod, *pod_field)) {
+        if (steps == 1) {
+          throw_sema_error_at(field.name, "directly recursive pods are not allowed");
+        } else {
+          throw_sema_error_at(field.name, "recursive cycle detected in pod declaration");
+        }
+        field.type = nullptr; // cycles bad
+      }
     }
   }
 }
@@ -237,26 +261,34 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
   }
 }
 
-void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
+// HACK! This probably should be encoded into the expression type
+static bool is_lvalue(Ast_Expression& expr) {
   using namespace mpark::patterns;
+  /*
+    l values (that can be assigned to) are simply plain variables,
+    and access on variables.
 
-  auto target_type = match(assign.target->v)(
-    pattern(as<Ast_Identifier>(_)) = [&]{
-      return analyse_expression(*assign.target, scope);
+    e.g.
+    x = 1 (ok)
+    x.y = 1 (ok)
+    foo().x = 1 (fail)
+  */
+  return match(expr.v)(
+    pattern(as<Ast_Identifier>(_)) = []{ return true; },
+    pattern(as<Ast_Field_Access>(arg)) = [](auto& access){
+      return is_lvalue(*access.object);
     },
-    pattern(as<Ast_Field_Access>(arg)) = [&](auto access) {
-      if (!std::get_if<Ast_Identifier>(&access.object->v)) {
-        throw_sema_error_at(assign.target,
-          "complex and nested field assigment is not implemented");
-      }
-      return analyse_expression(*assign.target, scope);
-    },
-    pattern(_) = [&]{
-      throw_sema_error_at(assign.target, "assignment target is not assignable");
-      return Type_Ptr(nullptr);
-    }
+    pattern(_) = []{ return false; }
   );
+}
 
+void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
+  if (!is_lvalue(*assign.target)) {
+    throw_sema_error_at(assign.target,
+      "target is not a lvalue");
+  }
+
+  auto target_type = analyse_expression(*assign.target, scope);
   auto expr_type = analyse_expression(*assign.expression, scope);
 
   if (!match_types(target_type.get(), expr_type.get())) {

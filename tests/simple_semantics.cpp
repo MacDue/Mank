@@ -686,5 +686,45 @@ TEST_CASE("Assign semantics", "[Sema]") {
 }
 
 TEST_CASE("For loop semantics", "[Sema]") {
-  // TODO
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("Using a non-existent loop value type is invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc _ {
+        for x: banana in 0 .. 10 {
+          # Who knows!
+        }
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("undeclared loop type"));
+  }
+
+  SECTION("Using non matching types for the start and end ranges is invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc _ {
+        for x in 0.0 .. 10 {
+          # :(
+        }
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code),
+      Contains("end range type") && Contains("does not match start range type"));
+  }
+
+  SECTION("Loop bodies that evaluate to a value are invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc _ {
+        for x in 0 .. 10 {
+          1000
+        }
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code),
+      Contains("should not evaluate to a value"));
+  }
 }

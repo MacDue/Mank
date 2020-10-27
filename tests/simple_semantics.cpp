@@ -728,3 +728,107 @@ TEST_CASE("For loop semantics", "[Sema]") {
       Contains("should not evaluate to a value"));
   }
 }
+
+TEST_CASE("Pod types and field access semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("Correctly accessing and assigning fields in a non-nested pod") {
+    auto code = Parser::parse_from_string(R"(
+      pod AbstractBean {
+        coolness: i32,
+        abstractness: f64
+      }
+
+      fun bean_stuff_you_would_not_understand: f64 {
+        bean: AbstractBean;
+        bean.coolness = 10000;
+        bean.abstractness = 32839.9999;
+        bean.abstractness
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+
+    auto& assign_1 = std::get<Ast_Assign>(function.body.statements.at(1)->v);
+    auto& access_1 = std::get<Ast_Field_Access>(assign_1.target->v);
+    // coolness -> index 0 (first element in pod)
+    REQUIRE(access_1.field_index == 0);
+
+    auto& assign_2 = std::get<Ast_Assign>(function.body.statements.at(2)->v);
+    auto& access_2 = std::get<Ast_Field_Access>(assign_2.target->v);
+    // abstractness -> index 1 (second element in pod)
+    REQUIRE(access_2.field_index == 1);
+  }
+
+  SECTION("Correctly accessing nested pod fields") {
+    auto code = Parser::parse_from_string(R"(
+      pod A {
+        test: i32
+      }
+
+      pod B {
+        ayy: A
+      }
+
+      pod C {
+        bee: B
+      }
+
+      proc main {
+        cee: C;
+        cee.bee.ayy.test = 10;
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
+
+  SECTION("Accessing fields on non-pods is invalid") {
+    auto code = Parser::parse_from_string(R"(
+      proc main {
+        cake := 1000;
+        cake.bake = 10;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), "not a pod type");
+  }
+
+  SECTION("Accessing a field that does not exist on a pod is invalid") {
+    auto code = Parser::parse_from_string(R"(
+      pod Ben {}
+
+      fun sad: i32 {
+        ben: Ben;
+        ben.qi
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("no field named \"qi\""));
+  }
+
+  SECTION("Assigning to a non-lvalue field is invalid") {
+    auto code = Parser::parse_from_string(R"(
+      pod Bar {
+        a: i32,
+        b: i32
+      }
+
+      fun make_bar: Bar {
+        bar: Bar;
+        bar.a = 1;
+        bar.b = 2;
+        bar
+      }
+
+      proc main {
+        make_bar().a = 10;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("not an lvalue"));
+  }
+}

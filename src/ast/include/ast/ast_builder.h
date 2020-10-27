@@ -222,6 +222,15 @@ inline Expression_Ptr make_binary(
   return to_expr_ptr(binop);
 }
 
+/* Field access */
+
+inline Expression_Ptr make_access(Expression_Ptr object, std::string field) {
+  Ast_Field_Access access;
+  access.object = object;
+  access.field.name = field;
+  return to_expr_ptr(access);
+}
+
 /* -- Statements -- */
 
 /* Expression statement */

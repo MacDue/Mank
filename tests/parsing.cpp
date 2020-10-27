@@ -515,3 +515,28 @@ TEST_CASE("Pods", "[Parser]") {
 
   MATCH_AST(parsed_pods, expected_pods);
 }
+
+TEST_CASE("Field access", "[Parser]") {
+  SECTION("Single level access") {
+    auto parsed_access = Parser::parse_from_string(
+      WPS "foo.bar;" WPE);
+
+    auto expected_access = wrap_expr(
+      make_access(make_ident("foo"), "bar"));
+
+    MATCH_AST(parsed_access, expected_access);
+  }
+
+  SECTION("Nested access") {
+    auto parsed_access = Parser::parse_from_string(
+      WPS "cs.manchester.ac.uk;" WPE);
+
+    auto expected_access = wrap_expr(
+      make_access(
+        make_access(
+          make_access(
+            make_ident("cs"), "manchester"), "ac"), "uk"));
+
+    MATCH_AST(parsed_access, expected_access);
+  }
+}

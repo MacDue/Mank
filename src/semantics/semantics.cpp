@@ -285,7 +285,7 @@ static bool is_lvalue(Ast_Expression& expr) {
 void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
   if (!is_lvalue(*assign.target)) {
     throw_sema_error_at(assign.target,
-      "target is not a lvalue");
+      "target is not an lvalue");
   }
 
   auto target_type = analyse_expression(*assign.target, scope);

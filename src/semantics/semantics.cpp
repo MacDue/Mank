@@ -35,6 +35,16 @@ static bool match_types(Type* a, Type* b) {
   return false;
 }
 
+Symbol* Semantics::emit_warning_if_shadows(
+  Ast_Identifier& ident, Scope& scope, std::string warning
+) {
+  Symbol* pior_symbol = scope.lookup_first_name(ident);
+  if (pior_symbol) {
+    emit_warning_at(ident, warning);
+  }
+  return pior_symbol;
+}
+
 void Semantics::analyse_file(Ast_File& file) {
   Scope& global_scope = file.scope;
 
@@ -54,6 +64,8 @@ void Semantics::analyse_file(Ast_File& file) {
   /* Add symbols for (yet to be checked) pods */
   for (auto& pod_type: file.pods) {
     auto& pod = std::get<Ast_Pod_Declaration>(pod_type->v);
+    emit_warning_if_shadows(pod.identifier, global_scope,
+      "pod declaration shadows existing symbol");
     file.scope.add(
       Symbol(pod.identifier, pod_type, Symbol::TYPE));
   }
@@ -66,6 +78,18 @@ void Semantics::analyse_file(Ast_File& file) {
   /* Add function headers into scope, resolve function return/param types */
   for (auto& func_type: file.functions) {
     auto& func = std::get<Ast_Function_Declaration>(func_type->v);
+    // This is not very efficient, top level symbols could be placed in a hashmap
+    if (auto symbol = global_scope.lookup_first_name(func.identifier)) {
+      if (symbol->kind == Symbol::FUNCTION) {
+        auto& pior_func = std::get<Ast_Function_Declaration>(symbol->type->v);
+        throw_sema_error_at(func.identifier,
+          "redeclaration of function (previously on line {})",
+          pior_func.identifier.location.start_line + 1);
+      } else {
+        emit_warning_at(func.identifier,
+          "function declaration shadows existing symbol");
+      }
+    }
     file.scope.add(
       Symbol(func.identifier, func_type, Symbol::FUNCTION));
     func.body.scope.parent = &global_scope;
@@ -346,11 +370,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         emit_warning_at(var_decl, "default initialization is currently unimplemented");
       }
 
-      Symbol* pior_symbol = scope.lookup_first_name(var_decl.variable);
-      if (pior_symbol) {
-        emit_warning_at(var_decl.variable, "declaration shadows existing symbol");
-      }
-
+      emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
       scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
     }
@@ -382,11 +402,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
       type_to_string(end_range_type.get()), type_to_string(start_range_type.get()));
   }
 
-  Symbol* pior_symbol = scope.lookup_first_name(for_loop.loop_value);
-  if (pior_symbol) {
-    emit_warning_at(for_loop.loop_value, "loop value shadows existing symbol");
-  }
-
+  emit_warning_if_shadows(for_loop.loop_value, scope, "loop value shadows existing symbol");
   auto& body = for_loop.body;
   body.scope.add(Symbol(
     for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));

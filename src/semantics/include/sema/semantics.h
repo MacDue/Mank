@@ -15,6 +15,9 @@ struct Semantics {
 private:
   Type* expected_return = nullptr;
 
+  Symbol* emit_warning_if_shadows(
+    Ast_Identifier& ident, Scope& scope, std::string warning);
+
   void analyse_pod(Ast_Pod_Declaration& pod, Scope& scope);
   void analyse_function_header(Ast_Function_Declaration& func);
   void analyse_function_body(Ast_Function_Declaration& func);

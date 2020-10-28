@@ -249,3 +249,52 @@ TEST_CASE("Abstract bean factory", "[Codegen]") {
   REQUIRE(get_bean_type_abstractness(1) == 1000000.1);
   REQUIRE(get_bean_type_abstractness(-1) == 0.0);
 }
+
+TEST_CASE("Getting and setting in nested pods", "[Codegen]") {
+  auto codegen = compile(R"(
+    pod One {
+      two: Two
+    }
+
+    pod Two {
+      three: Three
+    }
+
+    pod Three {
+      test: i32
+    }
+
+    fun make_nested_pod: One {
+      my_pod: One;
+      my_pod.two.three.test = 42;
+      my_pod
+    }
+
+    # Extracting field from local
+    fun test_1: i32 {
+      my_pod := make_nested_pod();
+      my_pod.two.three.test
+    }
+
+    # Extracting field from rvalue
+    fun test_2: i32 {
+      make_nested_pod().two.three.test
+    }
+
+    # Setting a field of a local
+    fun test_3: i32 {
+      my_pod := make_nested_pod();
+      my_pod.two.three.test = 1337;
+      my_pod.two.three.test
+    }
+  )");
+
+  auto test_1 = codegen.extract_function_from_jit<int()>("test_1");
+  REQUIRE(test_1() == 42);
+
+  auto test_2 = codegen.extract_function_from_jit<int()>("test_2");
+  REQUIRE(test_2() == 42);
+
+  auto test_3 = codegen.extract_function_from_jit<int()>("test_3");
+  REQUIRE(test_3() == 1337);
+}

@@ -8,6 +8,8 @@ LEFT_PAREN = '(',
 RIGHT_PAREN = ')',
 ASSIGN = '=',
 COMMA = ',',
+LEFT_SQUARE_BRACKET = '[',
+RIGHT_SQUARE_BRACKET = ']',
 
 /* Operators */
 #include "operators.def"

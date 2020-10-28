@@ -199,6 +199,8 @@ void Lexer::next_token() {
     || match("}", TokenType::RIGHT_BRACE)
     || match("(", TokenType::LEFT_PAREN)
     || match(")", TokenType::RIGHT_PAREN)
+    || match("[", TokenType::LEFT_SQUARE_BRACKET)
+    || match("]", TokenType::RIGHT_SQUARE_BRACKET)
     || match("=", TokenType::ASSIGN)
   ) {
     /* Simple token is now matched (last_token updated in match) */

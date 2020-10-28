@@ -766,6 +766,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
     });
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Literal& access, Scope& scope) {
+  assert(false && "todo implement array literl codegen");
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& scope) {
+  assert(false && "todo implement index access codegen");
+}
+
 /* JIT tools */
 
 llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {

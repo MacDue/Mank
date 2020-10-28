@@ -85,6 +85,8 @@ class AstPrinter {
     void print_expr(Ast_Unary_Operation& unary);
     void print_expr(Ast_Binary_Operation& binop);
     void print_expr(Ast_Field_Access& access);
+    void print_expr(Ast_Array_Literal& array);
+    void print_expr(Ast_Index_Access& index);
 
     DepthUpdate operator -> () {
       return DepthUpdate(this);

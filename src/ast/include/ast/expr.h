@@ -48,6 +48,14 @@ struct Ast_Field_Access: Ast_Expression_Node {
   int field_index = -1;
 };
 
+struct Ast_Array_Literal: Ast_Expression_Node {
+  std::vector<Expression_Ptr> elements;
+};
+
+struct Ast_Index_Access: Ast_Expression_Node {
+  Expression_Ptr object, index;
+};
+
 using Ast_Expression_Type = std::variant<
   Ast_Block,
   Ast_If_Expr,
@@ -56,7 +64,9 @@ using Ast_Expression_Type = std::variant<
   Ast_Identifier,
   Ast_Unary_Operation,
   Ast_Binary_Operation,
-  Ast_Field_Access>;
+  Ast_Field_Access,
+  Ast_Array_Literal,
+  Ast_Index_Access>;
 
 struct Ast_Expression {
   Ast_Expression_Type v;

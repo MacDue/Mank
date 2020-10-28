@@ -134,3 +134,20 @@ void BaseAstVisitor::operator()(Ast_Field_Access& access) {
   std::visit(recur, access.object->v);
   after(access);
 }
+
+void BaseAstVisitor::operator()(Ast_Array_Literal& array) {
+  before(array);
+  visit(array);
+  for (auto& element: array.elements) {
+    std::visit(recur, element->v);
+  }
+  after(array);
+}
+
+void BaseAstVisitor::operator()(Ast_Index_Access& index) {
+  before(index);
+  visit(index);
+  std::visit(recur, index.object->v);
+  std::visit(recur, index.index->v);
+  after(index);
+}

@@ -174,13 +174,6 @@ void AstPrinter::print_expr(Ast_Identifier& ident) {
   putf("- {}", ident.name);
 }
 
-void AstPrinter::print_expr(Ast_Field_Access& access) {
-  putf("* Field access");
-  putf("- Field: {}", access.field.name);
-  putf("- Object:");
-  self->print_expr(*access.object);
-}
-
 static char const * operation_to_string(Ast_Operator operation) {
   return token_type_to_string(static_cast<TokenType>(operation));
 }
@@ -211,4 +204,30 @@ void AstPrinter::print_expr(Ast_Binary_Operation& binop) {
   self->print_expr(*binop.left);
   putf("- Right:");
   self->print_expr(*binop.right);
+}
+
+void AstPrinter::print_expr(Ast_Field_Access& access) {
+  putf("* Field access");
+  putf("- Field: {}", access.field.name);
+  putf("- Object:");
+  self->print_expr(*access.object);
+}
+
+void AstPrinter::print_expr(Ast_Array_Literal& array) {
+  putf("* Array literal");
+  putf("- {} elements", array.elements.size());
+  uint element_idx = 0;
+  for (auto& element: array.elements) {
+    indent(); putf("[{}]:", element_idx);
+    self->print_expr(*element);
+    ++element_idx;
+  }
+}
+
+void AstPrinter::print_expr(Ast_Index_Access& index) {
+  putf("* Index access");
+  putf("- Index:");
+  self->print_expr(*index.index);
+  putf("- Object:");
+  self->print_expr(*index.object);
 }

@@ -279,7 +279,8 @@ void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
       assert(pod->is_local());
 
       auto pod_meta = static_cast<SymbolMetaLocal*>(pod->meta.get());
-      return ir_builder.CreateGEP(pod_meta->alloca, make_idx_list_for_gep(idx_list));
+      return ir_builder.CreateGEP(
+        pod_meta->alloca, make_idx_list_for_gep(idx_list), access.field.name);
     }
   );
 
@@ -754,14 +755,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
       Symbol* pod_var = scope.lookup_first_name(variable_name);
       assert(pod_var && pod_var->is_local());
       auto meta = static_cast<SymbolMetaLocal*>(pod_var->meta.get());
-      llvm::Value* field_ptr = ir_builder.CreateGEP(meta->alloca,
-        make_idx_list_for_gep(idx_list));
-      return ir_builder.CreateLoad(field_ptr);
+      llvm::Value* field_ptr = ir_builder.CreateGEP(
+        meta->alloca, make_idx_list_for_gep(idx_list), access.field.name);
+      return ir_builder.CreateLoad(field_ptr, access.field.name);
     },
     pattern(_) = [&]() -> llvm::Value* {
       // _assuming_ this is an rvalue (such as a call return / expr return)
       llvm::Value* pod_temp = codegen_expression(source_object, scope);
-      return ir_builder.CreateExtractValue(pod_temp, idx_list);
+      return ir_builder.CreateExtractValue(pod_temp, idx_list, access.field.name);
     });
 }
 

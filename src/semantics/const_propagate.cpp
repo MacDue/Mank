@@ -60,8 +60,6 @@ static bool is_integer_op(Ast_Operator op) {
   if the lhs & rhs (or operand) are both constants.
 
   Otherwise it'll just pass through the monostate (which just means it's non-constant).
-
-  I think this is a monad lol
 */
 
 void ConstantVisitor::after(Ast_Binary_Operation& binop) {

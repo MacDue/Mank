@@ -76,6 +76,10 @@ struct Expression_Meta {
     Type the expression does own.
     For example an array literal owns it's type.
     (this does lead to some duplicate types)
+
+    This is just a quick workaround as something has to own the pointer.
+    A better solution would probably be to have some from of "context"
+    (like llvm does that can create or return types)
   */
   Type_Ptr owned_type = nullptr;
 

@@ -148,6 +148,19 @@ void ConstantVisitor::after(Ast_Unary_Operation& unary) {
       pattern(_, _) = [&](){ return PrimativeValue(); }));
 }
 
+void ConstantVisitor::after(Ast_Index_Access& index) {
+  if (auto index_value = index.index->meta.get_const_value()) {
+    auto object_type = extract_type(index.object->meta.type);
+    // FIXME: Will break if more indexable types added
+    auto& array_type = std::get<FixedSizeArrayType>(object_type->v);
+    // FIXME: Will break with more integer types
+    auto int_index = std::get<int32_t>(*index_value);
+    if (int_index < 0 || static_cast<size_t>(int_index) >= array_type.size) {
+      throw_sema_error_at(index.index, "out of bounds index");
+    }
+  }
+}
+
 void ConstantVisitor::visit(Ast_Literal& literal) {
   auto& value = literal.value;
   switch (literal.literal_type) {

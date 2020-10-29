@@ -518,6 +518,20 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       }
       return array.get_meta().owned_type = std::make_shared<Type>(array_type);
     },
+    pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) {
+      auto object_type = analyse_expression(*index.object, scope);
+      auto index_type = analyse_expression(*index.index, scope);
+      if (auto array_type = std::get_if<FixedSizeArrayType>(&object_type->v)) {
+        if (!match_types(index_type.get(), Primative::INTEGER.get())) {
+          throw_sema_error_at(index.index, "invalid index type {}",
+            type_to_string(index_type.get()));
+        }
+        return array_type->element_type;
+      } else {
+        throw_sema_error_at(index.object, "not an array type (is {})",
+          type_to_string(object_type.get()));
+      }
+    },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
       return Type_Ptr(nullptr);

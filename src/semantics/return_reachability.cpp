@@ -138,6 +138,10 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
       return std::any_of(array.elements.begin(), array.elements.end(),
         [&](auto& el){ return all_paths_return(*el, unreachable_stmt); });
     },
+    pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) {
+      return all_paths_return(*index.object, unreachable_stmt)
+        || all_paths_return(*index.index, unreachable_stmt);
+    },
     pattern(_) = []{
       assert(false && "fix me! unknown expression in reachability checking");
       return false;

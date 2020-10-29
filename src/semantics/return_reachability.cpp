@@ -118,12 +118,8 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
       return then_returns && else_returns;
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
-      for (auto& arg: call.arguments) {
-        if (all_paths_return(*arg, unreachable_stmt)) {
-          return true;
-        }
-      }
-      return false;
+      return std::any_of(call.arguments.begin(), call.arguments.end(),
+        [&](auto& arg) { return all_paths_return(*arg, unreachable_stmt); });
     },
     pattern(as<Ast_Unary_Operation>(arg)) = [&](auto& unary) {
       return all_paths_return(*unary.operand, unreachable_stmt);
@@ -137,6 +133,10 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
     },
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access){
       return all_paths_return(*access.object, unreachable_stmt);
+    },
+    pattern(as<Ast_Array_Literal>(arg)) = [&](auto& array) {
+      return std::any_of(array.elements.begin(), array.elements.end(),
+        [&](auto& el){ return all_paths_return(*el, unreachable_stmt); });
     },
     pattern(_) = []{
       assert(false && "fix me! unknown expression in reachability checking");

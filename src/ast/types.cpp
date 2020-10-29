@@ -29,6 +29,10 @@ std::string type_to_string(Type& type) {
       // return pod_str;
       return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
+    pattern(as<FixedSizeArrayType>(arg)) = [](auto& array_type) {
+      return formatxx::format_string("{}[{}]",
+        type_to_string(array_type.element_type.get()), array_type.size);
+    },
     pattern(_) = []{
       return "???"s;
     });

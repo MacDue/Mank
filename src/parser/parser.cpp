@@ -314,21 +314,29 @@ Expression_Ptr Parser::parse_postfix_expression() {
   return mark_ast_location(postfix_start, expr);
 }
 
+std::vector<Expression_Ptr> Parser::parse_expression_list(
+  TokenType left_delim, TokenType right_delim
+) {
+  std::vector<Expression_Ptr> expressions;
+  expect(left_delim);
+  while (!peek(right_delim)) {
+    expressions.emplace_back(this->parse_expression());
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(right_delim);
+  return expressions;
+}
+
 Expression_Ptr Parser::parse_call(Expression_Ptr target) {
   /*
     call = expression, "(", [expression_list], ")" ;
     expression_list = expression, {",", expression} ;
   */
-  expect(TokenType::LEFT_PAREN);
   Ast_Call parsed_call;
   parsed_call.callee = std::move(target);
-  while (!peek(TokenType::RIGHT_PAREN)) {
-    parsed_call.arguments.emplace_back(this->parse_expression());
-    if (!consume(TokenType::COMMA)) {
-      break;
-    }
-  }
-  expect(TokenType::RIGHT_PAREN);
+  parsed_call.arguments = this->parse_expression_list();
   return to_expr_ptr(parsed_call);
 }
 
@@ -355,6 +363,8 @@ Expression_Ptr Parser::parse_primary_expression() {
     return this->parse_if();
   } else if (auto block = parse_block()) {
     return to_expr_ptr(*block);
+  } else if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
+    return this->parse_array_literal();
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }
@@ -587,6 +597,17 @@ std::optional<Ast_Identifier> Parser::parse_identifier() {
     return Ast_Identifier(token.location, std::string(token.raw_token));
   }
   return std::nullopt;
+}
+
+Expression_Ptr Parser::parse_array_literal() {
+  /*
+    array_literal = "[" [expression_list] "]" ;
+  */
+  Ast_Array_Literal parsed_array;
+  parsed_array.elements = this->parse_expression_list(
+    TokenType::LEFT_SQUARE_BRACKET,
+    TokenType::RIGHT_SQUARE_BRACKET);
+  return to_expr_ptr(parsed_array);
 }
 
 /* Types */

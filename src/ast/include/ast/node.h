@@ -72,6 +72,13 @@ struct Expression_Meta {
   */
   std::weak_ptr<Type> type;
 
+  /*
+    Type the expression does own.
+    For example an array literal owns it's type.
+    (this does lead to some duplicate types)
+  */
+  Type_Ptr owned_type = nullptr;
+
   PrimativeValue const_value;
 
   inline bool is_const() {

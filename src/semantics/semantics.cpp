@@ -25,10 +25,15 @@ static bool match_types(Type* a, Type* b) {
   if (a == b) {
     return true;
   } else if (a && b) {
-    match(a->v, b->v)(
+    return match(a->v, b->v)(
       pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) =
         [](auto& a, auto& b) {
           return a.tag == b.tag;
+        },
+      pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) =
+        [](auto& a, auto& b) {
+          return a.size == b.size
+            && match_types(a.element_type.get(), b.element_type.get());
         },
       pattern(_, _) = []{ return false; });
   }
@@ -491,6 +496,27 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         }
       }
       throw_sema_error_at(access.object, "not a pod type");
+    },
+    pattern(as<Ast_Array_Literal>(arg)) = [&](auto& array) {
+      FixedSizeArrayType array_type;
+      array_type.size = array.elements.size();
+      if (array_type.size == 1) {
+        array_type.element_type = analyse_expression(*array.elements.at(0), scope);
+      } else if (array_type.size > 1) {
+        std::adjacent_find(array.elements.begin(), array.elements.end(),
+          [&](auto& prev, auto& next){
+            array_type.element_type = analyse_expression(*prev, scope);
+            auto next_type = analyse_expression(*next, scope);
+            if (!match_types(array_type.element_type.get(), next_type.get())) {
+              throw_sema_error_at(next, "element type {} does not match array type of {}",
+                type_to_string(next_type.get()),
+                type_to_string(array_type.element_type.get()));
+              return true;
+            }
+            return false;
+          });
+      }
+      return array.get_meta().owned_type = std::make_shared<Type>(array_type);
     },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");

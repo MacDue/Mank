@@ -65,6 +65,9 @@ private:
   Statement_Ptr parse_for_loop();
 
   /* Expressions */
+  std::vector<Expression_Ptr> parse_expression_list(
+    TokenType left_delim = TokenType::LEFT_PAREN,
+    TokenType right_delim = TokenType::RIGHT_PAREN);
   Expression_Ptr parse_expression();
   Expression_Ptr parse_postfix_expression();
   Expression_Ptr parse_call(Expression_Ptr target);
@@ -75,6 +78,7 @@ private:
   Expression_Ptr parse_binary_expression();
   Expression_Ptr parse_unary();
   Expression_Ptr parse_literal();
+  Expression_Ptr parse_array_literal();
 
   /* Simple helpers */
   bool consume(TokenType token_type);

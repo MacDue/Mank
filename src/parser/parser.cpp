@@ -306,7 +306,9 @@ Expression_Ptr Parser::parse_postfix_expression() {
     if (peek(TokenType::LEFT_PAREN)) {
       expr = this->parse_call(std::move(expr));
     } else if (peek(TokenType::DOT)) {
-      expr = this->parse_access(std::move(expr));
+      expr = this->parse_field_access(std::move(expr));
+    } else if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
+      expr = this->parse_index_access(std::move(expr));
     } else {
       break;
     }
@@ -340,7 +342,7 @@ Expression_Ptr Parser::parse_call(Expression_Ptr target) {
   return to_expr_ptr(parsed_call);
 }
 
-Expression_Ptr Parser::parse_access(Expression_Ptr object) {
+Expression_Ptr Parser::parse_field_access(Expression_Ptr object) {
   expect(TokenType::DOT);
   Ast_Field_Access parsed_access;
   parsed_access.object = std::move(object);
@@ -350,6 +352,15 @@ Expression_Ptr Parser::parse_access(Expression_Ptr object) {
   }
   parsed_access.field = *field;
   return to_expr_ptr(parsed_access);
+}
+
+Expression_Ptr Parser::parse_index_access(Expression_Ptr object) {
+  expect(TokenType::LEFT_SQUARE_BRACKET);
+  Ast_Index_Access parsed_index;
+  parsed_index.object = std::move(object);
+  parsed_index.index = this->parse_expression();
+  expect(TokenType::RIGHT_SQUARE_BRACKET);
+  return to_expr_ptr(parsed_index);
 }
 
 Expression_Ptr Parser::parse_primary_expression() {

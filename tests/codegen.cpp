@@ -298,3 +298,27 @@ TEST_CASE("Getting and setting in nested pods", "[Codegen]") {
   auto test_3 = codegen.extract_function_from_jit<int()>("test_3");
   REQUIRE(test_3() == 1337);
 }
+
+TEST_CASE("Basic array sum", "[Codegen]") {
+  auto codegen = compile(R"(
+    fun sum: i32 {
+      array := [1, 2, 3, 4, 5];
+      # Literal init not implemented (at test time)
+      # Needs manual setting
+      array[0] = 1;
+      array[1] = 2;
+      array[2] = 3;
+      array[3] = 4;
+      array[4] = 5;
+
+      sum := 0;
+      for i in 0 .. array.length {
+        sum = sum + array[i];
+      }
+      sum
+    }
+  )");
+
+  auto sum = codegen.extract_function_from_jit<int()>("sum");
+  REQUIRE(sum() == 15);
+}

@@ -93,9 +93,13 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
       }
       return static_cast<SymbolMetaCompoundType*>(pod_symbol->meta.get())->type;
     },
-    pattern(_) = []{
+    pattern(as<FixedSizeArrayType>(arg)) = [&](auto const & array_type) -> llvm::Type* {
+      return llvm::ArrayType::get(
+        map_type_to_llvm(array_type.element_type.get(), scope), array_type.size);
+    },
+    pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");
-      return static_cast<llvm::Type*>(nullptr);
+      return nullptr;
     }
   );
 }
@@ -118,6 +122,13 @@ void LLVMCodeGen::create_exit_br(llvm::BasicBlock* target) {
   if (!block_terminates_here()) {
     ir_builder.CreateBr(target);
   }
+}
+
+llvm::AllocaInst* LLVMCodeGen::get_local(Ast_Identifier& ident, Scope& scope) {
+  Symbol* variable = scope.lookup_first_name(ident);
+  assert(variable && variable->is_local());
+  auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
+  return variable_meta->alloca;
 }
 
 /* Functions */
@@ -248,7 +259,7 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
   Symbol* return_local = scope.lookup_first(FUNCTION_RETURN_LOCAL);
   assert(return_local && "return local must exist to codegen return statement!");
 
-  // If this is not a SymbolMetaLocal something is _very_ wrong!
+  // If this is not a SymbolMetaReturn something is _very_ wrong!
   auto return_meta = static_cast<SymbolMetaReturn*>(return_local->meta.get());
 
   if (return_stmt.expression) {
@@ -263,10 +274,7 @@ void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
 
   llvm::Value* target_ptr = match(assign.target->v)(
     pattern(as<Ast_Identifier>(arg)) = [&](auto& variable_name) -> llvm::Value* {
-      Symbol* variable = scope.lookup_first_name(variable_name);
-      assert(variable->is_local());
-      auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
-      return variable_meta->alloca;
+      return get_local(variable_name, scope);
     },
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) -> llvm::Value* {
       std::vector<uint> idx_list;
@@ -275,12 +283,24 @@ void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
       auto pod_variable = std::get_if<Ast_Identifier>(&source_object.v);
       assert(pod_variable && "source object must be a variable!");
 
-      Symbol* pod = scope.lookup_first_name(*pod_variable);
-      assert(pod->is_local());
-
-      auto pod_meta = static_cast<SymbolMetaLocal*>(pod->meta.get());
+      llvm::AllocaInst* pod_alloca = get_local(*pod_variable, scope);
       return ir_builder.CreateGEP(
-        pod_meta->alloca, make_idx_list_for_gep(idx_list), access.field.name);
+        pod_alloca, make_idx_list_for_gep(idx_list), access.field.name);
+    },
+    pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
+      std::vector<llvm::Value*> idx_list;
+      idx_list.push_back(create_llvm_idx(0));
+      auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
+
+      auto array_variable = std::get_if<Ast_Identifier>(&source_object.v);
+      assert(array_variable && "source object must be array variable!");
+
+      llvm::AllocaInst* array_alloca = get_local(*array_variable, scope);
+      return ir_builder.CreateGEP(
+        array_alloca, idx_list, "index_access");
+    },
+    pattern(_) = []() -> llvm::Value* {
+      assert(false && ":( looks like this assignment type is not implemented");
     }
   );
 
@@ -723,22 +743,22 @@ Ast_Expression& LLVMCodeGen::flatten_nested_pod_accesses(
   return *base_expr;
 }
 
+llvm::Value* LLVMCodeGen::create_llvm_idx(uint value) {
+  auto constexpr FIELD_IDX_BITS = 32;
+  return llvm::ConstantInt::get(llvm_context,
+    llvm::APInt(FIELD_IDX_BITS, value, value));
+}
+
 std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
   std::vector<uint> const & idx_list
 ) {
-  auto create_llvm_idx = [&](uint value){
-    auto constexpr FIELD_IDX_BITS = 32;
-    return llvm::ConstantInt::get(llvm_context,
-      llvm::APInt(FIELD_IDX_BITS, value, value));
-  };
-
   // For some reason there's no GEP that takes a list of uint (unlike extractvalue)
   // So we have to map uint -> llvm::Value* (just constant ints)
   std::vector<llvm::Value*> llvm_idx_list;
   llvm_idx_list.reserve(idx_list.size() + 1);
   llvm_idx_list.push_back(create_llvm_idx(0)); // First base index for GEP
   std::transform(idx_list.begin(), idx_list.end(), std::back_inserter(llvm_idx_list),
-    create_llvm_idx);
+    std::bind1st(std::mem_fn(&LLVMCodeGen::create_llvm_idx), this));
 
   return llvm_idx_list;
 }
@@ -747,16 +767,19 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
   using namespace mpark::patterns;
   auto pod_type = extract_type(access.object->meta.type);
 
+  // FIXME: Special case, array length.
+  if (auto array_type = std::get_if<FixedSizeArrayType>(&pod_type->v)) {
+    return create_llvm_idx(array_type->size);
+  }
+
   std::vector<uint> idx_list;
   auto& source_object = flatten_nested_pod_accesses(access, idx_list);
 
   return match(source_object.v)(
     pattern(as<Ast_Identifier>(arg)) = [&](auto& variable_name) -> llvm::Value* {
-      Symbol* pod_var = scope.lookup_first_name(variable_name);
-      assert(pod_var && pod_var->is_local());
-      auto meta = static_cast<SymbolMetaLocal*>(pod_var->meta.get());
+      llvm::AllocaInst* pod_alloca = get_local(variable_name, scope);
       llvm::Value* field_ptr = ir_builder.CreateGEP(
-        meta->alloca, make_idx_list_for_gep(idx_list), access.field.name);
+        pod_alloca, make_idx_list_for_gep(idx_list), access.field.name);
       return ir_builder.CreateLoad(field_ptr, access.field.name);
     },
     pattern(_) = [&]() -> llvm::Value* {
@@ -767,11 +790,42 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Literal& access, Scope& scope) {
-  assert(false && "todo implement array literl codegen");
+  // assert(false && "todo implement array literal codegen");
+  return nullptr;
+}
+
+Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
+  Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list
+) {
+  Ast_Expression* base_expr;
+  if (auto pior_index = std::get_if<Ast_Index_Access>(&index.object->v)) {
+    base_expr = &flatten_nested_array_indexes(*pior_index, scope, idx_list);
+  } else {
+    base_expr = index.object.get();
+  }
+  idx_list.push_back(codegen_expression(*index.index, scope));
+  return *base_expr;
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& scope) {
-  assert(false && "todo implement index access codegen");
+  // assert(false && "todo implement index access codegen");
+  using namespace mpark::patterns;
+
+  std::vector<llvm::Value*> idx_list;
+  idx_list.push_back(create_llvm_idx(0));
+  auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
+
+  // FIXME account for pods
+  return match(source_object.v)(
+    pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) -> llvm::Value* {
+      llvm::AllocaInst* array = get_local(ident, scope);
+      llvm::Value* element_ptr = ir_builder.CreateGEP(array, idx_list, "index_access");
+      return ir_builder.CreateLoad(element_ptr, "load_element");
+    },
+    pattern(_) = [&]() -> llvm::Value* {
+      assert(false && "todo");
+    }
+  );
 }
 
 /* JIT tools */

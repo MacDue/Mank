@@ -81,10 +81,14 @@ public:
   LLVMCodeGen(Ast_File& file_ast);
   void create_module();
 
+  llvm::Value* create_llvm_idx(uint value);
+
   Ast_Expression& flatten_nested_pod_accesses(
     Ast_Field_Access& access, std::vector<uint>& idx_list);
   std::vector<llvm::Value*> make_idx_list_for_gep(
     std::vector<uint> const & idx_list);
+
+  llvm::AllocaInst* get_local(Ast_Identifier& ident, Scope& scope);
 
   /* Types */
   std::vector<llvm::Type*> map_arg_types_to_llvm(
@@ -109,6 +113,9 @@ public:
   void codegen_statement(Ast_Assign& assign, Scope& scope);
   void codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope);
   void codegen_statement(Ast_For_Loop& for_loop, Scope& scope);
+
+  Ast_Expression& flatten_nested_array_indexes(
+    Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope);

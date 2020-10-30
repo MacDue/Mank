@@ -303,19 +303,27 @@ static bool is_lvalue(Ast_Expression& expr) {
   return match(expr.v)(
     pattern(as<Ast_Identifier>(_)) = []{ return true; },
     pattern(as<Ast_Field_Access>(arg)) = [](auto& access){
+      // FIXME: Hardcoded array .length logic
+      auto object_type = extract_type(access.object->meta.type);
+      if (auto array_type = std::get_if<FixedSizeArrayType>(&object_type->v)) {
+        return false;
+      }
       return is_lvalue(*access.object);
+    },
+    pattern(as<Ast_Index_Access>(arg)) = [](auto& index) {
+      return is_lvalue(*index.object);
     },
     pattern(_) = []{ return false; }
   );
 }
 
 void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
+  auto target_type = analyse_expression(*assign.target, scope);
   if (!is_lvalue(*assign.target)) {
     throw_sema_error_at(assign.target,
       "target is not an lvalue");
   }
 
-  auto target_type = analyse_expression(*assign.target, scope);
   auto expr_type = analyse_expression(*assign.expression, scope);
 
   if (!match_types(target_type.get(), expr_type.get())) {
@@ -418,6 +426,20 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   }
 }
 
+static std::pair<Ast_Argument*, int> resolve_pod_field_index(
+  Ast_Pod_Declaration& pod_type, std::string_view field_name
+) {
+  auto accessed = std::find_if(pod_type.fields.begin(), pod_type.fields.end(),
+    [&](auto& field) {
+      return field.name.name == field_name;
+    });
+  if (accessed == pod_type.fields.end()) {
+    return std::make_pair(nullptr, -1);
+  }
+  auto index = std::distance(pod_type.fields.begin(), accessed);
+  return std::make_pair(&(*accessed), index);
+}
+
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
   auto expr_type = match(expr.v)(
@@ -482,17 +504,25 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) {
       auto object_type = analyse_expression(*access.object, scope);
       if (object_type) {
-        if (auto pod_type = std::get_if<Ast_Pod_Declaration>(&object_type->v)) {
-          auto accessed = std::find_if(pod_type->fields.begin(), pod_type->fields.end(),
-            [&](auto& field) {
-              return field.name.name == access.field.name;
-            });
-          if (accessed == pod_type->fields.end()) {
-            throw_sema_error_at(access.field, "{} has no field named \"{}\"",
-              pod_type->identifier.name, access.field.name);
-          }
-          access.field_index = std::distance(pod_type->fields.begin(), accessed);
-          return accessed->type;
+        auto access_type = match(object_type->v)(
+          pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
+            auto [accessed, field_index] = resolve_pod_field_index(pod_type, access.field.name);
+            if (field_index < 0) {
+              throw_sema_error_at(access.field, "{} has no field named \"{}\"",
+                  pod_type.identifier.name, access.field.name);
+            }
+            access.field_index = field_index;
+            return accessed->type;
+          },
+          // FIXME: Hardcoded .length
+          pattern(as<FixedSizeArrayType>(_)) = [&]{
+            WHEN(access.field.name == "length") {
+              return Primative::INTEGER;
+            };
+          },
+          pattern(_) = []() -> Type_Ptr { return nullptr; });
+        if (access_type) {
+          return access_type;
         }
       }
       throw_sema_error_at(access.object, "not a pod type");

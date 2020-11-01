@@ -803,7 +803,7 @@ void LLVMCodeGen::initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& va
   uint gep_idx = 0;
   for (auto& el: values.elements) {
     llvm::Value* element_ptr = ir_builder.CreateConstGEP2_32(
-      map_type_to_llvm(array_type.get(), scope), array_ptr, 0, gep_idx);
+      map_type_to_llvm(array_type.get(), scope), array_ptr, 0, gep_idx, "array_element");
     match(el->v)(
       pattern(as<Ast_Array_Literal>(arg)) = [&](auto& nested) {
         initialize_array(element_ptr, nested, scope);

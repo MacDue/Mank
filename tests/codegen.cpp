@@ -299,18 +299,54 @@ TEST_CASE("Getting and setting in nested pods", "[Codegen]") {
   REQUIRE(test_3() == 1337);
 }
 
-TEST_CASE("Basic array sum", "[Codegen]") {
-  auto codegen = compile(R"(
-    fun sum: i32 {
-      array := [1, 2, 3, 4, 5];
-      sum := 0;
-      for i in 0 .. array.length {
-        sum = sum + array[i];
+TEST_CASE("Basic array functionality", "[Codegen]") {
+  SECTION("Array sum") {
+    auto codegen = compile(R"(
+      fun sum: i32 {
+        array := [1, 2, 3, 4, 5];
+        sum := 0;
+        for i in 0 .. array.length {
+          sum = sum + array[i];
+        }
+        sum
       }
-      sum
-    }
-  )");
+    )");
 
-  auto sum = codegen.extract_function_from_jit<int()>("sum");
-  REQUIRE(sum() == 15);
+    auto sum = codegen.extract_function_from_jit<int()>("sum");
+    REQUIRE(sum() == 15);
+  }
+
+  SECTION("Index setting") {
+    auto codegen = compile(R"(
+      fun index_get_set: i32 {
+        not_just_array_myrray := [0,1,2,3];
+
+        not_just_array_myrray[0] =
+            not_just_array_myrray[1]
+          + not_just_array_myrray[2]
+          + not_just_array_myrray[3];
+
+        not_just_array_myrray[0]
+      }
+    )");
+
+    auto index_get_set = codegen.extract_function_from_jit<int()>("index_get_set");
+    REQUIRE(index_get_set() == 1 + 2 + 3);
+  }
+
+  SECTION("Non-const array init") {
+    auto codegen = compile(R"(
+      fun num_sum: i32 (a: i32, b: i32, c: i32, d: i32) {
+        nums := [a, b, c, d];
+        sum := 0;
+        for i in 0 .. nums.length {
+          sum = sum + nums[i];
+        }
+        sum
+      }
+    )");
+
+    auto num_sum = codegen.extract_function_from_jit<int(int, int, int, int)>("num_sum");
+    REQUIRE(num_sum(1,2,3,4) == 1 + 2 + 3 + 4);
+  }
 }

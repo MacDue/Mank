@@ -62,6 +62,7 @@ private:
 
   /* Statements */
   Statement_Ptr parse_statement();
+  Statement_Ptr parse_assign(Expression_Ptr lhs);
   Statement_Ptr parse_for_loop();
 
   /* Expressions */

@@ -32,6 +32,11 @@ SourceLocation join_source_locations(SourceLocation start, SourceLocation end) {
   };
 }
 
+template<typename TAst>
+SourceLocation extract_location(TAst& ast) {
+  return std::visit([](auto& ast){ return ast.location; }, ast.v);
+}
+
 /* Top level constructs */
 
 Ast_File Parser::parse_file() {
@@ -201,11 +206,8 @@ Statement_Ptr Parser::parse_statement() {
     stmt = this->parse_for_loop();
   } else if (auto expr = this->parse_expression()) {
     bool simple_expression = false;
-    if (consume(TokenType::ASSIGN)) {
-      Ast_Assign assign;
-      assign.target = expr;
-      assign.expression = this->parse_expression();
-      stmt = to_stmt_ptr(assign);
+    if (stmt = this->parse_assign(expr)) {
+      // ^ stmt set there (null if not an assign)
     } else if (consume(TokenType::COLON)) {
       Ast_Variable_Declaration var_decl;
       if (auto ident = std::get_if<Ast_Identifier>(&expr->v)) {
@@ -238,6 +240,46 @@ Statement_Ptr Parser::parse_statement() {
     throw_error_here("unexpected \"{}\", expecting an if, expression, or return statement");
   }
   return mark_ast_location(stmt_start, stmt);
+}
+
+static std::optional<Ast_Operator>
+assign_equals_to_operator(TokenType token) {
+  switch (token) {
+    case TokenType::PLUS_EQUAL: return Ast_Operator::PLUS;
+    case TokenType::MINUS_EQUAL: return Ast_Operator::MINUS;
+    case TokenType::BITWISE_OR_EQUAL: return Ast_Operator::BITWISE_OR;
+    case TokenType::BITWISE_AND_EQUAL: return Ast_Operator::BITWISE_AND;
+    case TokenType::TIMES_EQUAL: return Ast_Operator::TIMES;
+    case TokenType::MODULO_EQUAL: return Ast_Operator::MODULO;
+    default: return std::nullopt;
+  }
+}
+
+Statement_Ptr Parser::parse_assign(Expression_Ptr lhs) {
+  auto assign_start = extract_location(*lhs);
+  Ast_Assign assign;
+  assign.target = lhs;
+  std::optional<Ast_Operator> assign_op;
+  TokenType next_token = this->lexer.peek_next_token().type;
+  if ((assign_op = assign_equals_to_operator(next_token))) {
+    /* nothing to be done :) */
+  } else if (next_token != TokenType::ASSIGN) {
+    return nullptr;
+  }
+  this->lexer.consume_token();
+
+  auto expression = this->parse_expression();
+  if (assign_op) {
+    // Desugar <op>=
+    Ast_Binary_Operation assign_binop;
+    assign_binop.operation = *assign_op;
+    assign_binop.left = lhs;
+    assign_binop.right = expression;
+    expression = to_expr_ptr(assign_binop);
+    expression = mark_ast_location(assign_start, expression);
+  }
+  assign.expression = expression;
+  return to_stmt_ptr(assign);
 }
 
 Statement_Ptr Parser::parse_for_loop() {

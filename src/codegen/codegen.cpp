@@ -312,7 +312,13 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
   llvm::Function* current_function = get_current_function();
 
   llvm::Value* initializer = nullptr;
-  if (var_decl.initializer) {
+  auto array_initializer = std::get_if<Ast_Array_Literal>(&var_decl.initializer->v);
+
+  /*
+    (Non-const) array inits are not simple expressions.
+    Best I know is they have to be compiled to a bunch of geps + stores.
+  */
+  if (var_decl.initializer && !array_initializer) {
     initializer = codegen_expression(*var_decl.initializer, scope);
   }
 
@@ -334,6 +340,8 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
 
   if (initializer) {
     ir_builder.CreateStore(initializer, alloca);
+  } else if (array_initializer) {
+    initialize_array(alloca, *array_initializer, scope);
   }
 }
 
@@ -789,9 +797,34 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
     });
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Literal& access, Scope& scope) {
-  // assert(false && "todo implement array literal codegen");
-  return nullptr;
+void LLVMCodeGen::initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& values, Scope& scope) {
+  using namespace mpark::patterns;
+  auto array_type = extract_type(values.get_type());
+  uint gep_idx = 0;
+  for (auto& el: values.elements) {
+    llvm::Value* element_ptr = ir_builder.CreateConstGEP2_32(
+      map_type_to_llvm(array_type.get(), scope), array_ptr, 0, gep_idx);
+    match(el->v)(
+      pattern(as<Ast_Array_Literal>(arg)) = [&](auto& nested) {
+        initialize_array(element_ptr, nested, scope);
+      },
+      pattern(_) = [&]{
+        llvm::Value* value = codegen_expression(*el, scope);
+        ir_builder.CreateStore(value, element_ptr);
+      }
+    );
+    ++gep_idx;
+  }
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Literal& array, Scope& scope) {
+  /* I'm not sure this is much use as feature and may remove it */
+  // auto array_type = extract_type(array.get_type());
+  // llvm::AllocaInst* array_alloca = create_entry_alloca(
+  //   get_current_function(), scope, array_type.get(), "array_temp");
+  // initialize_array(array_alloca, array, scope);
+  // return array_alloca;
+  assert(false && "array literal expressions?");
 }
 
 Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(

@@ -117,6 +117,8 @@ public:
   Ast_Expression& flatten_nested_array_indexes(
     Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);
 
+  void initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& values, Scope& scope);
+
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope);
   llvm::Value* codegen_expression(Ast_Block& block, Scope& scope);
@@ -127,7 +129,7 @@ public:
   llvm::Value* codegen_expression(Ast_Unary_Operation& unary, Scope& scope);
   llvm::Value* codegen_expression(Ast_Binary_Operation& binop, Scope& scope);
   llvm::Value* codegen_expression(Ast_Field_Access& access, Scope& scope);
-  llvm::Value* codegen_expression(Ast_Array_Literal& access, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Array_Literal& array, Scope& scope);
   llvm::Value* codegen_expression(Ast_Index_Access& index, Scope& scope);
 
   /* JIT tools */

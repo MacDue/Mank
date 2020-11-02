@@ -119,6 +119,14 @@ static std::pair<Type_Ptr, std::optional<Ast_Identifier>>
         ? symbol->type : nullptr;
       return std::make_pair(resolved_type, std::optional{unchecked.identifier});
     },
+    pattern(as<FixedSizeArrayType>(arg)) = [&](auto& unchecked_array) {
+      auto [element_type, symbol] = resolve_type(scope, *unchecked_array.element_type);
+      auto resolved_array = std::make_shared<Type>(FixedSizeArrayType{
+        .element_type = element_type,
+        .size = unchecked_array.size
+      });
+      return std::make_pair(resolved_array, symbol);
+    },
     pattern(_) = [&] {
       return std::make_pair(Type_Ptr(nullptr), std::optional<Ast_Identifier>{});
     });

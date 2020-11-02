@@ -668,10 +668,46 @@ Expression_Ptr Parser::parse_array_literal() {
 Type_Ptr Parser::parse_type() {
   auto type_name = this->parse_identifier();
   if (type_name) {
-    UncheckedType type{*type_name};
-    return std::make_shared<Type>(type);
+    auto type = std::make_shared<Type>(UncheckedType{*type_name});
+    if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
+      return this->parse_array_type(type);
+    } else {
+      return type;
+    }
   }
   return nullptr;
+}
+
+Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
+  // TODO: Array sizes should be 64bit
+  // Maybe this should not parse to a fixed array type but some more abstract type
+  // that can be checked later?
+  static auto token_to_uint = [this](Token& token) {
+    try {
+      return static_cast<uint32_t>(std::stoul(std::string(token.raw_token)));
+    } catch (...) {
+      throw_error_here("not an u32 literal");
+    }
+  };
+  FixedSizeArrayType top_array_type;
+  FixedSizeArrayType* current_array = &top_array_type;
+  expect(TokenType::LEFT_SQUARE_BRACKET);
+  while (true) {
+    auto& token = lexer.peek_next_token();
+    if (token.literal_type != PrimativeType::INTEGER) {
+      throw_error_here("expected array size");
+    }
+    current_array->size = token_to_uint(token);
+    this->lexer.consume_token();
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+    current_array->element_type = std::make_shared<Type>(FixedSizeArrayType());
+    current_array = &std::get<FixedSizeArrayType>(current_array->element_type->v);
+  }
+  current_array->element_type = base_type;
+  expect(TokenType::RIGHT_SQUARE_BRACKET);
+  return std::make_shared<Type>(top_array_type);
 }
 
 /* Helpers */

@@ -1,0 +1,29 @@
+
+
+# This is still crap and I hate it :(
+
+fun insert_sort_10: i32[10] (array: i32[10]) {
+  for j in  1 .. array.length {
+    key := array[j];
+    i := j - 1;
+
+    for _ in 0 .. i + 1 {
+      current := array[i];
+      if (current > key) {
+        array[i + 1] = current;
+        i -= 1;
+      }
+    }
+    array[i + 1] = key;
+  }
+  array
+}
+
+
+fun sort_main_2: i32 (index: i32, sort_type: i32,
+  _0: i32, _1: i32, _2: i32, _3: i32, _4: i32, _5: i32, _6: i32, _7: i32, _8: i32, _9: i32
+) {
+  array := [_0, _1, _2, _3, _4, _5, _6, _7, _8, _9];
+  sorted := insert_sort_10(array);
+  return sorted[index];
+}

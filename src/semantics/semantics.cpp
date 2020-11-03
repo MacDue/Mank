@@ -35,6 +35,10 @@ static bool match_types(Type* a, Type* b) {
           return a.size == b.size
             && match_types(a.element_type.get(), b.element_type.get());
         },
+      pattern(as<ReferenceType>(arg), as<ReferenceType>(arg)) =
+        [](auto& a, auto& b) {
+          return match_types(a.references.get(), b.references.get());
+        },
       pattern(_, _) = []{ return false; });
   }
   return false;
@@ -109,10 +113,10 @@ void Semantics::analyse_file(Ast_File& file) {
 }
 
 static std::pair<Type_Ptr, std::optional<Ast_Identifier>>
-  resolve_type(Scope& scope, Type& unresolved
+  resolve_type(Scope& scope, Type_Ptr type
 ) {
   using namespace mpark::patterns;
-  return match(unresolved.v)(
+  return match(type->v)(
     pattern(as<UncheckedType>(arg)) = [&](auto const & unchecked) {
       Symbol* symbol = scope.lookup_first_name(unchecked.identifier);
       auto resolved_type = symbol && symbol->kind == Symbol::TYPE
@@ -120,12 +124,14 @@ static std::pair<Type_Ptr, std::optional<Ast_Identifier>>
       return std::make_pair(resolved_type, std::optional{unchecked.identifier});
     },
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto& unchecked_array) {
-      auto [element_type, symbol] = resolve_type(scope, *unchecked_array.element_type);
-      auto resolved_array = std::make_shared<Type>(FixedSizeArrayType{
-        .element_type = element_type,
-        .size = unchecked_array.size
-      });
-      return std::make_pair(resolved_array, symbol);
+      auto [element_type, symbol] = resolve_type(scope, unchecked_array.element_type);
+      unchecked_array.element_type = element_type;
+      return std::make_pair(type, symbol);
+    },
+    pattern(as<ReferenceType>(arg)) = [&](auto& reference) {
+      auto [referenced_type, symbol] = resolve_type(scope, reference.references);
+      reference.references = referenced_type;
+      return std::make_pair(type, symbol);
     },
     pattern(_) = [&] {
       return std::make_pair(Type_Ptr(nullptr), std::optional<Ast_Identifier>{});
@@ -134,7 +140,7 @@ static std::pair<Type_Ptr, std::optional<Ast_Identifier>>
 
 template<typename T>
 static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
-  auto [ resolved_type, type_slot ] = resolve_type(scope, *to_resolve);
+  auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);
   if (resolved_type) {
     to_resolve = resolved_type;
   } else if (type_slot) {
@@ -296,38 +302,9 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
   }
 }
 
-// HACK! This probably should be encoded into the expression type
-static bool is_lvalue(Ast_Expression& expr) {
-  using namespace mpark::patterns;
-  /*
-    l values (that can be assigned to) are simply plain variables,
-    and access on variables.
-
-    e.g.
-    x = 1 (ok)
-    x.y = 1 (ok)
-    foo().x = 1 (fail)
-  */
-  return match(expr.v)(
-    pattern(as<Ast_Identifier>(_)) = []{ return true; },
-    pattern(as<Ast_Field_Access>(arg)) = [](auto& access){
-      // FIXME: Hardcoded array .length logic
-      auto object_type = extract_type(access.object->meta.type);
-      if (auto array_type = std::get_if<FixedSizeArrayType>(&object_type->v)) {
-        return false;
-      }
-      return is_lvalue(*access.object);
-    },
-    pattern(as<Ast_Index_Access>(arg)) = [](auto& index) {
-      return is_lvalue(*index.object);
-    },
-    pattern(_) = []{ return false; }
-  );
-}
-
 void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
   auto target_type = analyse_expression(*assign.target, scope);
-  if (!is_lvalue(*assign.target)) {
+  if (assign.target->meta.value_type != Expression_Meta::LVALUE) {
     throw_sema_error_at(assign.target,
       "target is not an lvalue");
   }
@@ -450,6 +427,7 @@ static std::pair<Ast_Argument*, int> resolve_pod_field_index(
 
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
+  auto& expr_meta = expr.meta;
   auto expr_type = match(expr.v)(
     pattern(as<Ast_Literal>(arg)) = [&](auto& lit) {
       switch (lit.literal_type) {
@@ -498,6 +476,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       if (!symbol || !symbol->is_local()) {
         throw_sema_error_at(ident, "{} not declared", ident.name);
       }
+      expr_meta.value_type = Expression_Meta::LVALUE;
       return symbol->type;
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
@@ -520,11 +499,13 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
                   pod_type.identifier.name, access.field.name);
             }
             access.field_index = field_index;
+            expr_meta.value_type = access.object->meta.value_type;
             return accessed->type;
           },
           // FIXME: Hardcoded .length
           pattern(as<FixedSizeArrayType>(_)) = [&]{
             WHEN(access.field.name == "length") {
+              expr_meta.value_type = Expression_Meta::RVALUE;
               return Primative::INTEGER;
             };
           },
@@ -564,6 +545,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
           throw_sema_error_at(index.index, "invalid index type {}",
             type_to_string(index_type.get()));
         }
+        expr_meta.value_type = index.object->meta.value_type;
         return array_type->element_type;
       } else {
         throw_sema_error_at(index.object, "not an array type (is {})",

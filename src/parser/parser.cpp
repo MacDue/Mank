@@ -666,6 +666,13 @@ Expression_Ptr Parser::parse_array_literal() {
 /* Types */
 
 Type_Ptr Parser::parse_type() {
+  if (peek(TokenType::REF)) {
+    return this->parse_ref_type();
+  }
+  return this->parse_base_type();
+}
+
+Type_Ptr Parser::parse_base_type() {
   auto type_name = this->parse_identifier();
   if (type_name) {
     auto type = std::make_shared<Type>(UncheckedType{*type_name});
@@ -676,6 +683,13 @@ Type_Ptr Parser::parse_type() {
     }
   }
   return nullptr;
+}
+
+Type_Ptr Parser::parse_ref_type() {
+  ReferenceType ref_type;
+  expect(TokenType::REF);
+  ref_type.references = this->parse_base_type();
+  return std::make_shared<Type>(ref_type);
 }
 
 Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {

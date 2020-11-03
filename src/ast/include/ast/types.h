@@ -4,6 +4,7 @@
 
 #include "ast/construct.h"
 #include "ast/array_type.h"
+#include "ast/reference_type.h"
 #include "ast/primative_types.h"
 
 struct UncheckedType {
@@ -16,7 +17,8 @@ using Type_Type = std::variant<
   PrimativeType,
   Ast_Function_Declaration,
   Ast_Pod_Declaration,
-  FixedSizeArrayType>;
+  FixedSizeArrayType,
+  ReferenceType>;
 
 struct Type {
   Type_Type v;

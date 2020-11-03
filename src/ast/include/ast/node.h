@@ -54,7 +54,20 @@ enum class Ast_Operator {
 
 /* Expression meta stuff */
 
+struct ExpressionType {
+  Type_Ptr type;
+  enum ValueType {
+    LVALUE,
+    RVALUE
+  } value_type = RVALUE;
+};
+
 struct Expression_Meta {
+  enum ValueType {
+    RVALUE,
+    LVALUE
+  } value_type = RVALUE;
+
   /*
     The expression must not own it's resolved type or it can create cycles!
 

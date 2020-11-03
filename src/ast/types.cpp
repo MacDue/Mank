@@ -33,6 +33,10 @@ std::string type_to_string(Type& type) {
       return formatxx::format_string("{}[{}]",
         type_to_string(array_type.element_type.get()), array_type.size);
     },
+    pattern(as<ReferenceType>(arg)) = [](auto& ref_type) {
+      return formatxx::format_string("ref {}",
+        type_to_string(ref_type.references.get()));
+    },
     pattern(_) = []{
       return "???"s;
     });

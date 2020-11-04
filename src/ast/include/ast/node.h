@@ -72,6 +72,12 @@ struct Expression_Meta {
   */
   std::weak_ptr<Type> type;
 
+  // If this expression can appear on the left of an assignment
+  enum ValueType {
+    LVALUE,
+    RVALUE
+  } value_type = RVALUE;
+
   /*
     Type the expression does own.
     For example an array literal owns it's type.

@@ -359,12 +359,12 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   llvm::Value* end_value = codegen_expression(*for_loop.end_range, scope);
 
   auto& body = for_loop.body;
-  auto& loop_value_symbol = body.scope.add(Symbol(
-    for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
+  auto& loop_variable_symbol = body.scope.add(Symbol(
+    for_loop.loop_variable, for_loop.type, Symbol::LOCAL));
 
   llvm::Function* current_function = get_current_function();
-  llvm::AllocaInst* loop_value = create_entry_alloca(current_function, &loop_value_symbol);
-  ir_builder.CreateStore(start_value, loop_value);
+  llvm::AllocaInst* loop_variable = create_entry_alloca(current_function, &loop_variable_symbol);
+  ir_builder.CreateStore(start_value, loop_variable);
 
   auto loop_range_type = extract_type(for_loop.end_range->meta.type);
   auto& loop_end_range_symbol = body.scope.add(Symbol(
@@ -388,7 +388,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   /* For loop check -- should stop or keep looping */
   Ast_Binary_Operation loop_cond;
   loop_cond.operation = Ast_Operator::LESS_THAN;
-  loop_cond.left = to_expr_ptr(for_loop.loop_value);
+  loop_cond.left = to_expr_ptr(for_loop.loop_variable);
   loop_cond.right = make_ident(LOOP_RANGE_END);
   loop_cond.left->meta.type = loop_cond.right->meta.type = for_loop.start_range->meta.type;
 
@@ -417,12 +417,12 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
 
   Ast_Binary_Operation next_loop_value;
   next_loop_value.operation = Ast_Operator::PLUS;
-  next_loop_value.left = to_expr_ptr(for_loop.loop_value);
+  next_loop_value.left = to_expr_ptr(for_loop.loop_variable);
   next_loop_value.right = loop_inc_literal;
   next_loop_value.left->meta.type = next_loop_value.right->meta.type = for_loop.start_range->meta.type;
 
   Ast_Assign inc_loop;
-  inc_loop.target = to_expr_ptr(for_loop.loop_value);
+  inc_loop.target = to_expr_ptr(for_loop.loop_variable);
   inc_loop.expression = to_expr_ptr(next_loop_value);
 
   codegen_statement(inc_loop, body.scope);

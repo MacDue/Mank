@@ -289,15 +289,15 @@ Statement_Ptr Parser::parse_for_loop() {
   */
   if (consume(TokenType::FOR)) {
     Ast_For_Loop for_loop;
-    auto loop_value = this->parse_identifier();
-    if (!loop_value) {
+    auto loop_variable = this->parse_identifier();
+    if (!loop_variable) {
       throw_error_here("expected identifier (loop variable)");
     }
-    for_loop.loop_value = *loop_value;
+    for_loop.loop_variable = *loop_variable;
     if (consume(TokenType::COLON)) {
-      for_loop.value_type = this->parse_type();
-      if (!for_loop.value_type) {
-        throw_error_here("expected loop value type");
+      for_loop.type = this->parse_type();
+      if (!for_loop.type) {
+        throw_error_here("expected loop variable type");
       }
     }
 

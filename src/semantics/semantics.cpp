@@ -304,19 +304,19 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
 
 void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   auto start_range_type = analyse_expression(*for_loop.start_range, scope);
-  if (for_loop.value_type) {
-    resolve_type_or_fail(scope, for_loop.value_type, "undeclared loop type {}");
-    if (!match_types(for_loop.value_type.get(), start_range_type.get())) {
+  if (for_loop.type) {
+    resolve_type_or_fail(scope, for_loop.type, "undeclared loop type {}");
+    if (!match_types(for_loop.type.get(), start_range_type.get())) {
       throw_sema_error_at(for_loop.start_range,
-        "start range type type {} does not match loop value type {}",
-        type_to_string(start_range_type.get()), type_to_string(for_loop.value_type.get()));
+        "start range type type {} does not match loop variable type {}",
+        type_to_string(start_range_type.get()), type_to_string(for_loop.type.get()));
     }
   } else {
     if (!start_range_type) {
-      throw_sema_error_at(for_loop.start_range, "loop value cannot be type {}",
+      throw_sema_error_at(for_loop.start_range, "loop variable cannot be type {}",
         type_to_string(start_range_type.get()));
     }
-    for_loop.value_type = start_range_type;
+    for_loop.type = start_range_type;
   }
 
   auto end_range_type = analyse_expression(*for_loop.end_range, scope);
@@ -327,10 +327,9 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
       type_to_string(end_range_type.get()), type_to_string(start_range_type.get()));
   }
 
-  emit_warning_if_shadows(for_loop.loop_value, scope, "loop value shadows existing symbol");
+  emit_warning_if_shadows(for_loop.loop_variable, scope, "loop variable shadows existing symbol");
   auto& body = for_loop.body;
-  body.scope.add(Symbol(
-    for_loop.loop_value, for_loop.value_type, Symbol::LOCAL));
+  body.scope.add(Symbol(for_loop.loop_variable, for_loop.type, Symbol::LOCAL));
 
   auto body_type = analyse_block(body, scope);
   if (body_type) {

@@ -25,8 +25,8 @@ struct Ast_Variable_Declaration: Ast_Node {
 };
 
 struct Ast_For_Loop: Ast_Node {
-  Ast_Identifier loop_value;
-  Type_Ptr value_type;
+  Type_Ptr type; // of loop variable
+  Ast_Identifier loop_variable;
   Expression_Ptr start_range;
   Expression_Ptr end_range;
   Ast_Block body;

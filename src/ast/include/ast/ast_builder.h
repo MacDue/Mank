@@ -297,8 +297,8 @@ inline Statement_Ptr make_for(
   Ast_Block loop_body
 ) {
   Ast_For_Loop for_loop;
-  for_loop.loop_value.name = loop_value;
-  for_loop.value_type = value_type;
+  for_loop.loop_variable.name = loop_value;
+  for_loop.type = value_type;
   for_loop.start_range = start_range;
   for_loop.end_range = end_range;
   for_loop.body = loop_body;

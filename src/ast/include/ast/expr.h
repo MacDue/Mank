@@ -77,4 +77,20 @@ struct Ast_Expression {
     expr.meta = &meta;
     v = std::move(expr);
   }
+
+  inline bool is_lvalue() {
+    return meta.value_type == Expression_Meta::LVALUE;
+  }
+
+  inline bool is_rvalue() {
+    return !is_lvalue();
+  }
+
+  inline void set_value_type(Expression_Meta::ValueType value_type) {
+    meta.value_type = value_type;
+  }
+
+  inline void inherit_value_type(Ast_Expression const & child) {
+    set_value_type(child.meta.value_type);
+  }
 };

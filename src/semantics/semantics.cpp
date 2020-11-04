@@ -3,42 +3,11 @@
 
 #include <mpark/patterns.hpp>
 
-#include "ast/types.h"
+#include "sema/types.h"
 #include "sema/semantics.h"
 #include "sema/sema_errors.h"
 #include "sema/const_propagate.h"
 #include "sema/return_reachability.h"
-
-#define make_primative_type(type_tag) \
-  static auto type_tag = std::make_shared<Type>(PrimativeType(PrimativeType::Tag::type_tag))
-
-namespace Primative {
-  make_primative_type(FLOAT32);
-  make_primative_type(FLOAT64);
-  make_primative_type(INTEGER);
-  make_primative_type(STRING);
-  make_primative_type(BOOL);
-};
-
-static bool match_types(Type* a, Type* b) {
-  using namespace mpark::patterns;
-  if (a == b) {
-    return true;
-  } else if (a && b) {
-    return match(a->v, b->v)(
-      pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) =
-        [](auto& a, auto& b) {
-          return a.tag == b.tag;
-        },
-      pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) =
-        [](auto& a, auto& b) {
-          return a.size == b.size
-            && match_types(a.element_type.get(), b.element_type.get());
-        },
-      pattern(_, _) = []{ return false; });
-  }
-  return false;
-}
 
 Symbol* Semantics::emit_warning_if_shadows(
   Ast_Identifier& ident, Scope& scope, std::string warning
@@ -105,39 +74,6 @@ void Semantics::analyse_file(Ast_File& file) {
   for (auto& func_type: file.functions) {
     auto& func = std::get<Ast_Function_Declaration>(func_type->v);
     analyse_function_body(func);
-  }
-}
-
-using TypeResolution = std::pair<Type_Ptr, std::optional<Ast_Identifier>>;
-
-static TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
-  using namespace mpark::patterns;
-  return match(type->v)(
-    pattern(as<UncheckedType>(arg)) = [&](auto const & unchecked) {
-      Symbol* symbol = scope.lookup_first_name(unchecked.identifier);
-      auto resolved_type = symbol && symbol->kind == Symbol::TYPE
-        ? symbol->type : nullptr;
-      return std::make_pair(resolved_type, std::optional{unchecked.identifier});
-    },
-    pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
-      auto [element_type, symbol] = resolve_type(scope, array_type.element_type);
-      array_type.element_type = element_type;
-      return std::make_pair(type, symbol);
-    },
-    pattern(_) = [&] {
-      return std::make_pair(Type_Ptr(nullptr), std::optional<Ast_Identifier>{});
-    });
-}
-
-template<typename T>
-static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
-  auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);
-  if (resolved_type) {
-    to_resolve = resolved_type;
-  } else if (type_slot) {
-    throw_sema_error_at(*type_slot, error_format);
-  } else {
-    IMPOSSIBLE();
   }
 }
 
@@ -293,13 +229,9 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
   }
 }
 
-static bool is_lvalue(Ast_Expression const & expr) {
-  return expr.meta.value_type == Expression_Meta::LVALUE;
-}
-
 void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
   auto target_type = analyse_expression(*assign.target, scope);
-  if (!is_lvalue(*assign.target)) {
+  if (!assign.target->is_lvalue()) {
     throw_sema_error_at(assign.target,
       "target is not an lvalue");
   }
@@ -420,18 +352,6 @@ static std::pair<Ast_Argument*, int> resolve_pod_field_index(
   return std::make_pair(&(*accessed), index);
 }
 
-static inline void propagate_value_type(
-  Ast_Expression& parent, Ast_Expression const & child
-) {
-  parent.meta.value_type = child.meta.value_type;
-}
-
-static inline void mark_as_value_type(
-  Ast_Expression& expression, Expression_Meta::ValueType value_type
-) {
-  expression.meta.value_type = value_type;
-}
-
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
   auto expr_type = match(expr.v)(
@@ -482,7 +402,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       if (!symbol || !symbol->is_local()) {
         throw_sema_error_at(ident, "{} not declared", ident.name);
       }
-      mark_as_value_type(expr, Expression_Meta::LVALUE);
+      expr.set_value_type(Expression_Meta::LVALUE);
       return symbol->type;
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
@@ -505,7 +425,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
                   pod_type.identifier.name, access.field.name);
             }
             access.field_index = field_index;
-            propagate_value_type(expr, *access.object);
+            expr.inherit_value_type(*access.object);
             return accessed->type;
           },
           // FIXME: Hardcoded .length
@@ -550,7 +470,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
           throw_sema_error_at(index.index, "invalid index type {}",
             type_to_string(index_type.get()));
         }
-        propagate_value_type(expr, *index.object);
+        expr.inherit_value_type(*index.object);
         return array_type->element_type;
       } else {
         throw_sema_error_at(index.object, "not an array type (is {})",

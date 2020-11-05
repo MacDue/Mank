@@ -270,14 +270,19 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
           var_decl.variable.name);
       }
       if (var_decl.initializer) {
-        auto initializer_type = analyse_expression(*var_decl.initializer, scope);
+        // Don't implicitly duplicate references
+        auto initializer_type = remove_reference(analyse_expression(*var_decl.initializer, scope));
         if (!var_decl.type) {
           if (!initializer_type) {
             throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
               type_to_string(initializer_type.get()));
           }
-          // Don't implicitly duplicate references
-          var_decl.type = remove_reference(initializer_type);
+          var_decl.type = initializer_type;
+        } else if (auto ref_type = std::get_if<ReferenceType>(&var_decl.type->v)) {
+          // Fill in reference type
+          if (!ref_type->references) {
+            ref_type->references = initializer_type;
+          }
         }
       } else {
         emit_warning_at(var_decl, "default initialization is currently unimplemented");

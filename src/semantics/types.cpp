@@ -40,7 +40,7 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
       auto [element_type, symbol] = resolve_type(scope, array_type.element_type);
       array_type.element_type = element_type;
-      return std::make_pair(type, symbol);
+      return std::make_pair(element_type ? type : nullptr, symbol);
     },
     pattern(as<ReferenceType>(arg)) = [&](auto& reference_type) {
       auto [referenced_type, symbol] = resolve_type(scope, reference_type.references);

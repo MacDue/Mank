@@ -792,7 +792,6 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
-  using namespace mpark::patterns;
   auto pod_type = extract_type(access.object->meta.type);
 
   // FIXME: Special case, array length.
@@ -803,18 +802,15 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
   std::vector<uint> idx_list;
   auto& source_object = flatten_nested_pod_accesses(access, idx_list);
 
-  return match(source_object.v)(
-    pattern(as<Ast_Identifier>(arg)) = [&](auto& variable_name) -> llvm::Value* {
-      llvm::AllocaInst* pod_alloca = get_local(variable_name, scope);
-      llvm::Value* field_ptr = ir_builder.CreateGEP(
-        pod_alloca, make_idx_list_for_gep(idx_list), access.field.name);
-      return ir_builder.CreateLoad(field_ptr, access.field.name);
-    },
-    pattern(_) = [&]() -> llvm::Value* {
-      // _assuming_ this is an rvalue (such as a call return / expr return)
-      llvm::Value* pod_temp = codegen_expression(source_object, scope);
-      return ir_builder.CreateExtractValue(pod_temp, idx_list, access.field.name);
-    });
+  if (source_object.is_lvalue()) {
+    llvm::Value* source_address = address_of(source_object, scope);
+    llvm::Value* field_ptr = ir_builder.CreateGEP(
+      source_address, make_idx_list_for_gep(idx_list), access.field.name);
+    return ir_builder.CreateLoad(field_ptr, access.field.name);
+  } else {
+    llvm::Value* pod_temp = codegen_expression(source_object, scope);
+    return ir_builder.CreateExtractValue(pod_temp, idx_list, access.field.name);
+  }
 }
 
 void LLVMCodeGen::initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& values, Scope& scope) {
@@ -861,24 +857,17 @@ Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& scope) {
-  // assert(false && "todo implement index access codegen");
-  using namespace mpark::patterns;
-
   std::vector<llvm::Value*> idx_list;
   idx_list.push_back(create_llvm_idx(0));
   auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
 
-  // FIXME account for pods
-  return match(source_object.v)(
-    pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) -> llvm::Value* {
-      llvm::AllocaInst* array = get_local(ident, scope);
-      llvm::Value* element_ptr = ir_builder.CreateGEP(array, idx_list, "index_access");
-      return ir_builder.CreateLoad(element_ptr, "load_element");
-    },
-    pattern(_) = [&]() -> llvm::Value* {
-      assert(false && "todo");
-    }
-  );
+  if (source_object.is_lvalue()) {
+    llvm::Value* source_address = address_of(source_object, scope);
+    llvm::Value* element_ptr = ir_builder.CreateGEP(source_address, idx_list, "index_access");
+    return ir_builder.CreateLoad(element_ptr, "load_element");
+  } else {
+    assert(false && "todo");
+  }
 }
 
 /* JIT tools */

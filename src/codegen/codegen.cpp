@@ -267,7 +267,8 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
   auto return_meta = static_cast<SymbolMetaReturn*>(return_local->meta.get());
 
   if (return_stmt.expression) {
-    llvm::Value* return_value = codegen_expression(*return_stmt.expression, scope);
+    llvm::Value* return_value = codegen_bind(
+      *return_stmt.expression, return_local->type.get(), scope);
     ir_builder.CreateStore(return_value, return_meta->alloca);
   }
   ir_builder.CreateBr(return_meta->return_block);
@@ -290,11 +291,7 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
     Best I know is they have to be compiled to a bunch of geps + stores.
   */
   if (var_decl.initializer && !array_initializer) {
-    if (is_reference_type(var_decl.type.get())) {
-      initializer = address_of(*var_decl.initializer, scope);
-    } else {
-      initializer = codegen_expression(*var_decl.initializer, scope);
-    }
+    initializer = codegen_bind(*var_decl.initializer, var_decl.type.get(), scope);
   }
 
   /*
@@ -452,6 +449,16 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
   );
 }
 
+llvm::Value* LLVMCodeGen::codegen_bind(
+  Ast_Expression& expr, Type* bound_to, Scope& scope
+) {
+  if (is_reference_type(bound_to)) {
+    return address_of(expr, scope);
+  } else {
+    return codegen_expression(expr, scope);
+  }
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope) {
   return std::visit([&](auto& expr) {
     return codegen_expression(expr, scope);
@@ -561,13 +568,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
 
   uint arg_idx = 0;
   for (auto& arg: call.arguments) {
-    llvm::Value* arg_value = nullptr;
-    if (is_reference_type(function_type.arguments.at(arg_idx).type.get())) {
-      arg_value = address_of(*arg, scope);
-    } else {
-      arg_value = codegen_expression(*arg, scope);
-    }
-    call_args.push_back(arg_value);
+    auto arg_type = function_type.arguments.at(arg_idx).type.get();
+    call_args.push_back(codegen_bind(*arg, arg_type, scope));
     ++arg_idx;
   }
 

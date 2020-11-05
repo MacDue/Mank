@@ -147,7 +147,8 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
-    if (body_type && match_types(body_type.get(), func.return_type.get())) {
+    if (body_type) {
+      assert_valid_binding({}, expected_return, final_expr.get());
       /* Desugar implict return for codegen + return checking ease */
       func.body.has_final_expr = false;
       Ast_Return_Statement implicit_return;
@@ -158,11 +159,6 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       func.body.statements.pop_back();
       func.body.statements.emplace_back(
         std::make_shared<Ast_Statement>(implicit_return));
-    } else if (body_type) {
-      // If the type is not void (like an if statement or something)
-      throw_sema_error_at(final_expr,
-        "implicit return of type {} does not match expected type {}",
-        type_to_string(body_type.get()), type_to_string(func.return_type.get()));
     }
   }
 
@@ -264,11 +260,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       } else if (expected_return) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
-      if (!match_types(expr_type.get(), expected_return)) {
-        throw_sema_error_at(return_stmt.expression,
-          "invalid return type, expected {}, was {}",
-          type_to_string(expected_return), type_to_string(expr_type.get()));
-      }
+      assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get());
     },
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto& var_decl) {
       if (var_decl.type) {

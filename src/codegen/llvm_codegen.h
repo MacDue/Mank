@@ -120,6 +120,7 @@ public:
   void initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& values, Scope& scope);
 
   llvm::Value* address_of(Ast_Expression& expr, Scope& scope);
+  llvm::Value* codegen_bind(Ast_Expression& expr, Type* bound_to, Scope& scope);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope);

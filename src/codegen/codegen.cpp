@@ -797,7 +797,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
   auto pod_type = extract_type(access.object->meta.type);
 
   // FIXME: Special case, array length.
-  if (auto array_type = std::get_if<FixedSizeArrayType>(&pod_type->v)) {
+  if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(pod_type)) {
     return create_llvm_idx(array_type->size);
   }
 

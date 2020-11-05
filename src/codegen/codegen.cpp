@@ -442,8 +442,12 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
       return ir_builder.CreateGEP(
         source_address, idx_list, "index_access");
     },
+    pattern(as<Ast_Call>(arg)) = [&](auto& call) -> llvm::Value* {
+      // Must be a reference returned (so that is an address)
+      return codegen_expression(call, scope);
+    },
     pattern(_) = []() -> llvm::Value* {
-      assert("fix me! address_of not implemented for lvalue");
+      assert(false && "fix me! address_of not implemented for lvalue");
       return nullptr;
     }
   );

@@ -589,6 +589,11 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   }
 
   call.callee->meta.type = called_function->type;
+
+  if (is_reference_type(function_type.return_type.get())) {
+    call.get_meta().value_type = Expression_Meta::LVALUE;
+  }
+
   // FINALLY we've checked everything in the call!
   return function_type.return_type;
 }

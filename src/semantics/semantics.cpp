@@ -147,7 +147,7 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
-    if (match_types(body_type.get(), func.return_type.get())) {
+    if (body_type && match_types(body_type.get(), func.return_type.get())) {
       /* Desugar implict return for codegen + return checking ease */
       func.body.has_final_expr = false;
       Ast_Return_Statement implicit_return;

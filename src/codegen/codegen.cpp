@@ -362,7 +362,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   loop_cond.operation = Ast_Operator::LESS_THAN;
   loop_cond.left = to_expr_ptr(for_loop.loop_variable);
   loop_cond.right = make_ident(LOOP_RANGE_END);
-  loop_cond.left->meta.type = loop_cond.right->meta.type = for_loop.start_range->meta.type;
+  loop_cond.left->meta.type = loop_cond.right->meta.type = loop_range_type;
 
   llvm::Value* loop_check = codegen_expression(loop_cond, body.scope);
   ir_builder.CreateCondBr(loop_check, for_body, for_end);
@@ -391,7 +391,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   next_loop_value.operation = Ast_Operator::PLUS;
   next_loop_value.left = to_expr_ptr(for_loop.loop_variable);
   next_loop_value.right = loop_inc_literal;
-  next_loop_value.left->meta.type = next_loop_value.right->meta.type = for_loop.start_range->meta.type;
+  next_loop_value.left->meta.type = next_loop_value.right->meta.type = loop_range_type;
 
   Ast_Assign inc_loop;
   inc_loop.target = to_expr_ptr(for_loop.loop_variable);

@@ -307,7 +307,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
       throw_sema_error_at(for_loop.start_range, "loop variable cannot be type {}",
         type_to_string(start_range_type.get()));
     }
-    for_loop.type = start_range_type;
+    for_loop.type = remove_reference(start_range_type);
   }
 
   auto end_range_type = analyse_expression(*for_loop.end_range, scope);

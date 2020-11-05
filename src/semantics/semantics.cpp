@@ -364,7 +364,11 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       }
     },
     pattern(as<Ast_Block>(arg)) = [&](auto& block) {
-      return analyse_block(block, scope);
+      auto block_type = analyse_block(block, scope);
+      if (is_reference_type(block_type.get())) {
+        expr.set_value_type(Expression_Meta::LVALUE);
+      }
+      return block_type;
     },
     pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_expr){
       auto cond_type = analyse_expression(*if_expr.cond, scope);
@@ -380,12 +384,16 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             "type of then block {} does not match else block {}",
             type_to_string(then_type.get()), type_to_string(else_type.get()));
         }
+        if (is_reference_type(then_type.get()) && is_reference_type(else_type.get()) ) {
+          expr.set_value_type(Expression_Meta::LVALUE);
+        }
       } else if (then_type) {
         auto final_expr = std::get<Ast_Block>(if_expr.then_block->v).get_final_expr();
         throw_sema_error_at(final_expr,
           "if expression cannot evaluate to {} without a matching else",
           type_to_string(then_type.get()));
       }
+
       return then_type;
     },
     pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) {

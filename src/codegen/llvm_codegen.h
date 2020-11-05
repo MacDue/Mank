@@ -123,9 +123,9 @@ public:
   llvm::Value* codegen_bind(Ast_Expression& expr, Type* bound_to, Scope& scope);
 
   /* Expressions */
-  llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope);
-  llvm::Value* codegen_expression(Ast_Block& block, Scope& scope);
-  llvm::Value* codegen_expression(Ast_If_Expr& if_stmt, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);
+  llvm::Value* codegen_expression(Ast_Block& block, Scope& scope, bool as_lvalue = false);
+  llvm::Value* codegen_expression(Ast_If_Expr& if_stmt, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_Call& call, Scope& scope);
   llvm::Value* codegen_expression(Ast_Literal& literal, Scope& scope);
   llvm::Value* codegen_expression(Ast_Identifier& ident, Scope& scope);

@@ -446,6 +446,10 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
       // Must be a reference returned (so that is an address)
       return codegen_expression(call, scope);
     },
+    pattern(anyof(as<Ast_Block>(arg), as<Ast_If_Expr>(arg))) =
+    [&](auto& block_expr) -> llvm::Value* {
+      return codegen_expression(block_expr, scope, true);
+    },
     pattern(_) = []() -> llvm::Value* {
       assert(false && "fix me! address_of not implemented for lvalue");
       return nullptr;
@@ -463,13 +467,18 @@ llvm::Value* LLVMCodeGen::codegen_bind(
   }
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue) {
   return std::visit([&](auto& expr) {
+    using T = std::decay_t<decltype(expr)>;
+    // Kinda a hack
+    if constexpr (std::is_same_v<T, Ast_Block> || std::is_same_v<T, Ast_If_Expr>) {
+      return codegen_expression(expr, scope, as_lvalue);
+    }
     return codegen_expression(expr, scope);
   }, expr.v);
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope, bool as_lvalue) {
   llvm::Function* current_function = get_current_function();
 
   (void) scope; // Not needed
@@ -498,13 +507,19 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Block& block, Scope& scope) {
       llvm_context, "block_eval", current_function);
     create_exit_br(block_eval);
     ir_builder.SetInsertPoint(block_eval);
-    return codegen_expression(*final_expr, block.scope);
+
+    if (!as_lvalue) {
+      return codegen_expression(*final_expr, block.scope);
+    } else {
+      assert(block.get_meta().value_type == Expression_Meta::LVALUE);
+      return address_of(*final_expr, block.scope);
+    }
   }
 
   return nullptr;
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope, bool as_lvalue) {
   llvm::Function* current_function = get_current_function();
   llvm::Value* condition = codegen_expression(*if_expr.cond, scope);
 
@@ -526,7 +541,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope)
 
   /* then */
   ir_builder.SetInsertPoint(then_block);
-  llvm::Value* then_value = codegen_expression(*if_expr.then_block, scope);
+  llvm::Value* then_value = codegen_expression(*if_expr.then_block, scope, as_lvalue);
   create_exit_br(end_block);
   // So the incoming edges into the Phi node are correct
   // As nesting ifs change the current basic block.
@@ -536,10 +551,9 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope)
   llvm::Value* else_value = nullptr;
   if (if_expr.has_else) {
     // Now add the else block!
-
     current_function->getBasicBlockList().push_back(else_block);
     ir_builder.SetInsertPoint(else_block);
-    else_value = codegen_expression(*if_expr.else_block, scope);
+    else_value = codegen_expression(*if_expr.else_block, scope, as_lvalue);
     create_exit_br(end_block);
     else_block = ir_builder.GetInsertBlock();
   }
@@ -550,6 +564,9 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope)
 
   if (then_value && else_value) {
     auto if_type = extract_type(if_expr.then_block->meta.type);
+    if (!as_lvalue) {
+      if_type = remove_reference(if_type);
+    }
     llvm::PHINode* phi = ir_builder.CreatePHI(
       map_type_to_llvm(if_type.get(), scope), 2, "if_expr_selection");
     phi->addIncoming(then_value, then_block);

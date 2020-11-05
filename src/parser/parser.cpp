@@ -666,6 +666,16 @@ Expression_Ptr Parser::parse_array_literal() {
 /* Types */
 
 Type_Ptr Parser::parse_type() {
+  // Type modifiers
+  if (consume(TokenType::REF)) {
+    ReferenceType ref_type;
+    ref_type.references = this->parse_base_type();
+    return std::make_shared<Type>(ref_type);
+  }
+  return this->parse_base_type();
+}
+
+Type_Ptr Parser::parse_base_type() {
   auto type_name = this->parse_identifier();
   if (type_name) {
     auto type = std::make_shared<Type>(UncheckedType{*type_name});

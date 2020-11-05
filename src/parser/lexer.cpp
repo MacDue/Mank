@@ -145,6 +145,8 @@ static TokenType ident_to_token(std::string_view ident) {
     return TokenType::TRUE;
   } else if (ident == "false") {
     return TokenType::FALSE;
+  } else if (ident == "ref") {
+    return TokenType::REF;
   } else {
     return TokenType::IDENT;
   }

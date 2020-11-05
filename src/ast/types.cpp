@@ -7,17 +7,17 @@
 
 /* String helpers */
 
-std::string type_to_string(Type& type) {
+std::string type_to_string(Type const & type) {
   using namespace std::string_literals;
   using namespace mpark::patterns;
   return match(type.v)(
-    pattern(as<UncheckedType>(arg)) = [](auto& unchecked_type) {
+    pattern(as<UncheckedType>(arg)) = [](auto const & unchecked_type) {
       return formatxx::format_string("unchecked type - {}", unchecked_type.identifier.name);
     },
-    pattern(as<PrimativeType>(arg)) = [](auto& primative_type) {
+    pattern(as<PrimativeType>(arg)) = [](auto const & primative_type) {
       return std::string(primative_type.name());
     },
-    pattern(as<Ast_Pod_Declaration>(arg)) = [](auto& pod_type) {
+    pattern(as<Ast_Pod_Declaration>(arg)) = [](auto const & pod_type) {
       // std::string pod_str = "pod {";
       // for (auto it = pod_type.members.begin(); it != pod_type.members.end(); it++) {
       //   if (it != pod_type.members.begin()) {
@@ -29,16 +29,20 @@ std::string type_to_string(Type& type) {
       // return pod_str;
       return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
-    pattern(as<FixedSizeArrayType>(arg)) = [](auto& array_type) {
+    pattern(as<FixedSizeArrayType>(arg)) = [](auto const & array_type) {
       return formatxx::format_string("{}[{}]",
         type_to_string(array_type.element_type.get()), array_type.size);
+    },
+    pattern(as<ReferenceType>(arg)) = [](auto const & reference_type) {
+      return formatxx::format_string("reference to {}",
+        type_to_string(reference_type.references.get()));
     },
     pattern(_) = []{
       return "???"s;
     });
 }
 
-std::string type_to_string(Type* type) {
+std::string type_to_string(Type const * type) {
   if (type) {
     return type_to_string(*type);
   } else {

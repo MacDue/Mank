@@ -10,13 +10,18 @@ struct UncheckedType {
   Ast_Identifier identifier;
 };
 
+struct ReferenceType {
+  Type_Ptr references;
+};
+
 // (Great name! The type of the type that represents our types...)
 using Type_Type = std::variant<
   UncheckedType,
   PrimativeType,
   Ast_Function_Declaration,
   Ast_Pod_Declaration,
-  FixedSizeArrayType>;
+  FixedSizeArrayType,
+  ReferenceType>;
 
 struct Type {
   Type_Type v;
@@ -25,8 +30,8 @@ struct Type {
     : v{std::move(v)} {};
 };
 
-std::string type_to_string(Type& type);
-std::string type_to_string(Type* type);
+std::string type_to_string(Type const & type);
+std::string type_to_string(Type const * type);
 
 Type_Ptr extract_type_nullable(std::weak_ptr<Type> weak_type_ptr);
 Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr);

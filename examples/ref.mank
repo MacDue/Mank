@@ -1,0 +1,21 @@
+
+
+
+# fun test: ref i32 (a: ref i32, b: ref i32) {
+
+# }
+
+
+proc ref_test(a: ref i32, b: ref i32[2]) {
+  a = 100;
+  b[0] = 100;
+  asas : i32 = a * 2;
+}
+
+proc call {
+  value := 10;
+  a: ref i32 = value;
+  my_array := [1,2];
+  ref_test(value, my_array);
+}
+

@@ -76,6 +76,10 @@ struct Ast_Expression {
   Ast_Expression(Expr expr) {
     expr.meta = &meta;
     v = std::move(expr);
+    if (std::get_if<Ast_Identifier>(&v)) {
+      // ^ for some reason std::is_same_v randomly fails
+      meta.value_type = Expression_Meta::LVALUE;
+    }
   }
 
   inline bool is_lvalue() const {

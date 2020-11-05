@@ -4,6 +4,7 @@
 #include <mpark/patterns.hpp>
 
 #include "ast/ast.h"
+#include "sema/types.h"
 #include "sema/sema_errors.h"
 #include "sema/const_propagate.h"
 
@@ -152,10 +153,11 @@ void ConstantVisitor::after(Ast_Index_Access& index) {
   if (auto index_value = index.index->meta.get_const_value()) {
     auto object_type = extract_type(index.object->meta.type);
     // FIXME: Will break if more indexable types added
-    auto& array_type = std::get<FixedSizeArrayType>(object_type->v);
+    auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type);
+    assert(array_type && "should be an array type");
     // FIXME: Will break with more integer types
     auto int_index = std::get<int32_t>(*index_value);
-    if (int_index < 0 || static_cast<size_t>(int_index) >= array_type.size) {
+    if (int_index < 0 || static_cast<size_t>(int_index) >= array_type->size) {
       throw_sema_error_at(index.index, "out of bounds index");
     }
   }

@@ -2,14 +2,6 @@
 
 #include "sema/types.h"
 
-Type const * remove_reference(Type const * type) {
-  if (!type) return type;
-  if (auto ref_type = std::get_if<ReferenceType>(&type->v)) {
-    type = ref_type->references.get();
-  }
-  return type;
-}
-
 bool match_types(Type const * a, Type const * b) {
   using namespace mpark::patterns;
 

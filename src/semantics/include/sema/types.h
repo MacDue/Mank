@@ -2,6 +2,7 @@
 
 #include <utility>
 #include <optional>
+#include <type_traits>
 
 #include "ast/types.h"
 #include "sema/sema_errors.h"
@@ -20,7 +21,18 @@ namespace Primative {
 // The resolved type + a the type's identifier in the source (for error messages)
 using TypeResolution = std::pair<Type_Ptr, std::optional<Ast_Identifier>>;
 
-Type const * remove_reference(Type const * type);
+template <typename T>
+T remove_reference(T type) {
+  if (!type) return type;
+  if (auto ref_type = std::get_if<ReferenceType>(&type->v)) {
+    if constexpr (std::is_pointer_v<T>) {
+      type = ref_type->references.get();
+    } else {
+      type = ref_type->references;
+    }
+  }
+  return type;
+}
 
 inline bool is_reference_type(Type const * type) {
   return remove_reference(type) != type;
@@ -40,4 +52,9 @@ static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_for
   } else {
     IMPOSSIBLE();
   }
+}
+
+template<typename T1>
+T1* get_if_dereferenced_type(Type_Ptr& type) {
+  return std::get_if<T1>(&remove_reference(type.get())->v);
 }

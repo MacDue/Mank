@@ -411,7 +411,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) {
       auto object_type = analyse_expression(*access.object, scope);
       if (object_type) {
-        auto access_type = match(object_type->v)(
+        auto access_type = match(remove_reference(object_type.get())->v)(
           pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
             auto [accessed, field_index] = resolve_pod_field_index(pod_type, access.field.name);
             if (field_index < 0) {
@@ -459,7 +459,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) {
       auto object_type = analyse_expression(*index.object, scope);
       auto index_type = analyse_expression(*index.index, scope);
-      if (auto array_type = std::get_if<FixedSizeArrayType>(&object_type->v)) {
+      if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type)) {
         if (!match_types(index_type.get(), Primative::INTEGER.get())) {
           throw_sema_error_at(index.index, "invalid index type {}",
             type_to_string(index_type.get()));
@@ -481,8 +481,8 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
 }
 
 Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
-  auto operand_type = analyse_expression(*unary.operand, scope);
-  PrimativeType* primative_type = std::get_if<PrimativeType>(&operand_type->v);
+  auto operand_type = remove_reference(analyse_expression(*unary.operand, scope));
+  PrimativeType* primative_type = get_if_dereferenced_type<PrimativeType>(operand_type);
 
   if (primative_type)
   switch (unary.operation) {
@@ -514,7 +514,7 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
 
 Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
-  auto left_type = analyse_expression(*binop.left, scope);
+  auto left_type = remove_reference(analyse_expression(*binop.left, scope));
   auto right_type = analyse_expression(*binop.right, scope);
 
   if (!match_types(left_type.get(), right_type.get())) {
@@ -522,7 +522,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       type_to_string(left_type.get()), type_to_string(right_type.get()));
   }
 
-  PrimativeType* primative_type = std::get_if<PrimativeType>(&left_type->v);
+  PrimativeType* primative_type = get_if_dereferenced_type<PrimativeType>(left_type);
   auto binop_type = match(primative_type, binop.operation)(
     pattern(some(_), anyof(
       Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,

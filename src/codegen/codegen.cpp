@@ -5,7 +5,7 @@
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
 
-#include "ast/types.h"
+#include "sema/types.h"
 #include "llvm_codegen.h"
 #include "codegen/codegen.h"
 #include "ast/ast_builder.h"
@@ -96,6 +96,10 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto const & array_type) -> llvm::Type* {
       return llvm::ArrayType::get(
         map_type_to_llvm(array_type.element_type.get(), scope), array_type.size);
+    },
+    pattern(as<ReferenceType>(arg)) = [&](auto const & reference_type) -> llvm::Type* {
+      return llvm::PointerType::get(
+        map_type_to_llvm(reference_type.references.get(), scope), 0);
     },
     pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");
@@ -270,40 +274,7 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
-  using namespace mpark::patterns;
-
-  llvm::Value* target_ptr = match(assign.target->v)(
-    pattern(as<Ast_Identifier>(arg)) = [&](auto& variable_name) -> llvm::Value* {
-      return get_local(variable_name, scope);
-    },
-    pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) -> llvm::Value* {
-      std::vector<uint> idx_list;
-      auto& source_object = flatten_nested_pod_accesses(access, idx_list);
-
-      auto pod_variable = std::get_if<Ast_Identifier>(&source_object.v);
-      assert(pod_variable && "source object must be a variable!");
-
-      llvm::AllocaInst* pod_alloca = get_local(*pod_variable, scope);
-      return ir_builder.CreateGEP(
-        pod_alloca, make_idx_list_for_gep(idx_list), access.field.name);
-    },
-    pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
-      std::vector<llvm::Value*> idx_list;
-      idx_list.push_back(create_llvm_idx(0));
-      auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
-
-      auto array_variable = std::get_if<Ast_Identifier>(&source_object.v);
-      assert(array_variable && "source object must be array variable!");
-
-      llvm::AllocaInst* array_alloca = get_local(*array_variable, scope);
-      return ir_builder.CreateGEP(
-        array_alloca, idx_list, "index_access");
-    },
-    pattern(_) = []() -> llvm::Value* {
-      assert(false && ":( looks like this assignment type is not implemented");
-    }
-  );
-
+  llvm::Value* target_ptr = address_of(*assign.target, scope);
   llvm::Value* expression_value = codegen_expression(*assign.expression, scope);
   ir_builder.CreateStore(expression_value, target_ptr);
 }
@@ -319,7 +290,11 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
     Best I know is they have to be compiled to a bunch of geps + stores.
   */
   if (var_decl.initializer && !array_initializer) {
-    initializer = codegen_expression(*var_decl.initializer, scope);
+    if (is_reference_type(var_decl.type.get())) {
+      initializer = address_of(*var_decl.initializer, scope);
+    } else {
+      initializer = codegen_expression(*var_decl.initializer, scope);
+    }
   }
 
   /*
@@ -366,7 +341,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   llvm::AllocaInst* loop_variable = create_entry_alloca(current_function, &loop_variable_symbol);
   ir_builder.CreateStore(start_value, loop_variable);
 
-  auto loop_range_type = extract_type(for_loop.end_range->meta.type);
+  auto loop_range_type = remove_reference(extract_type(for_loop.end_range->meta.type));
   auto& loop_end_range_symbol = body.scope.add(Symbol(
     SymbolName(LOOP_RANGE_END), loop_range_type, Symbol::LOCAL));
   llvm::AllocaInst* range_end = create_entry_alloca(current_function, &loop_end_range_symbol);
@@ -437,6 +412,45 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
 }
 
 /* Expressions */
+
+llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
+  using namespace mpark::patterns;
+  // must be lvalue
+  // index access, field access, variable
+  assert(expr.is_lvalue() && "fix me! expression must be lvalue to have address!");
+
+  return match(expr.v)(
+    pattern(as<Ast_Identifier>(arg)) = [&](auto& variable) -> llvm::Value* {
+      auto type = extract_type_nullable(variable.get_meta().type);
+      llvm::AllocaInst* variable_alloca = get_local(variable, scope);
+      if (type && is_reference_type(type.get())) {
+        // We want to dereference it
+        return ir_builder.CreateLoad(variable_alloca, "dereference");
+      } else {
+        return variable_alloca;
+      }
+    },
+    pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) -> llvm::Value* {
+      std::vector<uint> idx_list;
+      auto& source_object = flatten_nested_pod_accesses(access, idx_list);
+      llvm::Value* source_address = address_of(source_object, scope);
+      return ir_builder.CreateGEP(
+        source_address, make_idx_list_for_gep(idx_list), access.field.name);
+    },
+    pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
+      std::vector<llvm::Value*> idx_list;
+      idx_list.push_back(create_llvm_idx(0));
+      auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
+      llvm::Value* source_address = address_of(source_object, scope);
+      return ir_builder.CreateGEP(
+        source_address, idx_list, "index_access");
+    },
+    pattern(_) = []() -> llvm::Value* {
+      assert("fix me! address_of not implemented for lvalue");
+      return nullptr;
+    }
+  );
+}
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope) {
   return std::visit([&](auto& expr) {
@@ -545,8 +559,16 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
   std::vector<llvm::Value*> call_args;
   call_args.reserve(call.arguments.size());
 
+  uint arg_idx = 0;
   for (auto& arg: call.arguments) {
-    call_args.push_back(codegen_expression(*arg, scope));
+    llvm::Value* arg_value = nullptr;
+    if (is_reference_type(function_type.arguments.at(arg_idx).type.get())) {
+      arg_value = address_of(*arg, scope);
+    } else {
+      arg_value = codegen_expression(*arg, scope);
+    }
+    call_args.push_back(arg_value);
+    ++arg_idx;
   }
 
   return ir_builder.CreateCall(callee, call_args,
@@ -586,22 +608,20 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
   Symbol* symbol = scope.lookup_first_name(ident);
   assert(symbol->is_local() && "only locals implemented");
 
-  return match(symbol->meta)(
-    pattern(some(as<SymbolMetaLocal>(arg))) = [&](auto& meta) {
-      auto load_inst = ir_builder.CreateLoad(meta.alloca,
-        formatxx::format_string("load_{}", ident.name));
-      return static_cast<llvm::Value*>(load_inst);
-    },
-    pattern(_) = []{
-      assert(false && "fix me! unknown symbol meta");
-      return static_cast<llvm::Value*>(nullptr);
-    }
-  );
+  // FIXME: Hack to use address_of
+  auto& ident_meta = ident.get_meta();
+  Ast_Expression ident_expr(ident);
+  ident_expr.meta = ident_meta;
+
+  llvm::Value* variable_address = address_of(ident_expr, scope);
+  return ir_builder.CreateLoad(variable_address,
+    formatxx::format_string("load_{}", ident.name));
 }
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
   using namespace mpark::patterns;
   llvm::Value* operand = codegen_expression(*unary.operand, scope);
-  auto unary_type = extract_type(unary.operand->meta.type);
+  auto unary_type = remove_reference(extract_type(unary.operand->meta.type));
   auto& unary_primative = std::get<PrimativeType>(unary_type->v);
 
   return match(unary_primative.tag, unary.operation)(
@@ -644,7 +664,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
-  auto binop_type = extract_type(binop.left->meta.type);
+  auto binop_type = remove_reference(extract_type(binop.left->meta.type));
   auto& binop_primative = std::get<PrimativeType>(binop_type->v);
 
   llvm::Value* left = codegen_expression(*binop.left, scope);

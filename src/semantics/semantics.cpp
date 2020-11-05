@@ -293,6 +293,10 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   auto start_range_type = analyse_expression(*for_loop.start_range, scope);
   if (for_loop.type) {
     resolve_type_or_fail(scope, for_loop.type, "undeclared loop type {}");
+    if (is_reference_type(for_loop.type.get())) {
+      throw_sema_error_at(for_loop.loop_variable, "reference loop variables are not yet supported");
+    }
+
     if (!match_types(for_loop.type.get(), start_range_type.get())) {
       throw_sema_error_at(for_loop.start_range,
         "start range type type {} does not match loop variable type {}",

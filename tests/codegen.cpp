@@ -350,3 +350,76 @@ TEST_CASE("Basic array functionality", "[Codegen]") {
     REQUIRE(num_sum(1,2,3,4) == 1 + 2 + 3 + 4);
   }
 }
+
+TEST_CASE("Messing with references", "[Codegen]") {
+  SECTION("Passing primatives by reference") {
+    auto codegen = compile(R"(
+      proc add_by_ref(a: i32, b: i32, result: ref i32) {
+        result = a + b;
+      }
+    )");
+
+    auto add_by_ref = codegen.extract_function_from_jit<void(int, int, int*)>("add_by_ref");
+
+    int result;
+    add_by_ref(1, 1, &result);
+    REQUIRE(result == 2);
+  }
+
+  SECTION("Pass array by reference (no modifications)") {
+    auto codegen = compile(R"(
+      fun array_sum: i32 (array: ref i32[10]) {
+        sum := 0;
+        for i in 0 .. array.length {
+          sum += array[i];
+        }
+        sum
+      }
+
+      fun sum_to_10: i32 {
+        my_array := [1,2,3,4,5,6,7,8,9,10];
+        array_sum(my_array)
+      }
+    )");
+
+    auto sum_to_10 = codegen.extract_function_from_jit<int()>("sum_to_10");
+    REQUIRE(sum_to_10() == 55);
+  }
+
+
+  SECTION("Mutate array reference") {
+    auto codegen = compile(R"(
+      proc swap_pair (pair: ref i32[2]) {
+        temp := pair[0];
+        pair[0] = pair[1];
+        pair[1] = temp;
+      }
+
+      fun second: i32 (a: i32, b: i32) {
+        pair := [a, b];
+        swap_pair(pair);
+        pair[0]
+      }
+    )");
+
+    auto second = codegen.extract_function_from_jit<int(int, int)>("second");
+    REQUIRE(second(5,6) == 6);
+    REQUIRE(second(2,-1) == -1);
+    REQUIRE(second(32,3223) == 3223);
+  }
+
+  SECTION("Local references") {
+    auto codegen = compile(R"(
+      fun idk_what_this_is: i32 (a: i32, b: i32) {
+        a_ref: ref = a;
+        b_ref: ref = b;
+        if a > b { a_ref } else { b_ref } = 100;
+        a
+      }
+    )");
+
+    auto idk_what_this_is = codegen.extract_function_from_jit<int(int, int)>("idk_what_this_is");
+    REQUIRE(idk_what_this_is(3, 2) == 100);
+    REQUIRE(idk_what_this_is(2, 3) == 2);
+  }
+}

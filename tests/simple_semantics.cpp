@@ -111,7 +111,7 @@ TEST_CASE("Calling functions", "[Sema]") {
     )");
 
     REQUIRE_THROWS_WITH(Semantics().analyse_file(code),
-      "expected to be called with Float64 but found Integer");
+      "cannot bind expression with type Integer to Float64");
   }
 
   SECTION("Calling an undefined function should fail") {
@@ -498,7 +498,7 @@ TEST_CASE("Function and procedure semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("invalid return type"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot bind expression"));
   }
 
   SECTION("Returning something in a procedure is invalid") {
@@ -508,7 +508,8 @@ TEST_CASE("Function and procedure semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("expected Void"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code),
+      Contains("cannot bind expression") && Contains("Integer to Void"));
   }
 }
 
@@ -641,7 +642,7 @@ TEST_CASE("Variable declaration semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("does not match declaration type"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot bind expression"));
   }
 
   SECTION("Declarations with void initializers are invalid") {

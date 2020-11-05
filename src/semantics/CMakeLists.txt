@@ -3,6 +3,7 @@ add_library(MankSemantics
   return_reachability.cpp
   const_propagate.cpp
   types.cpp
+  binding_helpers.cpp
 )
 
 target_link_libraries(MankSemantics

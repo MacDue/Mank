@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <optional>
 
 #include "ast/types.h"
 #include "sema/sema_errors.h"
@@ -18,6 +19,12 @@ namespace Primative {
 
 // The resolved type + a the type's identifier in the source (for error messages)
 using TypeResolution = std::pair<Type_Ptr, std::optional<Ast_Identifier>>;
+
+Type const * remove_reference(Type const * type);
+
+inline bool is_reference_type(Type const * type) {
+  return remove_reference(type) != type;
+}
 
 bool match_types(Type const * a, Type const * b);
 

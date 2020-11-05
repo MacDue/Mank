@@ -2,8 +2,22 @@
 
 #include "sema/types.h"
 
+Type const * remove_reference(Type const * type) {
+  if (!type) return type;
+  if (auto ref_type = std::get_if<ReferenceType>(&type->v)) {
+    type = ref_type->references.get();
+  }
+  return type;
+}
+
 bool match_types(Type const * a, Type const * b) {
   using namespace mpark::patterns;
+
+  // Reference types should be matched like normal versions of their type
+  // only when binding them should their be special treatment
+  a = remove_reference(a);
+  b = remove_reference(b);
+
   if (a == b) {
     return true;
   } else if (a && b) {
@@ -34,6 +48,11 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
       auto [element_type, symbol] = resolve_type(scope, array_type.element_type);
       array_type.element_type = element_type;
+      return std::make_pair(type, symbol);
+    },
+    pattern(as<ReferenceType>(arg)) = [&](auto& reference_type) {
+      auto [referenced_type, symbol] = resolve_type(scope, reference_type.references);
+      reference_type.references = referenced_type;
       return std::make_pair(type, symbol);
     },
     pattern(_) = [&] {

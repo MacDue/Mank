@@ -1,5 +1,4 @@
 #include <utility>
-#include <optional>
 
 #include <mpark/patterns.hpp>
 
@@ -8,6 +7,8 @@
 #include "sema/sema_errors.h"
 #include "sema/const_propagate.h"
 #include "sema/return_reachability.h"
+
+#include "binding_helpers.h"
 
 Symbol* Semantics::emit_warning_if_shadows(
   Ast_Identifier& ident, Scope& scope, std::string warning
@@ -278,13 +279,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       }
       if (var_decl.initializer) {
         auto initializer_type = analyse_expression(*var_decl.initializer, scope);
-        if (var_decl.type) {
-          if (!match_types(var_decl.type.get(), initializer_type.get())) {
-            throw_sema_error_at(var_decl.initializer,
-              "initializer type {} does not match declaration type {}",
-              type_to_string(initializer_type.get()), type_to_string(var_decl.type.get()));
-          }
-        } else {
+        if (!var_decl.type) {
           if (!initializer_type) {
             throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
               type_to_string(initializer_type.get()));
@@ -294,7 +289,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       } else {
         emit_warning_at(var_decl, "default initialization is currently unimplemented");
       }
-
+      assert_valid_binding(var_decl.variable, var_decl.type.get(), var_decl.initializer.get());
       emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
       scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
@@ -591,14 +586,10 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   }
 
   for (uint arg_idx = 0; arg_idx < function_type.arguments.size(); arg_idx++) {
-    auto& expected_type = *function_type.arguments.at(arg_idx).type;
+    auto& expected = function_type.arguments.at(arg_idx);
     auto& argument = *call.arguments.at(arg_idx);
-    auto given_type = analyse_expression(argument, scope);
-    if (!match_types(&expected_type, given_type.get())) {
-      throw_sema_error_at(argument,
-        "expected to be called with {} but found {}",
-        type_to_string(expected_type), type_to_string(given_type.get()));
-    }
+    (void) analyse_expression(argument, scope);
+    assert_valid_binding(expected.name, expected.type.get(), &argument);
   }
 
   call.callee->meta.type = called_function->type;

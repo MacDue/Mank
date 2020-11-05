@@ -78,11 +78,11 @@ struct Ast_Expression {
     v = std::move(expr);
   }
 
-  inline bool is_lvalue() {
+  inline bool is_lvalue() const {
     return meta.value_type == Expression_Meta::LVALUE;
   }
 
-  inline bool is_rvalue() {
+  inline bool is_rvalue() const {
     return !is_lvalue();
   }
 

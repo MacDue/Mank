@@ -276,7 +276,8 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
             throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
               type_to_string(initializer_type.get()));
           }
-          var_decl.type = initializer_type;
+          // Don't implicitly duplicate references
+          var_decl.type = remove_reference(initializer_type);
         }
       } else {
         emit_warning_at(var_decl, "default initialization is currently unimplemented");

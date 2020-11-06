@@ -411,8 +411,8 @@ TEST_CASE("Messing with references", "[Codegen]") {
   SECTION("Local references") {
     auto codegen = compile(R"(
       fun idk_what_this_is: i32 (a: i32, b: i32) {
-        a_ref: ref = a;
-        b_ref: ref = b;
+        a_ref: = ref a;
+        b_ref: = ref b;
         if a > b { a_ref } else { b_ref } = 100;
         a
       }

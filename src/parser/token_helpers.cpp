@@ -14,6 +14,9 @@ char const * token_type_to_string(TokenType token_type) {
     case TokenType::ASSIGN:       return "\"=\" (assign)";
     case TokenType::COMMA:        return "\",\" (comma)";
 
+    case TokenType::LEFT_SQUARE_BRACKET:  return "\"[\" (left square bracket)";
+    case TokenType::RIGHT_SQUARE_BRACKET: return "\"]\" (right square bracket)";
+
     /* Operators */
     case TokenType::PLUS:           return "\"+\" (plus)";
     case TokenType::MINUS:          return "\"-\" (minus)";
@@ -61,6 +64,12 @@ char const * token_type_to_string(TokenType token_type) {
     case TokenType::RETURN:     return "return";
     case TokenType::LITERAL:    return "literal";
     case TokenType::IN:         return "in";
+
+    /* Special */
+    case TokenType::REF:        return "ref";
+
+    /* Misc */
+    case TokenType::DOUBLE_DOT: return "\"..\" (double dot)";
 
     /* Lexer state */
     case TokenType::LEX_EOF:    return "[Lexer EOF]";

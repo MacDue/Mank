@@ -74,7 +74,7 @@ Type_Ptr Parser::parse_pod() {
   parsed_pod.identifier = *pod_name;
   parsed_pod.fields = this->parse_arguments(
     TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
-  return std::make_shared<Type>(parsed_pod);
+  return to_type_ptr(parsed_pod);
 }
 
 Function_Ptr Parser::parse_function() {
@@ -113,7 +113,7 @@ Function_Ptr Parser::parse_function() {
       throw_error_here("expected function body");
     }
     parsed_function.body = *body;
-    return std::make_shared<Type>(parsed_function);
+    return to_type_ptr(parsed_function);
   } else {
     // Should be unreachable
     throw_error_here("unexpected \"{}\"m expecting function or procedure");
@@ -670,7 +670,7 @@ Type_Ptr Parser::parse_type() {
   if (consume(TokenType::REF)) {
     ReferenceType ref_type;
     ref_type.references = this->parse_base_type();
-    return std::make_shared<Type>(ref_type);
+    return to_type_ptr(ref_type);
   }
   return this->parse_base_type();
 }
@@ -678,7 +678,7 @@ Type_Ptr Parser::parse_type() {
 Type_Ptr Parser::parse_base_type() {
   auto type_name = this->parse_identifier();
   if (type_name) {
-    auto type = std::make_shared<Type>(UncheckedType{*type_name});
+    auto type = to_type_ptr(UncheckedType{*type_name});
     if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
       return this->parse_array_type(type);
     } else {
@@ -712,12 +712,12 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
     if (!consume(TokenType::COMMA)) {
       break;
     }
-    current_array->element_type = std::make_shared<Type>(FixedSizeArrayType());
+    current_array->element_type = to_type_ptr(FixedSizeArrayType());
     current_array = &std::get<FixedSizeArrayType>(current_array->element_type->v);
   }
   current_array->element_type = base_type;
   expect(TokenType::RIGHT_SQUARE_BRACKET);
-  return std::make_shared<Type>(top_array_type);
+  return to_type_ptr(top_array_type);
 }
 
 /* Helpers */

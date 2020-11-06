@@ -464,7 +464,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             return false;
           });
       }
-      return array.get_meta().owned_type = std::make_shared<Type>(array_type);
+      return array.get_meta().owned_type = to_type_ptr(array_type);
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) {
       auto object_type = analyse_expression(*index.object, scope);

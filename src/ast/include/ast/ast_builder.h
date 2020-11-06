@@ -18,6 +18,11 @@ Expression_Ptr to_expr_ptr(TExpr && expr) {
   return std::make_shared<Ast_Expression>(expr);
 }
 
+template <typename T>
+Type_Ptr to_type_ptr(T && type) {
+  return std::make_shared<Type>(type);
+}
+
 /* -- Constructs -- */
 
 template<typename... TFunction>
@@ -25,8 +30,7 @@ Ast_File make_file(TFunction && ... function) {
   Ast_File file;
   file.filename = "<built_ast>";
   if constexpr (sizeof...(function) > 0) {
-    file.functions.push_back(
-      std::make_shared<Type>(function)...);
+    file.functions.push_back(to_type_ptr(function)...);
   }
   return file;
 }
@@ -50,7 +54,7 @@ std::vector<Ast_Argument> make_args(TArgs && ... args) {
 inline Type_Ptr make_unchecked_type(std::string type_name) {
   UncheckedType unchecked;
   unchecked.identifier.name = type_name;
-  return std::make_shared<Type>(unchecked);
+  return to_type_ptr(unchecked);
 }
 
 template <typename... TFields>
@@ -58,7 +62,7 @@ Type_Ptr make_pod(std::string name, TFields && ... fields) {
   Ast_Pod_Declaration pod;
   pod.identifier.name = name;
   pod.fields = std::vector<Ast_Argument> { fields... };
-  return std::make_shared<Type>(pod);
+  return to_type_ptr(pod);
 }
 
 /* Functions */
@@ -318,7 +322,7 @@ inline Statement_Ptr make_for(
 inline Type_Ptr make_type(std::string name) {
   UncheckedType type;
   type.identifier.name = name;
-  return std::make_shared<Type>(type);
+  return to_type_ptr(type);
 }
 
 /* Test helpers */

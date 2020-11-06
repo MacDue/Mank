@@ -5,10 +5,11 @@
 #include <type_traits>
 
 #include "ast/types.h"
+#include "ast/ast_builder.h"
 #include "sema/sema_errors.h"
 
 #define make_primative_type(type_tag) \
-  inline static auto type_tag = std::make_shared<Type>(PrimativeType(PrimativeType::Tag::type_tag))
+  inline static auto type_tag = to_type_ptr(PrimativeType(PrimativeType::Tag::type_tag))
 
 namespace Primative {
   make_primative_type(FLOAT32);

@@ -288,11 +288,6 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
               type_to_string(initializer_type.get()));
           }
           var_decl.type = initializer_type;
-        } else if (auto ref_type = std::get_if<ReferenceType>(&var_decl.type->v)) {
-          // Fill in reference type
-          if (!ref_type->references) {
-            ref_type->references = initializer_type;
-          }
         }
       } else {
         emit_warning_at(var_decl, "default initialization is currently unimplemented");

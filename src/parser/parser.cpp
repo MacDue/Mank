@@ -671,6 +671,9 @@ Type_Ptr Parser::parse_type() {
   if (consume(TokenType::REF)) {
     ReferenceType ref_type;
     ref_type.references = this->parse_base_type();
+    if (!ref_type.references) {
+      throw_error_here("expected referenced type");
+    }
     return to_type_ptr(ref_type);
   }
   return this->parse_base_type();

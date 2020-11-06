@@ -539,6 +539,7 @@ static bool is_unary_op(TokenType token) {
     case TokenType::MINUS:
     case TokenType::BITWISE_NOT:
     case TokenType::LOGICAL_NOT:
+    case TokenType::REF:
       return true;
     default: return false;
   }

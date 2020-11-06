@@ -450,6 +450,9 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
     [&](auto& block_expr) -> llvm::Value* {
       return codegen_expression(block_expr, scope, true);
     },
+    pattern(as<Ast_Unary_Operation>(arg)) = [&](auto& ref_unary) -> llvm::Value* {
+      return address_of(*ref_unary.operand, scope);
+    },
     pattern(_) = []() -> llvm::Value* {
       assert(false && "fix me! address_of not implemented for lvalue");
       return nullptr;
@@ -644,6 +647,12 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& scope) {
   using namespace mpark::patterns;
   llvm::Value* operand = codegen_expression(*unary.operand, scope);
+
+  // Special case for ref operations (if evaluted to a value they're just the operand)
+  if (unary.operation == Ast_Operator::REF) {
+    return operand;
+  }
+
   auto unary_type = remove_reference(extract_type(unary.operand->meta.type));
   auto& unary_primative = std::get<PrimativeType>(unary_type->v);
 

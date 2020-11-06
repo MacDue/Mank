@@ -241,6 +241,12 @@ void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
   }
 }
 
+static bool is_explict_reference(Ast_Expression& expr) {
+  // It is if the top level expression is a ref unary
+  auto unary = std::get_if<Ast_Unary_Operation>(&expr.v);
+  return unary && unary->operation == Ast_Operator::REF;
+}
+
 void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
   using namespace mpark::patterns;
   match(stmt.v)(
@@ -270,8 +276,12 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
           var_decl.variable.name);
       }
       if (var_decl.initializer) {
+        auto initializer_type = analyse_expression(*var_decl.initializer, scope);
         // Don't implicitly duplicate references
-        auto initializer_type = remove_reference(analyse_expression(*var_decl.initializer, scope));
+        if (!is_explict_reference(*var_decl.initializer)) {
+          initializer_type = remove_reference(initializer_type);
+        }
+
         if (!var_decl.type) {
           if (!initializer_type) {
             throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
@@ -516,6 +526,15 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
       break;
     }
     default: break;
+  }
+
+  if (unary.operation == Ast_Operator::REF) {
+    if (!operand_type || !unary.operand->is_lvalue()) {
+      throw_sema_error_at(unary.operand, "cannot take reference to non-lvalue expression");
+    }
+    unary.get_meta().value_type = Expression_Meta::LVALUE;
+    unary.operand->meta.owned_type = make_refernce(operand_type);
+    return unary.operand->meta.owned_type;
   }
 
   throw_sema_error_at(unary, "invalid unary operation for {}",

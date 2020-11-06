@@ -39,6 +39,11 @@ inline bool is_reference_type(Type const * type) {
   return remove_reference(type) != type;
 }
 
+inline Type_Ptr make_refernce(Type_Ptr type) {
+  assert(!is_reference_type(type.get()));
+  return to_type_ptr(ReferenceType{ .references = type });
+}
+
 bool match_types(Type const * a, Type const * b);
 
 TypeResolution resolve_type(Scope& scope, Type_Ptr type);

@@ -844,6 +844,10 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
 }
 
 TEST_CASE("Reference binding", "[Sema]") {
+  /*
+    Note that the same binding logic is used in other bind points,
+    e.g. calling a function with a reference type parameter
+  */
   using namespace Catch::Matchers;
 
   Semantics sema;
@@ -975,4 +979,59 @@ TEST_CASE("References act like their base type", "[Sema]") {
   )");
 
   REQUIRE_NOTHROW(sema.analyse_file(code));
+}
+
+TEST_CASE("Expressions that evaluate to references can be used as lvalues", "[Sema]") {
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("Non-reference type if expr cannot be assigned to") {
+    auto code = Parser::parse_from_string(R"(
+      proc ref_test {
+        a := 1;
+        b := 2;
+        if true { a } else { b } = 1;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("not an lvalue"));
+  }
+
+  SECTION("Reference type if expr can be assigned to") {
+    auto code = Parser::parse_from_string(R"(
+      proc ref_test {
+        a := 1;
+        b := 2;
+        if true { ref a } else { ref b } = 1;
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
+
+  SECTION("Non-reference type call expr cannot be assigned to") {
+    auto code = Parser::parse_from_string(R"(
+      fun callable: i32 { 1 }
+
+      proc ref_test {
+        callable() = 1;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("not an lvalue"));
+  }
+
+  SECTION("Reference type call can be assigned to") {
+    auto code = Parser::parse_from_string(R"(
+      fun ref_cast: ref i32 (a: ref i32) { a }
+
+      proc ref_test {
+        a: i32;
+        ref_cast(a) = 1;
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+  }
 }

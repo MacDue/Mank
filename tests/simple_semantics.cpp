@@ -943,3 +943,36 @@ TEST_CASE("Reference binding", "[Sema]") {
     REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("must be initialized"));
   }
 }
+
+TEST_CASE("References act like their base type", "[Sema]") {
+  Semantics sema;
+  auto code = Parser::parse_from_string(R"(
+    pod Example {
+      a: i32
+    }
+
+    proc ref_test {
+      # Base types
+      a: i32 = 1;
+      b: f64 = 1.0;
+      c := [1, 2, 3];
+      d: Example;
+
+      # References
+      a_ref := ref a;
+      b_ref := ref b;
+      c_ref := ref c;
+      d_ref := ref d;
+
+      # If the following statements check, then it shows that the reference
+      # type is matched with the base type
+      a_ref += 1;
+      b_ref += 1.0;
+      c_ref[1] += 1;
+      d_ref.a += 1;
+      d_ref = d;
+    }
+  )");
+
+  REQUIRE_NOTHROW(sema.analyse_file(code));
+}

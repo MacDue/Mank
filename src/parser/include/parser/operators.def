@@ -20,4 +20,4 @@ NOT_EQUAL_TO = TOK_MULTI_CHAR + 8,
 LOGICAL_AND = TOK_MULTI_CHAR + 9,
 
 /* Special */
-REF = TOK_MULTI_CHAR + 36,
+REF = TOK_MULTI_CHAR + 100, // start at 100 to avoid clashes with multi-char tokens

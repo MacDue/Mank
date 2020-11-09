@@ -10,6 +10,7 @@ ASSIGN = '=',
 COMMA = ',',
 LEFT_SQUARE_BRACKET = '[',
 RIGHT_SQUARE_BRACKET = ']',
+BACKSLASH = '\\',
 
 /* Operators */
 #include "operators.def"
@@ -45,6 +46,7 @@ FALSE = TOK_MULTI_CHAR + 34,
 
 /* Misc */
 DOUBLE_DOT = TOK_MULTI_CHAR + 35,
+ARROW = TOK_MULTI_CHAR + 36,
 
 /* Lexer state */
 LEX_EOF = -1,

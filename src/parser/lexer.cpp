@@ -178,6 +178,8 @@ void Lexer::next_token() {
     || match("/=", TokenType::DIVIDE_EQUAL)
     || match("*=", TokenType::TIMES_EQUAL)
     || match("%=", TokenType::MODULO_EQUAL)
+    /* Muti-char (misc) tokens */
+    || match("->", TokenType::ARROW)
     /* Single-char operators */
     || match("+", TokenType::PLUS)
     || match("-", TokenType::MINUS)
@@ -204,6 +206,7 @@ void Lexer::next_token() {
     || match("[", TokenType::LEFT_SQUARE_BRACKET)
     || match("]", TokenType::RIGHT_SQUARE_BRACKET)
     || match("=", TokenType::ASSIGN)
+    || match("\\", TokenType::BACKSLASH)
   ) {
     /* Simple token is now matched (last_token updated in match) */
   } else if (isalpha(this->peek_next_char()) || this->peek_next_char() == '_') {

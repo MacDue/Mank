@@ -680,6 +680,10 @@ Type_Ptr Parser::parse_type() {
 }
 
 Type_Ptr Parser::parse_base_type() {
+  if (peek(TokenType::BACKSLASH)) {
+    return this->parse_lambda_type();
+  }
+  // Array/simple types
   auto type_name = this->parse_identifier();
   if (type_name) {
     auto type = to_type_ptr(UncheckedType{*type_name});
@@ -722,6 +726,21 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
   current_array->element_type = base_type;
   expect(TokenType::RIGHT_SQUARE_BRACKET);
   return to_type_ptr(top_array_type);
+}
+
+Type_Ptr Parser::parse_lambda_type() {
+  LambdaType lambda_type;
+  expect(TokenType::BACKSLASH);
+  while (!peek(TokenType::ARROW)) {
+    lambda_type.argument_types.emplace_back(
+      this->parse_type());
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(TokenType::ARROW);
+  lambda_type.return_type = this->parse_type();
+  return to_type_ptr(lambda_type);
 }
 
 /* Helpers */

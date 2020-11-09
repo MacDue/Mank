@@ -18,15 +18,7 @@ std::string type_to_string(Type const & type) {
       return std::string(primative_type.name());
     },
     pattern(as<Ast_Pod_Declaration>(arg)) = [](auto const & pod_type) {
-      // std::string pod_str = "pod {";
-      // for (auto it = pod_type.members.begin(); it != pod_type.members.end(); it++) {
-      //   if (it != pod_type.members.begin()) {
-      //     pod_str += " , ";
-      //   }
-      //   pod_str += type_to_string(*it->type);
-      // }
-      // pod_str += "}";
-      // return pod_str;
+
       return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
     pattern(as<FixedSizeArrayType>(arg)) = [](auto const & array_type) {
@@ -36,6 +28,21 @@ std::string type_to_string(Type const & type) {
     pattern(as<ReferenceType>(arg)) = [](auto const & reference_type) {
       return formatxx::format_string("reference to {}",
         type_to_string(reference_type.references.get()));
+    },
+    pattern(as<LambdaType>(arg)) = [](auto const & lambda_type) {
+      std::string lambda_str = "lambda ";
+      for (
+        auto it = lambda_type.argument_types.begin();
+        it != lambda_type.argument_types.end();
+        it++
+      ) {
+        if (it != lambda_type.argument_types.begin()) {
+          lambda_str += ',';
+        }
+        lambda_str += type_to_string(it->get());
+      }
+      lambda_str += " -> " + type_to_string(lambda_type.return_type.get());
+      return lambda_str;
     },
     pattern(_) = []{
       return "???"s;

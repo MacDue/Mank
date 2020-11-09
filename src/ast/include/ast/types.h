@@ -4,6 +4,7 @@
 
 #include "ast/construct.h"
 #include "ast/array_type.h"
+#include "ast/lambda_type.h"
 #include "ast/primative_types.h"
 
 struct UncheckedType {
@@ -21,7 +22,8 @@ using Type_Type = std::variant<
   Ast_Function_Declaration,
   Ast_Pod_Declaration,
   FixedSizeArrayType,
-  ReferenceType>;
+  ReferenceType,
+  LambdaType>;
 
 struct Type {
   Type_Type v;

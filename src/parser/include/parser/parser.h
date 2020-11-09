@@ -52,6 +52,7 @@ private:
   Type_Ptr parse_type();
   Type_Ptr parse_base_type();
   Type_Ptr parse_array_type(Type_Ptr base_type);
+  Type_Ptr parse_lambda_type();
   Type_Ptr parse_pod();
   Function_Ptr parse_function();
 

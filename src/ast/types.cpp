@@ -18,7 +18,6 @@ std::string type_to_string(Type const & type) {
       return std::string(primative_type.name());
     },
     pattern(as<Ast_Pod_Declaration>(arg)) = [](auto const & pod_type) {
-
       return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
     pattern(as<FixedSizeArrayType>(arg)) = [](auto const & array_type) {

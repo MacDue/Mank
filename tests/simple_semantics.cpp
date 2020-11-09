@@ -833,3 +833,113 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
     REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("not an lvalue"));
   }
 }
+
+#define REQUIRE_REF_TYPE_TO(function, stmt_idx, to, extra) {        \
+  auto& decl = std::get<Ast_Variable_Declaration>(function.body.statements.at(stmt_idx)->v); \
+  auto ref_type = std::get_if<ReferenceType>(&decl.type->v);        \
+  REQUIRE(ref_type);                                                \
+  auto references = std::get_if<to>(&ref_type->references->v);      \
+  REQUIRE(references);                                              \
+  extra;                                                            \
+}
+
+TEST_CASE("Reference binding", "[Sema]") {
+  using namespace Catch::Matchers;
+
+  Semantics sema;
+
+  SECTION("References bound to lvalues is valid") {
+    auto code = Parser::parse_from_string(R"(
+      pod Example {
+        my_float: f64,
+        my_int: i32
+      }
+
+      proc ref_test {
+        my_pod: Example;
+        my_array := [1,2,3,4];
+        my_var := 1;
+
+        a := ref my_pod;            # 3
+        b := ref my_pod.my_float;   # 4
+        c := ref my_pod.my_int;     # 5
+        d := ref my_array;          # 6
+        e := ref my_array[2];       # 7
+        f := ref my_var;            # 8
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+
+    // a
+    REQUIRE_REF_TYPE_TO(function, 3, Ast_Pod_Declaration, ({}));
+
+    // b
+    REQUIRE_REF_TYPE_TO(function, 4, PrimativeType, ({
+      REQUIRE(references->tag == PrimativeType::FLOAT64);
+    }));
+
+    // c
+    REQUIRE_REF_TYPE_TO(function, 5, PrimativeType, ({
+      REQUIRE(references->tag == PrimativeType::INTEGER);
+    }));
+
+    // d
+    REQUIRE_REF_TYPE_TO(function, 6, FixedSizeArrayType, ({
+      REQUIRE(references->size == 4);
+    }));
+
+    // e
+    REQUIRE_REF_TYPE_TO(function, 7, PrimativeType, ({
+      REQUIRE(references->tag == PrimativeType::INTEGER);
+    }));
+
+    // f
+    REQUIRE_REF_TYPE_TO(function, 8, PrimativeType, ({
+      REQUIRE(references->tag == PrimativeType::INTEGER);
+    }));
+  }
+
+  SECTION("References are not implicitly copied") {
+    auto code = Parser::parse_from_string(R"(
+      proc ref_test {
+        my_var := 1;
+        a := ref my_var; # 1
+        b := my_var;     # 2
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+
+    auto& function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+
+    REQUIRE_REF_TYPE_TO(function, 1, PrimativeType, ({
+      REQUIRE(references->tag == PrimativeType::INTEGER);
+    }));
+
+    auto& b = std::get<Ast_Variable_Declaration>(function.body.statements.at(2)->v);
+    // not a reference type
+    REQUIRE(std::get_if<PrimativeType>(&b.type->v));
+  }
+
+  SECTION("References cannot be bound to rvalues") {
+    auto code = Parser::parse_from_string(R"(
+      proc ref_test {
+        a: ref i32 = 1;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot bind rvalue"));
+  }
+
+  SECTION("References must be initialized") {
+    auto code = Parser::parse_from_string(R"(
+      proc ref_test {
+        a: ref i32;
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("must be initialized"));
+  }
+}

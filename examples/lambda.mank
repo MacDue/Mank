@@ -1,0 +1,37 @@
+
+# Like this syntax :)
+
+fun apply_lambda: i32[10] (array: ref i32[10], lambda: \i32 -> i32) {
+  out: i32[10];
+  for i in 0 .. array.length {
+    out[i] = lambda(array[i]);
+  }
+  out
+}
+
+proc do_lambda (lambda: \ -> void) {
+  lambda();
+}
+
+fun bind: \i32 -> i32 (lambda: \i32,i32 -> i32, a: i32) {
+
+}
+
+proc idk {
+  lambda_that_returns_lambda: \i32,i32 -> \i32 -> i32;
+}
+
+# Function returing a lambda (\i32 -> i32)
+fun make_doubler: \i32 -> i32 {
+  # double_a := \a: i32 -> i32 { a * 2 }
+  # double_a
+}
+
+
+# Function returning a lambda (\i32,i32 -> i32)
+fun make_adder: \i32,i32 -> i32 {
+  # adder := \a: i32, b: i32 -> i32 { a + b }
+  # adder
+}
+
+# \i32,i32 -> void

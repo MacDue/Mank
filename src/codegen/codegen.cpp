@@ -313,7 +313,12 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
   if (initializer) {
     ir_builder.CreateStore(initializer, alloca);
   } else if (array_initializer) {
+    // "Remove" the symbol temporarily to avoid issues in array init.
+    auto name_backup = local_symbol.name.name;
+    local_symbol.name.name.clear();
+    // needs to be done before sym addd
     initialize_array(alloca, *array_initializer, scope);
+    local_symbol.name.name = name_backup;
   }
 }
 

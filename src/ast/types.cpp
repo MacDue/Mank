@@ -29,14 +29,16 @@ std::string type_to_string(Type const & type) {
         type_to_string(reference_type.references.get()));
     },
     pattern(as<LambdaType>(arg)) = [](auto const & lambda_type) {
-      std::string lambda_str = "lambda ";
+      std::string lambda_str = "lambda";
       for (
         auto it = lambda_type.argument_types.begin();
         it != lambda_type.argument_types.end();
         it++
       ) {
         if (it != lambda_type.argument_types.begin()) {
-          lambda_str += ',';
+          lambda_str += ", ";
+        } else {
+          lambda_str += ' ';
         }
         lambda_str += type_to_string(it->get());
       }

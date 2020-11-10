@@ -151,3 +151,9 @@ void BaseAstVisitor::operator()(Ast_Index_Access& index) {
   std::visit(recur, index.index->v);
   after(index);
 }
+
+void BaseAstVisitor::operator()(Ast_Lambda& lambda) {
+  before(lambda);
+  visit(lambda);
+  recur(lambda.body);
+}

@@ -418,6 +418,8 @@ Expression_Ptr Parser::parse_primary_expression() {
     return to_expr_ptr(*block);
   } else if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
     return this->parse_array_literal();
+  } else if (peek(TokenType::BACKSLASH)) {
+    return this->parse_lambda();
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }
@@ -662,6 +664,19 @@ Expression_Ptr Parser::parse_array_literal() {
     TokenType::LEFT_SQUARE_BRACKET,
     TokenType::RIGHT_SQUARE_BRACKET);
   return to_expr_ptr(parsed_array);
+}
+
+Expression_Ptr Parser::parse_lambda() {
+  Ast_Lambda parsed_lambda;
+  parsed_lambda.arguments = this->parse_arguments(
+    TokenType::BACKSLASH, TokenType::ARROW);
+  parsed_lambda.return_type = this->parse_type();
+  auto body = this->parse_block();
+  if (!body) {
+    throw_error_here("expected lambda body");
+  }
+  parsed_lambda.body = *body;
+  return to_expr_ptr(parsed_lambda);
 }
 
 /* Types */

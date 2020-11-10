@@ -63,7 +63,8 @@ struct BaseAstVisitor: public AstVisitor<
   Ast_Binary_Operation,
   Ast_Field_Access,
   Ast_Array_Literal,
-  Ast_Index_Access
+  Ast_Index_Access,
+  Ast_Lambda
 > {
   void operator()(Ast_File& file) override;
   void operator()(Ast_Function_Declaration& func) override;
@@ -84,4 +85,5 @@ struct BaseAstVisitor: public AstVisitor<
   void operator()(Ast_Field_Access& access) override;
   void operator()(Ast_Array_Literal& array) override;
   void operator()(Ast_Index_Access& index) override;
+  void operator()(Ast_Lambda& lambda) override;
 };

@@ -231,3 +231,13 @@ void AstPrinter::print_expr(Ast_Index_Access& index) {
   putf("- Object:");
   self->print_expr(*index.object);
 }
+
+void AstPrinter::print_expr(Ast_Lambda& lambda) {
+  putf("* Lambda");
+  if (lambda.arguments.size() > 0) {
+    putf("- Arguments:");
+    self->print_args(lambda.arguments);
+  }
+  putf("- Body:");
+  self->print_expr(lambda.body);
+}

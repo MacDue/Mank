@@ -134,6 +134,7 @@ public:
   llvm::Value* codegen_expression(Ast_Field_Access& access, Scope& scope);
   llvm::Value* codegen_expression(Ast_Array_Literal& array, Scope& scope);
   llvm::Value* codegen_expression(Ast_Index_Access& index, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Lambda& lambda, Scope& scope);
 
   /* JIT tools */
   void* jit_find_symbol(std::string name);

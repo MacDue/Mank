@@ -56,6 +56,13 @@ struct Ast_Index_Access: Ast_Expression_Node {
   Expression_Ptr object, index;
 };
 
+struct Ast_Lambda: Ast_Expression_Node {
+  /* Captures */
+  std::vector<Ast_Argument> arguments;
+  Type_Ptr return_type;
+  Ast_Block body;
+};
+
 using Ast_Expression_Type = std::variant<
   Ast_Block,
   Ast_If_Expr,
@@ -66,7 +73,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Binary_Operation,
   Ast_Field_Access,
   Ast_Array_Literal,
-  Ast_Index_Access>;
+  Ast_Index_Access,
+  Ast_Lambda>;
 
 struct Ast_Expression {
   Ast_Expression_Type v;

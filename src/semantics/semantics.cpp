@@ -454,11 +454,13 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       FixedSizeArrayType array_type;
       array_type.size = array.elements.size();
       if (array_type.size == 1) {
-        array_type.element_type = analyse_expression(*array.elements.at(0), scope);
+        // Arrays of references not supported
+        array_type.element_type = remove_reference(
+          analyse_expression(*array.elements.at(0), scope));
       } else if (array_type.size > 1) {
         std::adjacent_find(array.elements.begin(), array.elements.end(),
           [&](auto& prev, auto& next){
-            array_type.element_type = analyse_expression(*prev, scope);
+            array_type.element_type = remove_reference(analyse_expression(*prev, scope));
             auto next_type = analyse_expression(*next, scope);
             if (!match_types(array_type.element_type.get(), next_type.get())) {
               throw_sema_error_at(next, "element type {} does not match array type of {}",

@@ -50,6 +50,8 @@ bool match_types(Type const * a, Type const * b) {
 
 TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
   using namespace mpark::patterns;
+  static auto null_symbol = std::optional<Ast_Identifier>{};
+
   return match(type->v)(
     pattern(as<UncheckedType>(arg)) = [&](auto const & unchecked) {
       Symbol* symbol = scope.lookup_first_name(unchecked.identifier);
@@ -65,9 +67,28 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
     pattern(as<ReferenceType>(arg)) = [&](auto& reference_type) {
       auto [referenced_type, symbol] = resolve_type(scope, reference_type.references);
       reference_type.references = referenced_type;
-      return std::make_pair(type, symbol);
+      return std::make_pair(referenced_type ? type : nullptr, symbol);
+    },
+    pattern(as<LambdaType>(arg)) = [&](auto& lambda_type) {
+      // Args, return type
+      auto [return_type, return_symbol] = resolve_type(scope, lambda_type.return_type);
+      lambda_type.return_type = return_type;
+
+      if (!return_type) {
+        return std::make_pair(Type_Ptr(nullptr), return_symbol);
+      }
+
+      for (auto& arg_type: lambda_type.argument_types) {
+        auto [resolved_arg_type, arg_symbol] = resolve_type(scope, arg_type);
+        arg_type = resolved_arg_type;
+        if (!arg_type) {
+          return std::make_pair(Type_Ptr(nullptr), arg_symbol);
+        }
+      }
+
+      return std::make_pair(type, null_symbol);
     },
     pattern(_) = [&] {
-      return std::make_pair(Type_Ptr(nullptr), std::optional<Ast_Identifier>{});
+      return std::make_pair(Type_Ptr(nullptr), null_symbol);
     });
 }

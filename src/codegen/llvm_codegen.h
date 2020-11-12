@@ -67,6 +67,8 @@ class LLVMCodeGen: public CodeGenerator {
   */
   std::unique_ptr<llvm::Module> llvm_module;
 
+  /* Codegen state */
+
   std::optional<llvm::orc::VModuleKey> jit_module_handle;
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit_engine;
 
@@ -81,13 +83,14 @@ class LLVMCodeGen: public CodeGenerator {
 
   std::optional<ClosureInfo> current_closure_info;
 
+  /* LLVM Helpers */
+
   bool block_terminates_here();
 
   void create_exit_br(llvm::BasicBlock* target);
 
   llvm::orc::VModuleKey jit_current_module();
-public:
-  LLVMCodeGen(Ast_File& file_ast);
+
   void create_module();
 
   llvm::Value* create_llvm_idx(uint value);
@@ -98,6 +101,21 @@ public:
     std::vector<uint> const & idx_list);
 
   llvm::Value* get_local(Ast_Identifier& ident, Scope& scope);
+
+  // Expression value extractor to help dealing with lvalues and rvalues
+  class ExpressionExtract {
+    LLVMCodeGen* codegen;
+    bool is_lvalue;
+    llvm::Value* value_or_address;
+public:
+    ExpressionExtract(LLVMCodeGen* codegen, Ast_Expression& expr, Scope& scope);
+    llvm::Value* get_value(
+      std::vector<unsigned> const & idx_list, llvm::Twine const & name);
+  };
+
+  inline ExpressionExtract get_value_extractor(Ast_Expression& expr, Scope& scope) {
+    return ExpressionExtract(this, expr, scope);
+  }
 
   /* Types */
   std::vector<llvm::Type*> map_arg_types_to_llvm(
@@ -116,6 +134,7 @@ public:
     llvm::Function* func, Scope& scope, Type* type, std::string name);
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);
   void codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func = nullptr);
+
   /* Statements */
   void codegen_statement(Ast_Statement& stmt, Scope& scope);
   void codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);
@@ -146,6 +165,8 @@ public:
   llvm::Value* codegen_expression(Ast_Index_Access& index, Scope& scope);
   llvm::Value* codegen_expression(Ast_Lambda& lambda, Scope& scope);
 
+public:
+  LLVMCodeGen(Ast_File& file_ast);
   /* JIT tools */
   void* jit_find_symbol(std::string name);
 

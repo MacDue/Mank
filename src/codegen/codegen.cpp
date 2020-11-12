@@ -34,6 +34,29 @@ void LLVMCodeGen::create_module() {
   /* TODO: set up optimizations */
 }
 
+LLVMCodeGen::ExpressionExtract::ExpressionExtract(
+  LLVMCodeGen* codegen, Ast_Expression& expr, Scope& scope
+): codegen{codegen}, is_lvalue{expr.is_lvalue()}
+{
+  if (is_lvalue) {
+    value_or_address = codegen->address_of(expr, scope);
+  } else {
+    value_or_address = codegen->codegen_expression(expr, scope);
+  }
+}
+
+llvm::Value* LLVMCodeGen::ExpressionExtract::get_value(
+  std::vector<unsigned> const & idx_list, llvm::Twine const & name
+) {
+  if (is_lvalue) {
+    llvm::Value* value_addr = codegen->ir_builder.CreateGEP(
+      value_or_address, codegen->make_idx_list_for_gep(idx_list), name);
+    return codegen->ir_builder.CreateLoad(value_addr, name);
+  } else {
+    return codegen->ir_builder.CreateExtractValue(value_or_address, idx_list, name);
+  }
+}
+
 /* Types */
 
 llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeType::Tag primative) {
@@ -657,20 +680,9 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
     function_type = &std::get<Ast_Function_Declaration>(callee_type->v);
     callee = this->get_function(*function_type);
   } else {
-    llvm::Type* llvm_lambda_type = map_lambda_type_to_llvm(*lambda_type, scope);
-
-    // Handle both lvalue/rvalue lambdas (todo this should be handled elsewhere)
-    if (call.callee->is_lvalue()) {
-      llvm::Value* lambda_details = address_of(*call.callee, scope);
-      env_ptr = ir_builder.CreateLoad(
-        ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 0), "env_ptr");
-      callee = ir_builder.CreateLoad(
-        ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 1), "lambda_func");
-    } else {
-      llvm::Value* lambda_details = codegen_expression(*call.callee, scope);
-      env_ptr = ir_builder.CreateExtractValue(lambda_details, {0}, "env_ptr");
-      callee = ir_builder.CreateExtractValue(lambda_details, {1}, "lambda_func");
-    }
+    auto expr_result = get_value_extractor(*call.callee, scope);
+    env_ptr = expr_result.get_value({0}, "env_ptr");
+    callee = expr_result.get_value({1}, "lambda_func");
   }
 
   std::vector<llvm::Value*> call_args;
@@ -931,16 +943,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
 
   std::vector<uint> idx_list;
   auto& source_object = flatten_nested_pod_accesses(access, idx_list);
-
-  if (source_object.is_lvalue()) {
-    llvm::Value* source_address = address_of(source_object, scope);
-    llvm::Value* field_ptr = ir_builder.CreateGEP(
-      source_address, make_idx_list_for_gep(idx_list), access.field.name);
-    return ir_builder.CreateLoad(field_ptr, access.field.name);
-  } else {
-    llvm::Value* pod_temp = codegen_expression(source_object, scope);
-    return ir_builder.CreateExtractValue(pod_temp, idx_list, access.field.name);
-  }
+  return get_value_extractor(source_object, scope).get_value(idx_list, access.field.name);
 }
 
 void LLVMCodeGen::initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& values, Scope& scope) {
@@ -1043,7 +1046,6 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
     };
   }
 
-
   llvm::Function* lambda_func = codegen_function_header(lambda);
   codegen_function_body(lambda, lambda_func);
   this->current_closure_info = std::nullopt; // remove closure info!
@@ -1052,7 +1054,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
   auto lambda_type = extract_type(lambda.get_type());
   llvm::Type* llvm_lambda_type = map_type_to_llvm(lambda_type.get(), scope);
 
-  // Null env ptr for now (no envs yet)
+  // Create lambda struct
   llvm::Value* lambda_details = ir_builder.CreateInsertValue(
     llvm::UndefValue::get(llvm_lambda_type), env_ptr, {0});
   lambda_details = ir_builder.CreateInsertValue(lambda_details, lambda_func, {1});

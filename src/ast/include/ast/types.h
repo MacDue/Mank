@@ -4,7 +4,7 @@
 
 #include "ast/construct.h"
 #include "ast/array_type.h"
-#include "ast/lambda_type.h"
+#include "ast/lambda.h"
 #include "ast/primative_types.h"
 
 struct UncheckedType {

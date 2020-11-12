@@ -151,11 +151,32 @@ void LLVMCodeGen::create_exit_br(llvm::BasicBlock* target) {
   }
 }
 
-llvm::AllocaInst* LLVMCodeGen::get_local(Ast_Identifier& ident, Scope& scope) {
+llvm::Value* LLVMCodeGen::get_local(Ast_Identifier& ident, Scope& scope) {
   Symbol* variable = scope.lookup_first_name(ident);
   assert(variable && variable->is_local());
-  auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
-  return variable_meta->alloca;
+
+  bool in_closure = false;
+  size_t closure_element_idx;
+  if (current_closure_info) {
+    // FIXME: Crappy slow solution
+    auto result = std::find(
+      current_closure_info->closure->begin(),
+      current_closure_info->closure->end(),
+      variable);
+    if (result != current_closure_info->closure->end()) {
+      in_closure = true;
+      closure_element_idx = std::distance(current_closure_info->closure->begin(), result);
+    }
+  }
+
+  if (!in_closure) {
+    auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
+    return variable_meta->alloca;
+  } else {
+    return ir_builder.CreateConstGEP2_32(
+      current_closure_info->closure_type, current_closure_info->closure_ptr, 0, closure_element_idx,
+      formatxx::format_string("captured_{}", variable->name.name));
+  }
 }
 
 /* Functions */
@@ -246,10 +267,16 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func, llvm::Fu
 
   // Create allocas for the locals (the arguments) & store them
   for (auto& arg: llvm_func->args()) {
-    Symbol* local_arg = func.body.scope.lookup_first(std::string(arg.getName()));
-    llvm::AllocaInst* arg_alloca = create_entry_alloca(llvm_func, local_arg);
-    // Store passed argument
-    ir_builder.CreateStore(&arg, arg_alloca);
+    if (current_closure_info && arg.getName() == LAMBDA_ENV) {
+      llvm::Value* closure_ptr = ir_builder.CreateBitCast(&arg,
+        llvm::PointerType::get(current_closure_info->closure_type, 0), "closure");
+      current_closure_info->closure_ptr = closure_ptr;
+    } else {
+      Symbol* local_arg = func.body.scope.lookup_first(std::string(arg.getName()));
+      llvm::AllocaInst* arg_alloca = create_entry_alloca(llvm_func, local_arg);
+      // Store passed argument
+      ir_builder.CreateStore(&arg, arg_alloca);
+    }
   }
 
   llvm::BasicBlock* function_return = llvm::BasicBlock::Create(
@@ -459,7 +486,7 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
   return match(expr.v)(
     pattern(as<Ast_Identifier>(arg)) = [&](auto& variable) -> llvm::Value* {
       auto type = extract_type_nullable(variable.get_meta().type);
-      llvm::AllocaInst* variable_alloca = get_local(variable, scope);
+      llvm::Value* variable_alloca = get_local(variable, scope);
       if (type && is_reference_type(type.get())) {
         // We want to dereference it
         return ir_builder.CreateLoad(variable_alloca, "dereference");
@@ -632,7 +659,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
     function_type = &std::get<Ast_Function_Declaration>(called_function->type->v);
     callee = this->get_function(*function_type);
   } else {
-    llvm::AllocaInst* lambda_details = get_local(called_function_ident, scope);
+    llvm::Value* lambda_details = get_local(called_function_ident, scope);
     llvm::Type* llvm_lambda_type = map_lambda_type_to_llvm(*lambda_type, scope);
 
     env_ptr = ir_builder.CreateLoad(
@@ -970,16 +997,59 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& sco
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
   llvm::BasicBlock* saved_block = ir_builder.GetInsertBlock();
+  lambda.generate_closure();
+
+  llvm::Value* env_ptr = llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context));
+  if (!lambda.closure.empty()) {
+    // Create closure type
+    std::vector<llvm::Type*> closure_types;
+    std::transform(lambda.closure.begin(), lambda.closure.end(),
+      std::back_inserter(closure_types),
+      [&](Symbol* capture){
+        return map_type_to_llvm(capture->type.get(), scope);
+      });
+    llvm::Type* closure_type = llvm::StructType::create(llvm_context, closure_types, "!lambda_closure");
+
+    // Malloc closure
+    llvm::Constant* closure_size = llvm::ConstantExpr::getSizeOf(closure_type);
+    llvm::Type* llvm_i64 = llvm::Type::getInt64Ty(llvm_context);
+    closure_size = llvm::ConstantExpr::getTruncOrBitCast(closure_size, llvm_i64);
+    llvm::Instruction* closure = llvm::CallInst::CreateMalloc(
+      ir_builder.GetInsertBlock(),
+      llvm_i64, // (think this is the pointer type?)
+      closure_type, closure_size, nullptr, nullptr);
+    env_ptr = &saved_block->back();
+    ir_builder.Insert(closure, "closure_malloc");
+
+    // Copy captures into the closure
+    size_t capture_idx = 0;
+    for (Symbol* capture: lambda.closure) {
+      llvm::Value* capture_addr = ir_builder.CreateConstGEP2_32(
+        closure_type, closure, 0, capture_idx, "closure_element");
+      ir_builder.CreateStore(
+        ir_builder.CreateLoad(get_local(capture->name, scope), "capture"), capture_addr);
+      ++capture_idx;
+    }
+
+    this->current_closure_info = ClosureInfo{
+      .parent = &scope,
+      .closure = &lambda.closure,
+      .closure_type = closure_type
+    };
+  }
+
+
   llvm::Function* lambda_func = codegen_function_header(lambda);
   codegen_function_body(lambda, lambda_func);
+  this->current_closure_info = std::nullopt; // remove closure info!
   ir_builder.SetInsertPoint(saved_block);
 
   auto lambda_type = extract_type(lambda.get_type());
   llvm::Type* llvm_lambda_type = map_type_to_llvm(lambda_type.get(), scope);
 
   // Null env ptr for now (no envs yet)
-  llvm::Value* lambda_details = ir_builder.CreateInsertValue(llvm::UndefValue::get(llvm_lambda_type),
-      llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context)), {0});
+  llvm::Value* lambda_details = ir_builder.CreateInsertValue(
+    llvm::UndefValue::get(llvm_lambda_type), env_ptr, {0});
   lambda_details = ir_builder.CreateInsertValue(lambda_details, lambda_func, {1});
 
   return lambda_details;

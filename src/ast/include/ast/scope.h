@@ -40,8 +40,16 @@ struct Symbol {
 
 class Scope {
   std::vector<Symbol> symbols;
-public:
   Scope* parent = nullptr;
+  int level = 0;
+public:
+  inline Scope* get_parent() { return parent; }
+  inline int get_level() { return level; }
+
+  inline void set_parent(Scope& parent) {
+    this->parent = &parent;
+    this->level = parent.level + 1;
+  }
 
   Symbol& add(Symbol symbol);
 

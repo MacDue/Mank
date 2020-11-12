@@ -67,7 +67,7 @@ void Semantics::analyse_file(Ast_File& file) {
     }
     file.scope.add(
       Symbol(func.identifier, func_type, Symbol::FUNCTION));
-    func.body.scope.parent = &global_scope;
+    func.body.scope.set_parent(global_scope);
     analyse_function_header(func);
   }
 
@@ -115,7 +115,7 @@ void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
 
 void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
   /* Try to resolve arg and return types */
-  Scope& parent_scope = *func.body.scope.parent;
+  Scope& parent_scope = *func.body.scope.get_parent();
   if (!func.procedure) {
     resolve_type_or_fail(parent_scope, func.return_type, "undeclared return type {}");
   }
@@ -125,7 +125,7 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
 }
 
 Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
-  block.scope.parent = &scope;
+  block.scope.set_parent(scope);
   for (auto& stmt: block.statements) {
     analyse_statement(*stmt, block.scope);
   }
@@ -143,7 +143,7 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       Symbol(arg.name, arg.type, Symbol::INPUT));
   }
   this->expected_returns.push(func.return_type.get());
-  auto body_type = analyse_block(func.body, *func.body.scope.parent);
+  auto body_type = analyse_block(func.body, *func.body.scope.get_parent());
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
@@ -492,7 +492,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       }
     },
     pattern(as<Ast_Lambda>(arg)) = [&](auto& lambda) {
-      lambda.body.scope.parent = &scope;
+      lambda.body.scope.set_parent(scope);
       analyse_function_header(lambda);
       LambdaType lambda_type;
       std::transform(lambda.arguments.begin(), lambda.arguments.end(),
@@ -601,20 +601,22 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
 
 Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   using namespace mpark::patterns;
-  auto called_function_ident = std::get_if<Ast_Identifier>(&call.callee->v);
-  if (!called_function_ident) {
-    auto callee_type = analyse_expression(*call.callee, scope);
-    throw_sema_error_at(call.callee, NOT_CALLABLE, type_to_string(callee_type.get()));
-  }
+  Type_Ptr callee_type;
 
-  Symbol* called_function = scope.lookup_first_name(*called_function_ident);
-  if (!called_function) {
-    throw_sema_error_at(*called_function_ident, "attempting to call undefined function \"{}\"",
-      called_function_ident->name);
+  auto called_function_ident = std::get_if<Ast_Identifier>(&call.callee->v);
+  if (called_function_ident) {
+    Symbol* called_function = scope.lookup_first_name(*called_function_ident);
+    if (!called_function) {
+      throw_sema_error_at(*called_function_ident, "attempting to call undefined function \"{}\"",
+        called_function_ident->name);
+    }
+    callee_type = called_function->type;
+  } else {
+    callee_type = analyse_expression(*call.callee, scope);
   }
 
   // Fairly hackly updated to support lambdas (will need a rework)
-  return match(called_function->type->v)(
+  return match(callee_type->v)(
     pattern(anyof(as<Ast_Function_Declaration>(arg), as<LambdaType>(arg))) =
     [&](auto& function_type) {
       using TFunc = std::decay_t<decltype(function_type)>;
@@ -649,7 +651,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
         }
       }
 
-      call.callee->meta.type = called_function->type;
+      call.callee->meta.type = callee_type;
 
       if (is_reference_type(function_type.return_type.get())) {
         call.get_meta().value_type = Expression_Meta::LVALUE;
@@ -659,8 +661,8 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
       return function_type.return_type;
     },
     pattern(_) = [&]() -> Type_Ptr {
-      throw_sema_error_at(*called_function_ident, NOT_CALLABLE,
-        type_to_string(called_function->type.get()));
+      throw_sema_error_at(call.callee, NOT_CALLABLE,
+        type_to_string(callee_type.get()));
       return nullptr;
     }
   );

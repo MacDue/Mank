@@ -6,6 +6,7 @@
 
 #include "ast/node.h"
 #include "ast/block.h"
+#include "ast/lambda.h"
 #include "ast/construct.h"
 #include "ast/primative_types.h"
 
@@ -55,13 +56,6 @@ struct Ast_Array_Literal: Expression_Node {
 
 struct Ast_Index_Access: Expression_Node {
   Expression_Ptr object, index;
-};
-
-struct Ast_Lambda: Ast_Expression_Node, Ast_Function_Declaration {
-  Ast_Lambda() {
-    this->lambda = true;
-    this->identifier.name = "!lambda";
-  }
 };
 
 using Ast_Expression_Type = std::variant<

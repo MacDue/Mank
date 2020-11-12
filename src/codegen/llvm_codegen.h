@@ -72,6 +72,15 @@ class LLVMCodeGen: public CodeGenerator {
 
   Ast_File& file_ast;
 
+  struct ClosureInfo {
+    Scope* parent;
+    Closure* closure;
+    llvm::Type* closure_type;
+    llvm::Value* closure_ptr = nullptr;
+  };
+
+  std::optional<ClosureInfo> current_closure_info;
+
   bool block_terminates_here();
 
   void create_exit_br(llvm::BasicBlock* target);
@@ -88,7 +97,7 @@ public:
   std::vector<llvm::Value*> make_idx_list_for_gep(
     std::vector<uint> const & idx_list);
 
-  llvm::AllocaInst* get_local(Ast_Identifier& ident, Scope& scope);
+  llvm::Value* get_local(Ast_Identifier& ident, Scope& scope);
 
   /* Types */
   std::vector<llvm::Type*> map_arg_types_to_llvm(

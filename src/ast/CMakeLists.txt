@@ -5,4 +5,5 @@ add_library(MankAST
   primative_types.cpp
   default_ast_visitor.cpp
   scope.cpp
+  lambda.cpp
 )

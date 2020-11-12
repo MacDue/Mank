@@ -647,25 +647,30 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope,
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
-  auto& called_function_ident = std::get<Ast_Identifier>(call.callee->v);
-
-  Symbol* called_function = scope.lookup_first_name(called_function_ident);
-  LambdaType* lambda_type = std::get_if<LambdaType>(&called_function->type->v);
+  auto callee_type = extract_type(call.callee->meta.type);
+  LambdaType* lambda_type = std::get_if<LambdaType>(&callee_type->v);
   Ast_Function_Declaration* function_type = nullptr;
 
   llvm::Value* callee;
   llvm::Value* env_ptr = nullptr;
   if (!lambda_type) {
-    function_type = &std::get<Ast_Function_Declaration>(called_function->type->v);
+    function_type = &std::get<Ast_Function_Declaration>(callee_type->v);
     callee = this->get_function(*function_type);
   } else {
-    llvm::Value* lambda_details = get_local(called_function_ident, scope);
     llvm::Type* llvm_lambda_type = map_lambda_type_to_llvm(*lambda_type, scope);
 
-    env_ptr = ir_builder.CreateLoad(
-      ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 0), "env_ptr");
-    callee = ir_builder.CreateLoad(
-      ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 1), "lambda_func");
+    // Handle both lvalue/rvalue lambdas (todo this should be handled elsewhere)
+    if (call.callee->is_lvalue()) {
+      llvm::Value* lambda_details = address_of(*call.callee, scope);
+      env_ptr = ir_builder.CreateLoad(
+        ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 0), "env_ptr");
+      callee = ir_builder.CreateLoad(
+        ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 1), "lambda_func");
+    } else {
+      llvm::Value* lambda_details = codegen_expression(*call.callee, scope);
+      env_ptr = ir_builder.CreateExtractValue(lambda_details, {0}, "env_ptr");
+      callee = ir_builder.CreateExtractValue(lambda_details, {1}, "lambda_func");
+    }
   }
 
   std::vector<llvm::Value*> call_args;

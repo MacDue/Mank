@@ -459,3 +459,46 @@ TEST_CASE("Simple lambdas", "[Codegen]") {
     REQUIRE(mult(10, -5) == 10 * -5);
   }
 }
+
+TEST_CASE("Closures", "[Codegen]") {
+  SECTION("makeAdder") {
+    auto codegen = compile(R"(
+      fun make_adder: \i32 -> i32 (x: i32) {
+        \y: i32 -> i32 {
+          x + y
+        }
+      }
+
+      fun add: i32 (a: i32, b: i32) {
+        adder := make_adder(a);
+        adder(b)
+      }
+    )");
+
+    auto add = codegen.extract_function_from_jit<int(int, int)>("add");
+    REQUIRE(add(1, 1) == 2);
+    REQUIRE(add(20, -5) == 15);
+  }
+
+  SECTION("Curried addThree") {
+    auto codegen = compile(R"(
+      fun make_add_three: \i32 -> \i32 -> \i32 -> i32 {
+        \a:i32 -> \i32 -> \i32 -> i32 {
+          \b:i32 -> \i32 -> i32 {
+            \c:i32 -> i32 {
+              a + b + c
+            }
+          }
+        }
+      }
+
+      fun add_three: i32 (a: i32, b: i32, c: i32) {
+        adder := make_add_three();
+        adder(a)(b)(c)
+      }
+    )");
+
+    auto add_three = codegen.extract_function_from_jit<int(int, int, int)>("add_three");
+    REQUIRE(add_three(1, 2, 3) == 1 + 2 + 3);
+  }
+}

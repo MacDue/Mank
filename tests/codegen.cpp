@@ -501,4 +501,27 @@ TEST_CASE("Closures", "[Codegen]") {
     auto add_three = codegen.extract_function_from_jit<int(int, int, int)>("add_three");
     REQUIRE(add_three(1, 2, 3) == 1 + 2 + 3);
   }
+
+  SECTION("Counter") {
+    auto codegen = compile(R"(
+      fun make_counter: \ -> i32 (start: i32) {
+        count := start;
+        \ -> i32 {
+          count += 1;
+          count
+        }
+      }
+
+      fun count_to: i32 (n: i32) {
+        counter := make_counter(0);
+        for _  in 0 .. n - 1 {
+          __ := counter();
+        }
+        counter()
+      }
+    )");
+
+    auto count_to = codegen.extract_function_from_jit<int(int)>("count_to");
+    REQUIRE(count_to(10) == 10);
+  }
 }

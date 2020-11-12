@@ -423,3 +423,39 @@ TEST_CASE("Messing with references", "[Codegen]") {
     REQUIRE(idk_what_this_is(2, 3) == 2);
   }
 }
+
+TEST_CASE("Simple lambdas", "[Codegen]") {
+  SECTION("Lambda with no env") {
+    auto codegen = compile(R"(
+      fun apply_lambda: i32 (lambda: \i32,i32 -> i32, a: i32, b: i32) {
+        lambda(a, b)
+      }
+
+      fun make_adder: \i32,i32 -> i32 {
+        \a: i32, b: i32 -> i32 { a + b }
+      }
+
+      fun make_mult: \i32,i32 -> i32 {
+        \a: i32, b: i32 -> i32 { a * b }
+      }
+
+      fun add: i32 (a: i32, b: i32) {
+        multer := make_adder();
+        apply_lambda(multer, a, b)
+      }
+
+      fun mult: i32 (a: i32, b: i32) {
+        adder := make_mult();
+        apply_lambda(adder, a, b)
+      }
+    )");
+
+    auto add = codegen.extract_function_from_jit<int(int, int)>("add");
+    REQUIRE(add(1,1) == 2);
+    REQUIRE(add(10, -5) == 5);
+
+    auto mult = codegen.extract_function_from_jit<int(int, int)>("mult");
+    REQUIRE(mult(1, 1) == 1);
+    REQUIRE(mult(10, -5) == 10 * -5);
+  }
+}

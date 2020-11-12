@@ -17,6 +17,7 @@ namespace Primative {
   make_primative_type(INTEGER);
   make_primative_type(STRING);
   make_primative_type(BOOL);
+  make_primative_type(UNSIGNED_BYTE);
 };
 
 // The resolved type + a the type's identifier in the source (for error messages)

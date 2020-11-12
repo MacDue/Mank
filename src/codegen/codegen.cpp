@@ -48,6 +48,8 @@ llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeType::Tag primative) {
       return llvm::Type::getInt8PtrTy(llvm_context);
     case PrimativeType::BOOL:
       return llvm::Type::getInt1Ty(llvm_context);
+    case PrimativeType::UNSIGNED_BYTE:
+      return llvm::Type::getInt8Ty(llvm_context);
     default:
       assert(false && "fix me! mapping unknown primative to LLVM");
   }
@@ -66,6 +68,24 @@ std::vector<llvm::Type*> LLVMCodeGen::map_arg_types_to_llvm(
     });
 
   return arg_types;
+}
+
+llvm::Type* LLVMCodeGen::map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope) {
+  std::vector<llvm::Type*> arg_types;
+  // The lambda env pointer
+  std::transform(lambda_type.argument_types.begin(), lambda_type.argument_types.end(),
+    std::back_inserter(arg_types), [&](auto& arg_type){
+      return map_type_to_llvm(arg_type.get(), scope);
+    });
+  arg_types.push_back(llvm::Type::getInt8PtrTy(llvm_context));
+
+  llvm::Type* lambda_func_type = llvm::FunctionType::get(
+    map_type_to_llvm(lambda_type.return_type.get(), scope), arg_types, false);
+
+  return llvm::StructType::get(llvm_context, {
+      llvm::Type::getInt8PtrTy(llvm_context),
+      llvm::PointerType::get(lambda_func_type, 0)
+    }, "lambda");
 }
 
 llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope) {
@@ -100,6 +120,9 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
     pattern(as<ReferenceType>(arg)) = [&](auto const & reference_type) -> llvm::Type* {
       return llvm::PointerType::get(
         map_type_to_llvm(reference_type.references.get(), scope), 0);
+    },
+    pattern(as<LambdaType>(arg)) = [&](auto const & lambda_type) -> llvm::Type* {
+      return map_lambda_type_to_llvm(lambda_type, scope);
     },
     pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");
@@ -149,8 +172,18 @@ llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
   }
 }
 
+#define LAMBDA_ENV "!lambda_env"
+
 llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& func) {
   llvm::Type* return_type = map_type_to_llvm(func.return_type.get(), func.body.scope);
+
+  if (func.lambda) {
+    // Add the lambda environment parameter
+    auto env_type = make_refernce(Primative::UNSIGNED_BYTE);
+    SymbolName env_name(LAMBDA_ENV);
+    func.arguments.push_back(Ast_Argument{.type = env_type, .name = env_name});
+    func.body.scope.add(Symbol(env_name, env_type, Symbol::INPUT));
+  }
 
   llvm::FunctionType* func_type = llvm::FunctionType::get(
     return_type, map_arg_types_to_llvm(func.arguments, func.body.scope), /*vararg:*/ false);
@@ -199,8 +232,10 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol*
 
 #define FUNCTION_RETURN_LOCAL "!return_value"
 
-void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func) {
-  llvm::Function* llvm_func = this->get_function(func);
+void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func) {
+  if (!llvm_func) {
+    llvm_func = this->get_function(func);
+  }
 
   assert("function must not already be generated" && llvm_func->empty());
 
@@ -588,22 +623,48 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
   auto& called_function_ident = std::get<Ast_Identifier>(call.callee->v);
 
   Symbol* called_function = scope.lookup_first_name(called_function_ident);
-  auto& function_type = std::get<Ast_Function_Declaration>(called_function->type->v);
+  LambdaType* lambda_type = std::get_if<LambdaType>(&called_function->type->v);
+  Ast_Function_Declaration* function_type = nullptr;
 
-  llvm::Function* callee = this->get_function(function_type);
+  llvm::Value* callee;
+  llvm::Value* env_ptr = nullptr;
+  if (!lambda_type) {
+    function_type = &std::get<Ast_Function_Declaration>(called_function->type->v);
+    callee = this->get_function(*function_type);
+  } else {
+    llvm::AllocaInst* lambda_details = get_local(called_function_ident, scope);
+    llvm::Type* llvm_lambda_type = map_lambda_type_to_llvm(*lambda_type, scope);
+
+    env_ptr = ir_builder.CreateLoad(
+      ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 0), "env_ptr");
+    callee = ir_builder.CreateLoad(
+      ir_builder.CreateConstGEP2_32(llvm_lambda_type, lambda_details, 0, 1), "lambda_func");
+  }
 
   std::vector<llvm::Value*> call_args;
   call_args.reserve(call.arguments.size());
 
   uint arg_idx = 0;
   for (auto& arg: call.arguments) {
-    auto arg_type = function_type.arguments.at(arg_idx).type.get();
+    Type* arg_type;
+    if (function_type) {
+      arg_type = function_type->arguments.at(arg_idx).type.get();
+    } else {
+      arg_type = lambda_type->argument_types.at(arg_idx).get();
+    }
     call_args.push_back(codegen_bind(*arg, arg_type, scope));
     ++arg_idx;
   }
 
-  return ir_builder.CreateCall(callee, call_args,
-    function_type.procedure ? "" : "call_ret");
+  if (lambda_type) {
+    // Pass lambda env
+    call_args.push_back(env_ptr);
+  }
+
+  bool has_return = (lambda_type && lambda_type->return_type.get())
+    || (function_type && !function_type->procedure);
+
+  return ir_builder.CreateCall(callee, call_args, has_return ? "call_ret" : "");
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {
@@ -908,7 +969,20 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& sco
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
-  assert(false && "todo lambda codegen");
+  llvm::BasicBlock* saved_block = ir_builder.GetInsertBlock();
+  llvm::Function* lambda_func = codegen_function_header(lambda);
+  codegen_function_body(lambda, lambda_func);
+  ir_builder.SetInsertPoint(saved_block);
+
+  auto lambda_type = extract_type(lambda.get_type());
+  llvm::Type* llvm_lambda_type = map_type_to_llvm(lambda_type.get(), scope);
+
+  // Null env ptr for now (no envs yet)
+  llvm::Value* lambda_details = ir_builder.CreateInsertValue(llvm::UndefValue::get(llvm_lambda_type),
+      llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context)), {0});
+  lambda_details = ir_builder.CreateInsertValue(lambda_details, lambda_func, {1});
+
+  return lambda_details;
 }
 
 /* JIT tools */

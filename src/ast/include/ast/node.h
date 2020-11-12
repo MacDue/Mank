@@ -103,12 +103,10 @@ struct Expression_Meta {
   }
 };
 
-class Ast_Expression_Node: public Ast_Node {
+class Ast_Expression_Node {
   Expression_Meta* meta = nullptr;
   friend class Ast_Expression;
 public:
-  using Ast_Node::Ast_Node;
-
   inline Expression_Meta& get_meta() {
     assert(meta != nullptr && "fix me! expression missing needed meta data");
     return *meta;
@@ -131,12 +129,14 @@ public:
   }
 };
 
-struct Ast_Identifier: Ast_Expression_Node {
+#define Expression_Node Ast_Node, Ast_Expression_Node
+
+struct Ast_Identifier: Expression_Node {
   std::string name;
 
   Ast_Identifier() = default;
   Ast_Identifier(SourceLocation location, std::string name)
-    : Ast_Expression_Node(location), name{name} {}
+    : Ast_Node(location), name{name} {}
   Ast_Identifier(std::string name)
     : Ast_Identifier({} /* dummy */, name) {};
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stack>
 #include <vector>
 #include <formatxx/std_string.h>
 
@@ -13,7 +14,8 @@ struct Semantics {
 
   CompilerWarnings const & get_warnings() { return warnings; }
 private:
-  Type* expected_return = nullptr;
+  // Simply because it's a pain to pass this around (top of stack == current function)
+  std::stack<Type*> expected_returns;
 
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);

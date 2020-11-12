@@ -6,20 +6,21 @@
 
 #include "ast/node.h"
 #include "ast/block.h"
+#include "ast/construct.h"
 #include "ast/primative_types.h"
 
-struct Ast_If_Expr: Ast_Expression_Node {
+struct Ast_If_Expr: Expression_Node {
   bool has_else = false;
   Expression_Ptr cond;
   Expression_Ptr then_block, else_block;
 };
 
-struct Ast_Call: Ast_Expression_Node {
+struct Ast_Call: Expression_Node {
   Expression_Ptr callee;
   std::vector<Expression_Ptr> arguments;
 };
 
-struct Ast_Literal: Ast_Expression_Node {
+struct Ast_Literal: Expression_Node {
   PrimativeType::Tag literal_type;
   std::string value;
 
@@ -31,36 +32,36 @@ struct Ast_Literal: Ast_Expression_Node {
   int size_bytes();
 };
 
-struct Ast_Unary_Operation: Ast_Expression_Node {
+struct Ast_Unary_Operation: Expression_Node {
   Expression_Ptr operand;
   Ast_Operator operation;
 };
 
-struct Ast_Binary_Operation: Ast_Expression_Node {
+struct Ast_Binary_Operation: Expression_Node {
   Expression_Ptr left, right;
   Ast_Operator operation;
   bool parenthesised = false;
 };
 
-struct Ast_Field_Access: Ast_Expression_Node {
+struct Ast_Field_Access: Expression_Node {
   Expression_Ptr object;
   Ast_Identifier field;
   int field_index = -1;
 };
 
-struct Ast_Array_Literal: Ast_Expression_Node {
+struct Ast_Array_Literal: Expression_Node {
   std::vector<Expression_Ptr> elements;
 };
 
-struct Ast_Index_Access: Ast_Expression_Node {
+struct Ast_Index_Access: Expression_Node {
   Expression_Ptr object, index;
 };
 
-struct Ast_Lambda: Ast_Expression_Node {
-  /* Captures */
-  std::vector<Ast_Argument> arguments;
-  Type_Ptr return_type;
-  Ast_Block body;
+struct Ast_Lambda: Ast_Expression_Node, Ast_Function_Declaration {
+  Ast_Lambda() {
+    this->lambda = true;
+    this->identifier.name = "!lambda";
+  }
 };
 
 using Ast_Expression_Type = std::variant<

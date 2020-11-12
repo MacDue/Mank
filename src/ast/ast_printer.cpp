@@ -234,6 +234,7 @@ void AstPrinter::print_expr(Ast_Index_Access& index) {
 
 void AstPrinter::print_expr(Ast_Lambda& lambda) {
   putf("* Lambda");
+  putf("- Return type: {}", type_to_string(lambda.return_type.get()));
   if (lambda.arguments.size() > 0) {
     putf("- Arguments:");
     self->print_args(lambda.arguments);

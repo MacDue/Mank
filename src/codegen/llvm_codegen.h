@@ -93,6 +93,8 @@ public:
   /* Types */
   std::vector<llvm::Type*> map_arg_types_to_llvm(
     std::vector<Ast_Argument> const & args, Scope& scope);
+
+  llvm::Type* map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope);
   llvm::Type* map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope);
   llvm::Type* map_primative_to_llvm(PrimativeType::Tag primative);
   llvm::Type* map_type_to_llvm(Type const * type, Scope& scope);
@@ -104,8 +106,7 @@ public:
   llvm::AllocaInst* create_entry_alloca(
     llvm::Function* func, Scope& scope, Type* type, std::string name);
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);
-  void codegen_function_body(Ast_Function_Declaration& func);
-
+  void codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func = nullptr);
   /* Statements */
   void codegen_statement(Ast_Statement& stmt, Scope& scope);
   void codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);

@@ -3,7 +3,7 @@
 #include "ast/node.h"
 #include "ast/scope.h"
 
-struct Ast_Block: Ast_Expression_Node {
+struct Ast_Block: Expression_Node {
   Scope scope;
   std::vector<Statement_Ptr> statements;
   bool has_final_expr = false;

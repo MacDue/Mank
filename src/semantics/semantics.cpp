@@ -142,13 +142,13 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
     func.body.scope.add(
       Symbol(arg.name, arg.type, Symbol::INPUT));
   }
-  this->expected_return = func.return_type.get();
+  this->expected_returns.push(func.return_type.get());
   auto body_type = analyse_block(func.body, *func.body.scope.parent);
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
     if (body_type) {
-      assert_valid_binding({}, expected_return, final_expr.get());
+      assert_valid_binding({}, expected_returns.top(), final_expr.get());
       /* Desugar implict return for codegen + return checking ease */
       func.body.has_final_expr = false;
       Ast_Return_Statement implicit_return;
@@ -173,6 +173,8 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   if (first_unreachable_stmt) {
     emit_warning_at(*first_unreachable_stmt, "unreachable code");
   }
+
+  this->expected_returns.pop();
 }
 
 static bool expression_may_have_side_effects(Ast_Expression& expr) {
@@ -261,6 +263,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
     },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
       Type_Ptr expr_type;
+      Type* expected_return = expected_returns.top();
       if (return_stmt.expression) {
         expr_type = analyse_expression(*return_stmt.expression, scope);
       } else if (expected_return) {
@@ -488,6 +491,17 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
           type_to_string(object_type.get()));
       }
     },
+    pattern(as<Ast_Lambda>(arg)) = [&](auto& lambda) {
+      lambda.body.scope.parent = &scope;
+      analyse_function_header(lambda);
+      LambdaType lambda_type;
+      std::transform(lambda.arguments.begin(), lambda.arguments.end(),
+        std::back_inserter(lambda_type.argument_types),
+        [&](auto & arg){ return arg.type; });
+      lambda_type.return_type = lambda.return_type;
+      analyse_function_body(lambda);
+      return expr.meta.owned_type = to_type_ptr(lambda_type);
+    },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
       return Type_Ptr(nullptr);
@@ -586,7 +600,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
 #define NOT_CALLABLE "{} is not callable"
 
 Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
-  //Symbol* called_function = scope.lookup_first_name(expr.callee)
+  using namespace mpark::patterns;
   auto called_function_ident = std::get_if<Ast_Identifier>(&call.callee->v);
   if (!called_function_ident) {
     auto callee_type = analyse_expression(*call.callee, scope);
@@ -599,31 +613,55 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
       called_function_ident->name);
   }
 
-  if (called_function->kind != Symbol::FUNCTION) {
-    throw_sema_error_at(*called_function_ident, NOT_CALLABLE,
-      type_to_string(called_function->type.get()));
-  }
+  // Fairly hackly updated to support lambdas (will need a rework)
+  return match(called_function->type->v)(
+    pattern(anyof(as<Ast_Function_Declaration>(arg), as<LambdaType>(arg))) =
+    [&](auto& function_type) {
+      using TFunc = std::decay_t<decltype(function_type)>;
+      constexpr bool is_lambda = std::is_same_v<TFunc, LambdaType>;
 
-  auto& function_type = std::get<Ast_Function_Declaration>(called_function->type->v);
+      size_t expected_arg_count;
+      std::string function_name;
+      if constexpr (is_lambda) {
+        expected_arg_count = function_type.argument_types.size();
+        function_name = "\\lambda";
+      } else {
+        expected_arg_count = function_type.arguments.size();
+        function_name = function_type.identifier.name;
+      }
 
-  if (function_type.arguments.size() != call.arguments.size()) {
-    throw_sema_error_at(call.callee, "{} expects {} arguments not {}",
-      function_type.identifier.name, function_type.arguments.size(), call.arguments.size());
-  }
+      if (expected_arg_count != call.arguments.size()) {
+        throw_sema_error_at(call.callee, "{} expects {} arguments not {}",
+          function_name, expected_arg_count, call.arguments.size());
+      }
 
-  for (uint arg_idx = 0; arg_idx < function_type.arguments.size(); arg_idx++) {
-    auto& expected = function_type.arguments.at(arg_idx);
-    auto& argument = *call.arguments.at(arg_idx);
-    (void) analyse_expression(argument, scope);
-    assert_valid_binding(expected.name, expected.type.get(), &argument);
-  }
+      for (uint arg_idx = 0; arg_idx < expected_arg_count; arg_idx++) {
+        auto& argument = *call.arguments.at(arg_idx);
+        (void) analyse_expression(argument, scope);
 
-  call.callee->meta.type = called_function->type;
+        if constexpr (!is_lambda) {
+          auto& expected = function_type.arguments.at(arg_idx);
+          assert_valid_binding(expected.name, expected.type.get(), &argument);
+        } else {
+          // Lambda args are not named (will need a better error reporting method...)
+          auto& expected = function_type.argument_types.at(arg_idx);
+          assert_valid_binding(*called_function_ident, expected.get(), &argument);
+        }
+      }
 
-  if (is_reference_type(function_type.return_type.get())) {
-    call.get_meta().value_type = Expression_Meta::LVALUE;
-  }
+      call.callee->meta.type = called_function->type;
 
-  // FINALLY we've checked everything in the call!
-  return function_type.return_type;
+      if (is_reference_type(function_type.return_type.get())) {
+        call.get_meta().value_type = Expression_Meta::LVALUE;
+      }
+
+      // FINALLY we've checked everything in the call!
+      return function_type.return_type;
+    },
+    pattern(_) = [&]() -> Type_Ptr {
+      throw_sema_error_at(*called_function_ident, NOT_CALLABLE,
+        type_to_string(called_function->type.get()));
+      return nullptr;
+    }
+  );
 }

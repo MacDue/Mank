@@ -3,8 +3,8 @@
 #include <vector>
 
 #include "ast/node.h"
-#include "ast/expr.h"
 #include "ast/scope.h"
+#include "ast/block.h"
 
 struct Ast_File: Ast_Node {
   Scope scope;
@@ -14,9 +14,10 @@ struct Ast_File: Ast_Node {
 };
 
 struct Ast_Function_Declaration: Ast_Node {
-  bool external = false;
-  bool c_function = false;
-  bool procedure = false;
+  bool external = false,
+       c_function = false,
+       procedure = false,
+       lambda = false;
   Ast_Identifier identifier;
   std::vector<Ast_Argument> arguments;
   Type_Ptr return_type;

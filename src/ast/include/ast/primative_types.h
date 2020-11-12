@@ -9,6 +9,7 @@ using PrimativeValue = std::variant<
   double,
   /* strings? */
   int32_t,
+  uint8_t,
   bool>;
 
 struct PrimativeType {
@@ -17,6 +18,7 @@ struct PrimativeType {
     FLOAT64,
     STRING,
     INTEGER,
+    UNSIGNED_BYTE,
     BOOL,
     /* TODO: more integer types */
   } tag;

@@ -1,0 +1,79 @@
+fun bind: \i32 -> i32 (func: \i32,i32 -> i32, a: i32) {
+  \b: i32 -> i32 { func(a, b) }
+}
+
+fun normal_add: i32 (a: i32, b: i32) { a + b }
+
+fun make_adder_bind: \i32 -> i32 (x: i32) {
+  bind(normal_add, x)
+}
+
+fun harder_closure: \i32 -> \i32 -> i32 {
+  a_cat := 12;
+  thing := 2112;
+  other_thing := 1212;
+  \a: i32 -> \i32 -> i32 {
+    lambda_local := 102;
+    a_cat -= 1;               # captures outer scope
+    ret := \b: i32 -> i32 {
+      thing -= 1;             # captures outer lambdas captre
+      other_thing *= 2;       # pulls into outer lambdas closure
+      return thing + other_thing;
+    }
+    thing *= 2;               # top level
+    ret
+  }
+}
+
+fun make_fib: \i32 -> i32 {
+  fib_proto : \i32 -> i32;
+  \ -> \i32 -> i32 {
+    fib_ref := ref fib_proto;
+    fib_proto = \n: i32 -> i32 {
+      if n == 0 {
+        0
+      } else if (n == 1) {
+        1
+      } else {
+        fib_ref(n - 1) + fib_ref(n - 2)
+      }
+    }
+    fib_proto
+  }()
+}
+
+fun fib: i32 (n: i32) {
+  fib_func := make_fib();
+  fib_func(n)
+}
+
+fun make_add_three: \i32 -> \i32 -> \i32 -> i32 {
+  \a:i32 -> \i32 -> \i32 -> i32 {
+    \b:i32 -> \i32 -> i32 {
+      \c:i32 -> i32 {
+        a + b + c
+      }
+    }
+  }
+}
+
+fun add_three: i32 (a: i32, b: i32, c: i32) {
+  adder := make_add_three();
+  adder(a)(b)(c)
+}
+
+fun make_counter: \ -> i32 (start: i32) {
+  count := start;
+  \ -> i32 {
+    count += 1;
+    count
+  }
+}
+
+fun count_to: i32 (n: i32) {
+  counter := make_counter(0);
+  for _  in 0 .. n - 1 {
+    __ := counter();
+  }
+  counter()
+}

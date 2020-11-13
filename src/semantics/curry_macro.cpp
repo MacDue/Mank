@@ -54,6 +54,7 @@ Ast_Expression builtin_curry(Ast_Call& curry_call) {
     // curry parm / return
     curried.return_type = current_return;
     curried.arguments = { arg };
+    curried.location = {};
     curry_type.return_type = current_return;
     curry_type.argument_types = { arg.type };
 

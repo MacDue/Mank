@@ -178,26 +178,28 @@ llvm::Value* LLVMCodeGen::get_local(Ast_Identifier& ident, Scope& scope) {
   Symbol* variable = scope.lookup_first_name(ident);
   assert(variable && variable->is_local());
 
-  bool in_closure = false;
   size_t closure_element_idx;
-  if (current_closure_info) {
+  ClosureInfo* closure_info = nullptr;
+  if (!current_closure_info.empty()) {
     // FIXME: Crappy slow solution
+    closure_info = &current_closure_info.top();
     auto result = std::find(
-      current_closure_info->closure->begin(),
-      current_closure_info->closure->end(),
+      closure_info->closure->begin(),
+      closure_info->closure->end(),
       variable);
-    if (result != current_closure_info->closure->end()) {
-      in_closure = true;
-      closure_element_idx = std::distance(current_closure_info->closure->begin(), result);
+    if (result != closure_info->closure->end()) {
+      closure_element_idx = std::distance(closure_info->closure->begin(), result);
+    } else {
+      closure_info = nullptr;
     }
   }
 
-  if (!in_closure) {
+  if (!closure_info) {
     auto variable_meta = static_cast<SymbolMetaLocal*>(variable->meta.get());
     return variable_meta->alloca;
   } else {
     return ir_builder.CreateConstGEP2_32(
-      current_closure_info->closure_type, current_closure_info->closure_ptr, 0, closure_element_idx,
+      closure_info->closure_type, closure_info->closure_ptr, 0, closure_element_idx,
       formatxx::format_string("captured_{}", variable->name.name));
   }
 }
@@ -290,10 +292,11 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func, llvm::Fu
 
   // Create allocas for the locals (the arguments) & store them
   for (auto& arg: llvm_func->args()) {
-    if (current_closure_info && arg.getName() == LAMBDA_ENV) {
+    if (!current_closure_info.empty() && arg.getName() == LAMBDA_ENV) {
+      auto& closure_info = current_closure_info.top();
       llvm::Value* closure_ptr = ir_builder.CreateBitCast(&arg,
-        llvm::PointerType::get(current_closure_info->closure_type, 0), "closure");
-      current_closure_info->closure_ptr = closure_ptr;
+        llvm::PointerType::get(closure_info.closure_type, 0), "closure");
+      closure_info.closure_ptr = closure_ptr;
     } else {
       Symbol* local_arg = func.body.scope.lookup_first(std::string(arg.getName()));
       llvm::AllocaInst* arg_alloca = create_entry_alloca(llvm_func, local_arg);
@@ -1007,8 +1010,9 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
   llvm::BasicBlock* saved_block = ir_builder.GetInsertBlock();
   lambda.generate_closure();
 
+  bool has_closure = !lambda.closure.empty();
   llvm::Value* env_ptr = llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context));
-  if (!lambda.closure.empty()) {
+  if (has_closure) {
     // Create closure type
     std::vector<llvm::Type*> closure_types;
     std::transform(lambda.closure.begin(), lambda.closure.end(),
@@ -1039,16 +1043,18 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
       ++capture_idx;
     }
 
-    this->current_closure_info = ClosureInfo{
+    this->current_closure_info.push(ClosureInfo{
       .parent = &scope,
       .closure = &lambda.closure,
       .closure_type = closure_type
-    };
+    });
   }
 
   llvm::Function* lambda_func = codegen_function_header(lambda);
   codegen_function_body(lambda, lambda_func);
-  this->current_closure_info = std::nullopt; // remove closure info!
+  if (has_closure) {
+    this->current_closure_info.pop(); // remove closure info!
+  }
   ir_builder.SetInsertPoint(saved_block);
 
   auto lambda_type = extract_type(lambda.get_type());

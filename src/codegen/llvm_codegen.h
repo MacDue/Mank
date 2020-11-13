@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stack>
 #include <string>
 #include <optional>
 
@@ -81,7 +82,7 @@ class LLVMCodeGen: public CodeGenerator {
     llvm::Value* closure_ptr = nullptr;
   };
 
-  std::optional<ClosureInfo> current_closure_info;
+  std::stack<ClosureInfo> current_closure_info;
 
   /* LLVM Helpers */
 

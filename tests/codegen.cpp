@@ -524,4 +524,33 @@ TEST_CASE("Closures", "[Codegen]") {
     auto count_to = codegen.extract_function_from_jit<int(int)>("count_to");
     REQUIRE(count_to(10) == 10);
   }
+
+  SECTION("Recursive lambda") {
+    auto codegen = compile(R"(
+      fun make_fib: \i32 -> i32 {
+        fib_proto : \i32 -> i32;
+        \ -> \i32 -> i32 {
+          fib_ref := ref fib_proto;
+          fib_proto = \n: i32 -> i32 {
+            if n == 0 {
+              0
+            } else if (n == 1) {
+              1
+            } else {
+              fib_ref(n - 1) + fib_ref(n - 2)
+            }
+          }
+          fib_proto
+        }()
+      }
+
+      fun fib: i32 (n: i32) {
+        fib_func := make_fib();
+        fib_func(n)
+      }
+    )");
+
+    auto fib = codegen.extract_function_from_jit<int(int)>("fib");
+    MATCH_INTEGER_TO_INTEGER_FUNCTION(fib, reference_fibonacci, 20);
+  }
 }

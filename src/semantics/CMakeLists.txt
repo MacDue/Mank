@@ -6,6 +6,7 @@ add_library(MankSemantics
   binding_helpers.cpp
   macros.cpp
   bind_macro.cpp
+  curry_macro.cpp
 )
 
 target_link_libraries(MankSemantics

@@ -52,12 +52,12 @@ Ast_Expression builtin_bind(Ast_Call& bind_call) {
       bind_call.arguments.begin() + 1, bind_call.arguments.end());
 
   for (auto idx = bound_count; idx < lambda_type->argument_types.size(); idx++) {
-    auto arg_name = formatxx::format_string("!{}", idx);
+    auto arg_name = to_internal_name(idx);
     bound_lambda.arguments.push_back(Ast_Argument{
       .type = lambda_type->argument_types.at(idx),
       .name = arg_name
     });
-    bound_call.arguments.push_back(make_ident(arg_name));
+    bound_call.arguments.push_back(to_expr_ptr(arg_name));
   }
 
   bound_lambda.body = make_body(true, make_expr_stmt(to_expr_ptr(bound_call), true));

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <formatxx/std_string.h>
 
 #include "ast/ast.h"
 
@@ -338,4 +339,11 @@ inline Ast_File wrap_expr(Expression_Ptr expr, bool final_expr = false) {
 
 inline Ast_File wrap_final_expr(Expression_Ptr expr) {
   return wrap_expr(expr, true);
+}
+
+/* Misc */
+
+template<typename T>
+inline Ast_Identifier to_internal_name(T stringifyable) {
+  return Ast_Identifier(formatxx::format_string("!{}", stringifyable));
 }

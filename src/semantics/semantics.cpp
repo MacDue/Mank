@@ -616,7 +616,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   }
 
   // Fairly hackly updated to support lambdas (will need a rework)
-  return match(callee_type->v)(
+  return match(remove_reference(callee_type)->v)(
     pattern(anyof(as<Ast_Function_Declaration>(arg), as<LambdaType>(arg))) =
     [&](auto& function_type) {
       using TFunc = std::decay_t<decltype(function_type)>;

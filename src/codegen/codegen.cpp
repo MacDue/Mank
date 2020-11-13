@@ -673,7 +673,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope,
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
-  auto callee_type = extract_type(call.callee->meta.type);
+  auto callee_type = remove_reference(extract_type(call.callee->meta.type));
   LambdaType* lambda_type = std::get_if<LambdaType>(&callee_type->v);
   Ast_Function_Declaration* function_type = nullptr;
 

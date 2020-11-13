@@ -597,3 +597,22 @@ TEST_CASE("Bind macro", "[Codegen]") {
     REQUIRE(fun_add(9, 1) == 40);
   }
 }
+
+TEST_CASE("Curry marco", "[Codegen]") {
+  SECTION("Currying top level functions") {
+    auto codegen = compile(R"(
+      fun add4: i32 (a: i32, b: i32, c: i32, d: i32) {
+        a + b + c + d
+      }
+
+      fun just_like_haskell: i32 {
+        func := curry!(add4);
+        func(1)(2)(3)(4)
+      }
+    )");
+
+    auto just_like_haskell = codegen.extract_function_from_jit<int()>("just_like_haskell");
+    REQUIRE(just_like_haskell() == 1 + 2 + 3 + 4);
+  }
+
+}

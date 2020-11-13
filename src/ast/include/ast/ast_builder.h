@@ -239,9 +239,10 @@ inline Expression_Ptr make_access(Expression_Ptr object, std::string field) {
 
 /* Expression statement */
 
-inline Statement_Ptr make_expr_stmt(Expression_Ptr expr) {
+inline Statement_Ptr make_expr_stmt(Expression_Ptr expr, bool final_expr = false) {
   Ast_Expression_Statement expr_stmt;
   expr_stmt.expression = expr;
+  expr_stmt.final_expr = final_expr;
   return to_stmt_ptr(expr_stmt);
 }
 

@@ -103,6 +103,7 @@ struct Expression_Meta {
   }
 };
 
+
 class Ast_Expression_Node {
   Expression_Meta* meta = nullptr;
   friend class Ast_Expression;
@@ -126,6 +127,10 @@ public:
 
   inline void update_const_value(PrimativeValue value) {
     get_meta().const_value = value;
+  }
+
+  inline void unsafe_move_meta(Expression_Meta* meta) {
+    this->meta = meta;
   }
 };
 

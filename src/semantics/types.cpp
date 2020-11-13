@@ -89,6 +89,8 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
       return std::make_pair(type, null_symbol);
     },
     pattern(_) = [&] {
-      return std::make_pair(Type_Ptr(nullptr), null_symbol);
+      // Possible it's already resolved
+      // TODO: Make sure code does not recurse over already resolved types.
+      return std::make_pair(type, null_symbol);
     });
 }

@@ -356,6 +356,32 @@ static std::pair<Ast_Argument*, int> resolve_pod_field_index(
   return std::make_pair(&(*accessed), index);
 }
 
+#define AUTO_LAMBDA "!auto_lambda"
+
+static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_func) {
+  assert(!top_level_func.lambda);
+  Ast_Lambda lambda_wrapper;
+  lambda_wrapper.identifier.name = AUTO_LAMBDA;
+  lambda_wrapper.return_type = top_level_func.return_type;
+  lambda_wrapper.arguments = top_level_func.arguments;
+
+  std::vector<Expression_Ptr> passthrough_args;
+  std::transform(top_level_func.arguments.begin(), top_level_func.arguments.end(),
+    std::back_inserter(passthrough_args),
+    [](Ast_Argument& arg) {
+      return make_ident(arg.name.name);
+    });
+
+  Ast_Call call;
+  call.callee = make_ident(top_level_func.identifier.name);
+  call.arguments = passthrough_args;
+  bool returns_value = !top_level_func.procedure;
+  lambda_wrapper.body = make_body(returns_value,
+    make_expr_stmt(to_expr_ptr(call), returns_value));
+
+  return lambda_wrapper;
+}
+
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
   auto expr_type = match(expr.v)(
@@ -411,11 +437,23 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) {
       Symbol* symbol = scope.lookup_first_name(ident);
-      if (!symbol || !symbol->is_local()) {
+      if (!symbol) {
         throw_sema_error_at(ident, "{} not declared", ident.name);
       }
-      expr.set_value_type(Expression_Meta::LVALUE);
-      return symbol->type;
+      if (symbol->kind == Symbol::FUNCTION) {
+        // Auto box functions to rvalue lambdas
+        auto wrapped_lambda = wrap_function_in_lambda(
+          std::get<Ast_Function_Declaration>(symbol->type->v));
+        wrapped_lambda.location = ident.location;
+        wrapped_lambda.unsafe_move_meta(&expr.meta);
+        expr.v = wrapped_lambda;
+        return analyse_expression(expr, scope); // should resolve lambda info
+      } else if (symbol->is_local()) {
+        expr.set_value_type(Expression_Meta::LVALUE);
+        return symbol->type;
+      } else {
+        throw_sema_error_at(ident, "{} cannot be used in this context", ident.name);
+      }
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
       return analyse_call(call, scope);
@@ -494,12 +532,12 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Lambda>(arg)) = [&](auto& lambda) {
       lambda.body.scope.set_parent(scope);
       analyse_function_header(lambda);
+      analyse_function_body(lambda);
       LambdaType lambda_type;
       std::transform(lambda.arguments.begin(), lambda.arguments.end(),
         std::back_inserter(lambda_type.argument_types),
         [&](auto & arg){ return arg.type; });
       lambda_type.return_type = lambda.return_type;
-      analyse_function_body(lambda);
       return expr.meta.owned_type = to_type_ptr(lambda_type);
     },
     pattern(_) = [&]{

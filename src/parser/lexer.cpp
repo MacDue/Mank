@@ -191,7 +191,7 @@ void Lexer::next_token() {
     || match("~", TokenType::BITWISE_NOT)
     || match("&", TokenType::BITWISE_AND)
     || match("|", TokenType::BITWISE_OR)
-    || match("!", TokenType::LOGICAL_NOT)
+    || match("!", TokenType::EXCLAMATION_MARK)
     || match("¬", TokenType::LOGICAL_NOT)
     /* Basic elements */
     || match("..", TokenType::DOUBLE_DOT)

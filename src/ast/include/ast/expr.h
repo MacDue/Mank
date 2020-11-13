@@ -58,6 +58,9 @@ struct Ast_Index_Access: Expression_Node {
   Expression_Ptr object, index;
 };
 
+// Just want something different to make errors easier
+// struct Ast_Macro_Ident: Ast_Identifier {};
+
 using Ast_Expression_Type = std::variant<
   Ast_Block,
   Ast_If_Expr,

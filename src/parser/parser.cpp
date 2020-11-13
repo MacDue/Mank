@@ -409,7 +409,9 @@ Expression_Ptr Parser::parse_primary_expression() {
   if (peek(TokenType::LITERAL) || peek(TokenType::TRUE) || peek(TokenType::FALSE)) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
-    return to_expr_ptr(*this->parse_identifier());
+    auto ident = *this->parse_identifier();
+    ident.macro_ident = this->consume(TokenType::EXCLAMATION_MARK);
+    return to_expr_ptr(ident);
   } else if (peek(TokenType::LEFT_PAREN)) {
     return this->parse_parenthesised_expression();
   } else if (peek(TokenType::IF)) {
@@ -607,6 +609,10 @@ Expression_Ptr Parser::parse_unary() {
   */
   auto unary_start = this->current_location();
   auto unary_op = this->lexer.peek_next_token().type;
+  // FIXME: Quick hack for ¬ and ! nots
+  if (unary_op == TokenType::EXCLAMATION_MARK) {
+    unary_op = TokenType::LOGICAL_NOT;
+  }
   if (!is_unary_op(unary_op)) {
     return this->parse_postfix_expression();
   }

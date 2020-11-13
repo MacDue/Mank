@@ -34,6 +34,8 @@ private:
   Type_Ptr analyse_binary_expression(Ast_Binary_Operation& expr, Scope& scope);
   Type_Ptr analyse_call(Ast_Call& expr, Scope& scope);
 
+  Ast_Lambda builtin_bind(Ast_Call& bind_call, Scope& scope);
+
 #include "sema_warnings.h"
 
   CompilerWarnings warnings;

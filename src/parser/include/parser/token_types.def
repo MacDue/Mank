@@ -11,6 +11,7 @@ COMMA = ',',
 LEFT_SQUARE_BRACKET = '[',
 RIGHT_SQUARE_BRACKET = ']',
 BACKSLASH = '\\',
+EXCLAMATION_MARK = '!',
 
 /* Operators */
 #include "operators.def"

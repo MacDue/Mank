@@ -170,7 +170,9 @@ void AstPrinter::print_expr(Ast_Literal& literal) {
 }
 
 void AstPrinter::print_expr(Ast_Identifier& ident) {
-  putf("* Identifier");
+  putf(!ident.macro_ident
+    ? "* Identifier"
+    : "* Macro identifier");
   putf("- {}", ident.name);
 }
 

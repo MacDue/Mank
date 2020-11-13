@@ -10,6 +10,17 @@
 
 #include "binding_helpers.h"
 
+// Macros
+#include "macros/bind_macro.h"
+
+Semantics::Semantics() {
+  static bool macros_loaded = false;
+  if (!macros_loaded) {
+    Macros::register_macro("bind", Macros::builtin_bind);
+    macros_loaded = true;
+  }
+}
+
 Symbol* Semantics::emit_warning_if_shadows(
   Ast_Identifier& ident, Scope& scope, std::string warning
 ) {
@@ -382,61 +393,26 @@ static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_fu
   return lambda_wrapper;
 }
 
-Ast_Lambda Semantics::builtin_bind(Ast_Call& bind_call, Scope& scope) {
-  auto arg_count = bind_call.arguments.size();
-  if (arg_count <= 0) {
-    throw_sema_error_at(bind_call, "bind needs some arguments");
-  }
-  auto bound_count = arg_count - 1;
-
-  size_t current_bind = 0;
-  LambdaType* lambda_type;
-  std::vector<Type_Ptr> bind_types;
-  bool first_arg = true;
-  bind_types.reserve(bind_call.arguments.size());
-  std::transform(
-    bind_call.arguments.begin(),
-    bind_call.arguments.end(), std::back_inserter(bind_types),
-    [&](auto& arg) -> Type_Ptr {
-      auto arg_type = analyse_expression(*arg, scope);
-      if (first_arg) {
-        lambda_type = std::get_if<LambdaType>(&arg_type->v);
-        if (!lambda_type) {
-          throw_sema_error_at(arg, "cannot bind non-lambda type");
-        } else if (bound_count > lambda_type->argument_types.size()) {
-          throw_sema_error_at(bind_call, "too many binds for lambda");
-        }
-        first_arg = false;
-        return nullptr;
-      }
-      auto& target_type = lambda_type->argument_types.at(current_bind);
-      if (!match_types(target_type.get(), arg_type.get())) {
-        throw_sema_error_at(arg, "cannot bind {} to {}",
-          type_to_string(arg_type.get()), type_to_string(target_type.get()));
-      }
-      ++current_bind;
-      return arg_type;
-    });
-
-  Ast_Lambda bound_lambda;
-  bound_lambda.identifier.name = "!bind";
-  bound_lambda.return_type = lambda_type->return_type;
-  Ast_Call bound_call;
-  bound_call.callee = bind_call.arguments.at(0);
-  bound_call.arguments = std::vector<Expression_Ptr>(
-      bind_call.arguments.begin() + 1, bind_call.arguments.end());
-
-  for (auto idx = bound_count; idx < lambda_type->argument_types.size(); idx++) {
-    auto arg_name = formatxx::format_string("!{}", idx);
-    bound_lambda.arguments.push_back(Ast_Argument{
-      .type = lambda_type->argument_types.at(idx),
-      .name = arg_name
-    });
-    bound_call.arguments.push_back(make_ident(arg_name));
+void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_call, Scope& scope) {
+  auto& macro_name = std::get<Ast_Macro_Ident>(macro_call.callee->v);
+  auto* expander = Macros::get_expr_macro_expander(macro_name);
+  if (!expander) {
+    throw_sema_error_at(macro_call, "expander for macro not found");
   }
 
-  bound_lambda.body = make_body(true, make_expr_stmt(to_expr_ptr(bound_call), true));
-  return bound_lambda;
+  for (auto& arg: macro_call.arguments) {
+    (void) analyse_expression(*arg, scope);
+  }
+
+  Ast_Expression expansion = (*expander)(macro_call);
+
+  // Some book keeping or the metas go funky
+  std::visit([&](auto& expansion){
+    auto meta = expansion.get_meta();
+    expansion.unsafe_move_meta(&target.meta);
+    target.v = expansion;
+    expansion.get_meta() = meta;
+  }, expansion.v);
 }
 
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
@@ -514,16 +490,10 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       }
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
-      if (auto callee = std::get_if<Ast_Identifier>(&call.callee->v)) {
-        // Builtins
-        if (callee->name == "bind") {
-          auto bound_lambda = builtin_bind(call, scope);
-          bound_lambda.location = {};
-          bound_lambda.unsafe_move_meta(&expr.meta);
-          expr.v = bound_lambda;
-          expr.set_value_type(Expression_Meta::RVALUE);
-          return analyse_expression(expr, scope);
-        }
+      if (std::holds_alternative<Ast_Macro_Ident>(call.callee->v)) {
+        expand_macro_expression(expr, call, scope);
+        // Expansion must then be checked
+        return analyse_expression(expr, scope);
       }
       return analyse_call(call, scope);
     },

@@ -59,7 +59,7 @@ struct Ast_Index_Access: Expression_Node {
 };
 
 // Just want something different to make errors easier
-// struct Ast_Macro_Ident: Ast_Identifier {};
+struct Ast_Macro_Ident: Ast_Identifier {};
 
 using Ast_Expression_Type = std::variant<
   Ast_Block,
@@ -72,7 +72,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Field_Access,
   Ast_Array_Literal,
   Ast_Index_Access,
-  Ast_Lambda>;
+  Ast_Lambda,
+  Ast_Macro_Ident>;
 
 struct Ast_Expression {
   Ast_Expression_Type v;

@@ -170,10 +170,13 @@ void AstPrinter::print_expr(Ast_Literal& literal) {
 }
 
 void AstPrinter::print_expr(Ast_Identifier& ident) {
-  putf(!ident.macro_ident
-    ? "* Identifier"
-    : "* Macro identifier");
+  putf("* Identifier");
   putf("- {}", ident.name);
+}
+
+void AstPrinter::print_expr(Ast_Macro_Ident& macro_ident) {
+  putf("* Macro identifier");
+  putf("- {}", macro_ident.name);
 }
 
 static char const * operation_to_string(Ast_Operator operation) {

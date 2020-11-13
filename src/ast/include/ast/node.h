@@ -138,7 +138,6 @@ public:
 
 struct Ast_Identifier: Expression_Node {
   std::string name;
-  bool macro_ident = false;
 
   Ast_Identifier() = default;
   Ast_Identifier(SourceLocation location, std::string name)

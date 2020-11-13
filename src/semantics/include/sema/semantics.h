@@ -10,6 +10,8 @@
 struct Semantics {
   using CompilerWarnings = std::vector<CompilerMessage>;
 
+  Semantics();
+
   void analyse_file(Ast_File& file);
 
   CompilerWarnings const & get_warnings() { return warnings; }
@@ -33,6 +35,8 @@ private:
   Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope);
   Type_Ptr analyse_binary_expression(Ast_Binary_Operation& expr, Scope& scope);
   Type_Ptr analyse_call(Ast_Call& expr, Scope& scope);
+
+  void expand_macro_expression(Ast_Expression& target, Ast_Call& macro_call, Scope& scope);
 
   Ast_Lambda builtin_bind(Ast_Call& bind_call, Scope& scope);
 

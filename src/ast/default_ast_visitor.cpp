@@ -157,3 +157,9 @@ void BaseAstVisitor::operator()(Ast_Lambda& lambda) {
   visit(lambda);
   recur(lambda.body);
 }
+
+void BaseAstVisitor::operator()(Ast_Macro_Ident& macro_ident) {
+  before(macro_ident);
+  visit(macro_ident);
+  after(macro_ident);
+};

@@ -410,7 +410,11 @@ Expression_Ptr Parser::parse_primary_expression() {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
     auto ident = *this->parse_identifier();
-    ident.macro_ident = this->consume(TokenType::EXCLAMATION_MARK);
+    if (this->consume(TokenType::EXCLAMATION_MARK)) {
+      Ast_Macro_Ident macro_ident;
+      *static_cast<Ast_Identifier*>(&macro_ident) = ident;
+      return to_expr_ptr(macro_ident);
+    }
     return to_expr_ptr(ident);
   } else if (peek(TokenType::LEFT_PAREN)) {
     return this->parse_parenthesised_expression();

@@ -579,3 +579,21 @@ TEST_CASE("Closures", "[Codegen]") {
     REQUIRE(add(-19, 9) == -10);
   }
 }
+
+TEST_CASE("Bind macro", "[Codegen]") {
+  SECTION("Binding top level functions") {
+    auto codegen = compile(R"(
+      fun add4: i32 (a: i32, b: i32, c: i32, d: i32) {
+        a + b + c + d
+      }
+
+      fun fun_add: i32 (a: i32, b: i32) {
+        adder := bind!(add4, a, 10);
+        adder(b, 20)
+      }
+    )");
+
+    auto fun_add = codegen.extract_function_from_jit<int(int, int)>("fun_add");
+    REQUIRE(fun_add(9, 1) == 40);
+  }
+}

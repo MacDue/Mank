@@ -294,9 +294,11 @@ void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func, llvm::Fu
   for (auto& arg: llvm_func->args()) {
     if (!current_closure_info.empty() && arg.getName() == LAMBDA_ENV) {
       auto& closure_info = current_closure_info.top();
-      llvm::Value* closure_ptr = ir_builder.CreateBitCast(&arg,
-        llvm::PointerType::get(closure_info.closure_type, 0), "closure");
-      closure_info.closure_ptr = closure_ptr;
+      if (closure_info.closure_type) {
+        llvm::Value* closure_ptr = ir_builder.CreateBitCast(&arg,
+          llvm::PointerType::get(closure_info.closure_type, 0), "closure");
+        closure_info.closure_ptr = closure_ptr;
+      }
     } else {
       Symbol* local_arg = func.body.scope.lookup_first(std::string(arg.getName()));
       llvm::AllocaInst* arg_alloca = create_entry_alloca(llvm_func, local_arg);
@@ -1010,9 +1012,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
   llvm::BasicBlock* saved_block = ir_builder.GetInsertBlock();
   lambda.generate_closure();
 
-  bool has_closure = !lambda.closure.empty();
+  ClosureInfo closure_info {
+    .parent = &scope,
+    .closure = &lambda.closure,
+    .closure_type = nullptr
+  };
+
   llvm::Value* env_ptr = llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context));
-  if (has_closure) {
+  if (!lambda.closure.empty()) {
     // Create closure type
     std::vector<llvm::Type*> closure_types;
     std::transform(lambda.closure.begin(), lambda.closure.end(),
@@ -1020,16 +1027,17 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
       [&](Symbol* capture){
         return map_type_to_llvm(capture->type.get(), scope);
       });
-    llvm::Type* closure_type = llvm::StructType::create(llvm_context, closure_types, "!lambda_closure");
+    closure_info.closure_type = llvm::StructType::create(
+      llvm_context, closure_types, "!lambda_closure");
 
     // Malloc closure
-    llvm::Constant* closure_size = llvm::ConstantExpr::getSizeOf(closure_type);
+    llvm::Constant* closure_size = llvm::ConstantExpr::getSizeOf(closure_info.closure_type);
     llvm::Type* llvm_i64 = llvm::Type::getInt64Ty(llvm_context);
     closure_size = llvm::ConstantExpr::getTruncOrBitCast(closure_size, llvm_i64);
     llvm::Instruction* closure = llvm::CallInst::CreateMalloc(
       ir_builder.GetInsertBlock(),
       llvm_i64, // (think this is the pointer type?)
-      closure_type, closure_size, nullptr, nullptr);
+      closure_info.closure_type, closure_size, nullptr, nullptr);
     env_ptr = &saved_block->back();
     ir_builder.Insert(closure, "closure_malloc");
 
@@ -1037,24 +1045,17 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
     size_t capture_idx = 0;
     for (Symbol* capture: lambda.closure) {
       llvm::Value* capture_addr = ir_builder.CreateConstGEP2_32(
-        closure_type, closure, 0, capture_idx, "closure_element");
+        closure_info.closure_type, closure, 0, capture_idx, "closure_element");
       ir_builder.CreateStore(
         ir_builder.CreateLoad(get_local(capture->name, scope), "capture"), capture_addr);
       ++capture_idx;
     }
-
-    this->current_closure_info.push(ClosureInfo{
-      .parent = &scope,
-      .closure = &lambda.closure,
-      .closure_type = closure_type
-    });
   }
 
+  this->current_closure_info.push(closure_info);
   llvm::Function* lambda_func = codegen_function_header(lambda);
   codegen_function_body(lambda, lambda_func);
-  if (has_closure) {
-    this->current_closure_info.pop(); // remove closure info!
-  }
+  this->current_closure_info.pop(); // remove closure info!
   ir_builder.SetInsertPoint(saved_block);
 
   auto lambda_type = extract_type(lambda.get_type());

@@ -553,4 +553,29 @@ TEST_CASE("Closures", "[Codegen]") {
     auto fib = codegen.extract_function_from_jit<int(int)>("fib");
     MATCH_INTEGER_TO_INTEGER_FUNCTION(fib, reference_fibonacci, 20);
   }
+
+  SECTION("Using top level function as lambda") {
+    auto codegen = compile(R"(
+      fun normal_add: i32 (a: i32, b: i32) { a + b }
+
+      fun bind: \i32 -> i32 (func: \i32,i32 -> i32, a: i32) {
+        \b: i32 -> i32 {
+          func(a, b)
+        }
+      }
+
+      fun make_adder: \i32 -> i32 (x: i32) {
+        bind(normal_add, x)
+      }
+
+      fun add: i32 (a: i32, b: i32) {
+        adder := make_adder(a);
+        adder(b)
+      }
+    )");
+
+    auto add = codegen.extract_function_from_jit<int(int, int)>("add");
+    REQUIRE(add(1,2) == 3);
+    REQUIRE(add(-19, 9) == -10);
+  }
 }

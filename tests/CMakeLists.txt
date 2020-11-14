@@ -9,6 +9,7 @@ add_executable(UnitTests
 target_link_libraries(UnitTests
   MankParser
   MankSemantics
-  MankCodegen)
+  MankCodegen
+  gc)
 
 add_test(Name MankTests COMMAND UnitTests)

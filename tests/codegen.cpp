@@ -1,3 +1,4 @@
+#include <gc/gc.h>
 #include "catch/catch.hpp"
 
 #include "parser/parser.h"
@@ -5,6 +6,8 @@
 #include "codegen/codegen.h"
 
 CodeGen compile(std::string source) {
+  // Setup libgc for unit tests
+  if (GC_is_init_called()) GC_INIT();
   Ast_File code = Parser::parse_from_string(source);
   Semantics().analyse_file(code);
   CodeGen codegen(code);

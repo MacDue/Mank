@@ -34,6 +34,28 @@ void LLVMCodeGen::create_module() {
   /* TODO: set up optimizations */
 }
 
+#define GC_MALLOC "GC_malloc"
+
+llvm::Function* LLVMCodeGen::get_gc_malloc() {
+  llvm::Function* gc_malloc = llvm_module->getFunction(GC_MALLOC);
+
+  if (gc_malloc) {
+    return gc_malloc;
+  }
+
+  llvm::FunctionType* gc_malloc_type = llvm::FunctionType::get(
+     llvm::Type::getInt8PtrTy(llvm_context),
+     llvm::Type::getInt64Ty(llvm_context), false);
+
+  gc_malloc = llvm::Function::Create(
+    gc_malloc_type,
+    llvm::Function::ExternalLinkage,
+    GC_MALLOC,
+    llvm_module.get());
+
+  return gc_malloc;
+}
+
 LLVMCodeGen::ExpressionExtract::ExpressionExtract(
   LLVMCodeGen* codegen, Ast_Expression& expr, Scope& scope
 ): codegen{codegen}, is_lvalue{expr.is_lvalue()}
@@ -1037,7 +1059,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
     llvm::Instruction* closure = llvm::CallInst::CreateMalloc(
       ir_builder.GetInsertBlock(),
       llvm_i64, // (think this is the pointer type?)
-      closure_info.closure_type, closure_size, nullptr, nullptr);
+      closure_info.closure_type, closure_size, nullptr, get_gc_malloc());
     env_ptr = &saved_block->back();
     ir_builder.Insert(closure, "closure_malloc");
 

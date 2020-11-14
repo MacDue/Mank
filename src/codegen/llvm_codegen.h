@@ -94,6 +94,8 @@ class LLVMCodeGen: public CodeGenerator {
 
   void create_module();
 
+  llvm::Function* get_gc_malloc();
+
   llvm::Value* create_llvm_idx(uint value);
 
   Ast_Expression& flatten_nested_pod_accesses(

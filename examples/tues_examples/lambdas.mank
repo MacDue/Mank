@@ -1,0 +1,63 @@
+
+# Passing an lambda to a function and applying to an array
+proc apply(array: ref i32[10], func: \i32 -> i32) {
+  for i in 0 .. array.length {
+    array[i] = func(array[i]);
+  }
+}
+
+proc double_array(array: ref i32[10]) {
+  apply(array, \x: i32 -> i32 { x * 2 });
+}
+
+# Fun with closures
+
+# Counters
+fun make_counter: \ -> i32 (start: i32) {
+  count := start;
+  \ -> i32 {
+    count += 1;
+    count
+  }
+}
+
+# Adders
+fun make_adder: \i32 -> i32 (x: i32) {
+  \y: i32 -> i32 { x + y }
+}
+
+# Nested closures
+fun sum: \i32 -> \i32 -> \i32 -> i32 (a: i32) {
+  # (too verbose right now -- but macros help here)
+  \b: i32 -> \i32 -> \i32 -> i32 {
+    \c: i32 -> \i32 -> i32 {
+      \d: i32 -> i32 {
+        a + b + c + d
+      }
+    }
+  }
+}
+
+# Recursive fib lambda
+fun make_fib: \i32 -> i32 {
+  fib_proto : \i32 -> i32;
+  \ -> \i32 -> i32 {
+    fib_ref := ref fib_proto;
+    fib_proto = \n: i32 -> i32 {
+      if n == 0 {
+        0
+      } else if (n == 1) {
+        1
+      } else {
+        fib_ref(n - 1) + fib_ref(n - 2)
+      }
+    }
+    fib_proto
+  }()
+}
+
+fun fib: i32 (n: i32) {
+  fib_func := make_fib();
+  fib_func(n)
+}
+

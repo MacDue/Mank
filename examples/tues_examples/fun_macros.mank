@@ -1,0 +1,63 @@
+# Binding params
+
+fun launch_nukes: bool (simulation: bool, lat: f64, long: f64) {
+  # Some pointless code
+  if (lat == 20.0) {
+    if long == 20.0 {
+      return ¬simulation;
+    }
+  }
+  return false;
+}
+
+fun make_launcher: \f64,f64 -> bool {
+  bind!(launch_nukes, false)
+}
+
+fun make_manchester_destroyer: \ -> bool {
+  bind!(launch_nukes, false, 53.4808, 2.2426)
+}
+
+# Auto currying
+
+# Adding
+fun boring_add4: i32 (a: i32, b: i32, c: i32, d: i32) {
+  a + b + c + d
+}
+
+fun sum_test: i32 {
+  adder := curry!(boring_add4);
+  adder(1)(2)(3)(4)
+}
+
+fun partial_apply: \i32 -> i32 {
+  adder := curry!(boring_add4);
+  adder(1)(2)(3)
+}
+
+# Silly append
+fun make_list: i32[5] (a: i32, b: i32, c: i32, d: i32, e: i32) {
+  [a, b, c, d, e]
+}
+
+fun append_to_list: i32[5] {
+  append := curry!(make_list);
+  append := append(1);
+  append := append(2);
+  append := append(3);
+  append := append(4);
+  list: i32[5] = append(5);
+  list
+}
+
+# Mixed types
+
+fun complex_thing: bool (a: i32, b: f64, c: bool, d: i32[3]) {
+  # TODO
+  return false;
+}
+
+fun do_complex_thing: bool {
+  builder := curry!(complex_thing);
+  builder(20)(4.2)(false)([1,2,3])
+}

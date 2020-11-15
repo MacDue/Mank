@@ -396,7 +396,7 @@ static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_fu
 }
 
 void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_call, Scope& scope) {
-  auto& macro_name = std::get<Ast_Macro_Ident>(macro_call.callee->v);
+  auto& macro_name = std::get<Ast_Macro_Identifier>(macro_call.callee->v);
   auto* expander = Macros::get_expr_macro_expander(macro_name);
   if (!expander) {
     throw_sema_error_at(macro_call, "expander for macro not found");
@@ -492,7 +492,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       }
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
-      if (std::holds_alternative<Ast_Macro_Ident>(call.callee->v)) {
+      if (std::holds_alternative<Ast_Macro_Identifier>(call.callee->v)) {
         expand_macro_expression(expr, call, scope);
         // Expansion must then be checked
         return analyse_expression(expr, scope);

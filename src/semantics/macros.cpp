@@ -7,7 +7,7 @@ namespace Macros {
 
 static std::unordered_map<std::string, ExprMacroExpander> expression_expanders;
 
-ExprMacroExpander const * get_expr_macro_expander(Ast_Macro_Ident const & macro) {
+ExprMacroExpander const * get_expr_macro_expander(Ast_Macro_Identifier const & macro) {
   if (expression_expanders.contains(macro.name)) {
     return &expression_expanders.at(macro.name);
   }

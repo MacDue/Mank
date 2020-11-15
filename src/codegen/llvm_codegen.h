@@ -168,7 +168,7 @@ public:
   llvm::Value* codegen_expression(Ast_Index_Access& index, Scope& scope);
   llvm::Value* codegen_expression(Ast_Lambda& lambda, Scope& scope);
 
-  inline llvm::Value* codegen_expression(Ast_Macro_Ident& lambda, Scope& scope) {
+  inline llvm::Value* codegen_expression(Ast_Macro_Identifier& lambda, Scope& scope) {
     assert(false && "??? there should not be any macros left at this stage!");
   }
 

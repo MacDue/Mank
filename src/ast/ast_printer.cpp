@@ -174,7 +174,7 @@ void AstPrinter::print_expr(Ast_Identifier& ident) {
   putf("- {}", ident.name);
 }
 
-void AstPrinter::print_expr(Ast_Macro_Ident& macro_ident) {
+void AstPrinter::print_expr(Ast_Macro_Identifier& macro_ident) {
   putf("* Macro identifier");
   putf("- {}", macro_ident.name);
 }

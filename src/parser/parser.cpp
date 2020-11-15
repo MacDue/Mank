@@ -410,8 +410,10 @@ Expression_Ptr Parser::parse_primary_expression() {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
     auto ident = *this->parse_identifier();
+    // FIXME! This is just hacked in.
+    // Works fine for current macro impl though.
     if (this->consume(TokenType::EXCLAMATION_MARK)) {
-      Ast_Macro_Ident macro_ident;
+      Ast_Macro_Identifier macro_ident;
       *static_cast<Ast_Identifier*>(&macro_ident) = ident;
       return to_expr_ptr(macro_ident);
     }

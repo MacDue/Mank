@@ -994,13 +994,15 @@ void LLVMCodeGen::initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& va
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Literal& array, Scope& scope) {
-  /* I'm not sure this is much use as feature and may remove it */
-  // auto array_type = extract_type(array.get_type());
-  // llvm::AllocaInst* array_alloca = create_entry_alloca(
-  //   get_current_function(), scope, array_type.get(), "array_temp");
-  // initialize_array(array_alloca, array, scope);
-  // return array_alloca;
-  assert(false && "array literal expressions?");
+  /*
+    I'm not sure this is much use as feature and may remove it
+    It'd also be better codegen-ed with insertvalue, but that's more special cases
+  */
+  auto array_type = extract_type(array.get_type());
+  llvm::AllocaInst* array_alloca = create_entry_alloca(
+    get_current_function(), scope, array_type.get(), "array_temp");
+  initialize_array(array_alloca, array, scope);
+  return ir_builder.CreateLoad(array_alloca, "array_expr");
 }
 
 Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(

@@ -581,6 +581,37 @@ TEST_CASE("Closures", "[Codegen]") {
     REQUIRE(add(1,2) == 3);
     REQUIRE(add(-19, 9) == -10);
   }
+
+  // This should map to one top level wrapper & not crash
+  SECTION("Repeatedly using a top level function as a lambda") {
+    auto codegen = compile(R"(
+      fun double: i32 (x: i32) {
+        x * 2
+      }
+
+      proc apply (pair: ref i32[2], op: \i32 -> i32) {
+        pair[0] = op(pair[0]);
+        pair[1] = op(pair[1]);
+      }
+
+      fun do_apply: i32 (x: i32, op: \i32 -> i32) {
+        op(x)
+      }
+
+      fun test: i32 {
+        a := [1, 2];
+        b := 3;
+
+        apply(a, double);
+        b = do_apply(b, double);
+
+        return a[0] + a[1] + b;
+      }
+    )");
+
+    auto test = codegen.extract_function_from_jit<int()>("test");
+    REQUIRE(test() + (1 + 2 + 3) * 2);
+  }
 }
 
 TEST_CASE("Bind macro", "[Codegen]") {

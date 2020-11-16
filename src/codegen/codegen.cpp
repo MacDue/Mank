@@ -1030,9 +1030,30 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& sco
   }
 }
 
+llvm::Value* LLVMCodeGen::create_lambda(
+  llvm::Type* lambda_type, llvm::Function* body, llvm::Value* env_ptr
+) {
+  // Create lambda struct
+  llvm::Value* lambda_details = ir_builder.CreateInsertValue(
+    llvm::UndefValue::get(lambda_type), env_ptr, {0});
+  lambda_details = ir_builder.CreateInsertValue(lambda_details, body, {1});
+  return lambda_details;
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
-  llvm::BasicBlock* saved_block = ir_builder.GetInsertBlock();
-  lambda.generate_closure();
+  auto lambda_type = extract_type(lambda.get_type());
+  llvm::Type* llvm_lambda_type = map_type_to_llvm(lambda_type.get(), scope);
+  llvm::Function* lambda_func = nullptr;
+  llvm::Value* env_ptr = llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context));
+
+  if (lambda.top_level_wrapper) {
+    // Only need to generate one top level wrapper per (top level) function.
+    // The env is obviously always null.
+    lambda_func = llvm_module->getFunction(lambda.identifier.name);
+    if (lambda_func) {
+      return create_lambda(llvm_lambda_type, lambda_func, env_ptr);
+    }
+  }
 
   ClosureInfo closure_info {
     .parent = &scope,
@@ -1040,7 +1061,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
     .closure_type = nullptr
   };
 
-  llvm::Value* env_ptr = llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context));
+  llvm::BasicBlock* saved_block = ir_builder.GetInsertBlock();
+  lambda.generate_closure();
   if (!lambda.closure.empty()) {
     // Create closure type
     std::vector<llvm::Type*> closure_types;
@@ -1075,20 +1097,12 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
   }
 
   this->current_closure_info.push(closure_info);
-  llvm::Function* lambda_func = codegen_function_header(lambda);
+  lambda_func = codegen_function_header(lambda);
   codegen_function_body(lambda, lambda_func);
   this->current_closure_info.pop(); // remove closure info!
   ir_builder.SetInsertPoint(saved_block);
 
-  auto lambda_type = extract_type(lambda.get_type());
-  llvm::Type* llvm_lambda_type = map_type_to_llvm(lambda_type.get(), scope);
-
-  // Create lambda struct
-  llvm::Value* lambda_details = ir_builder.CreateInsertValue(
-    llvm::UndefValue::get(llvm_lambda_type), env_ptr, {0});
-  lambda_details = ir_builder.CreateInsertValue(lambda_details, lambda_func, {1});
-
-  return lambda_details;
+  return create_lambda(llvm_lambda_type, lambda_func, env_ptr);
 }
 
 /* JIT tools */

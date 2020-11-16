@@ -154,6 +154,8 @@ public:
   llvm::Value* address_of(Ast_Expression& expr, Scope& scope);
   llvm::Value* codegen_bind(Ast_Expression& expr, Type* bound_to, Scope& scope);
 
+  llvm::Value* create_lambda(llvm::Type* lambda_type, llvm::Function* body, llvm::Value* env_ptr);
+
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_Block& block, Scope& scope, bool as_lvalue = false);
@@ -168,7 +170,8 @@ public:
   llvm::Value* codegen_expression(Ast_Index_Access& index, Scope& scope);
   llvm::Value* codegen_expression(Ast_Lambda& lambda, Scope& scope);
 
-  inline llvm::Value* codegen_expression(Ast_Macro_Identifier& lambda, Scope& scope) {
+  inline llvm::Value* codegen_expression(Ast_Macro_Identifier& macro, Scope& scope) {
+    (void) macro; (void) scope;
     assert(false && "??? there should not be any macros left at this stage!");
   }
 

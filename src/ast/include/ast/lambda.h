@@ -15,6 +15,7 @@ using Closure = std::vector<Symbol*>;
 
 struct Ast_Lambda: Ast_Expression_Node, Ast_Function_Declaration {
   Closure closure;
+  bool top_level_wrapper = false;
 
   Ast_Lambda() {
     this->lambda = true;

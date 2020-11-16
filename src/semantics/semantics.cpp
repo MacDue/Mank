@@ -377,6 +377,7 @@ static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_fu
   // There only needs to be one auto lambda per top level function.
   lambda_wrapper.top_level_wrapper = true;
   // (top level wrappers must have unique names)
+  lambda_wrapper.procedure = top_level_func.procedure;
   lambda_wrapper.identifier.name = formatxx::format_string(
     AUTO_LAMBDA "!{}", top_level_func.identifier.name);
   lambda_wrapper.return_type = top_level_func.return_type;

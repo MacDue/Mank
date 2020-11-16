@@ -43,6 +43,7 @@ Ast_Expression builtin_curry(Ast_Call& curry_call) {
   Type_Ptr current_return = lambda_type->return_type;
   LambdaType curry_type;
   Ast_Lambda curried;
+  curried.procedure = !current_return;
   curried.body = make_body(returns_value,
     make_expr_stmt(to_expr_ptr(final_call), returns_value));
 

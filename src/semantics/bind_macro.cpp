@@ -46,6 +46,8 @@ Ast_Expression builtin_bind(Ast_Call& bind_call) {
   Ast_Lambda bound_lambda;
   bound_lambda.identifier.name = "!bind";
   bound_lambda.return_type = lambda_type->return_type;
+  bound_lambda.procedure = !lambda_type->return_type;
+
   Ast_Call bound_call;
   bound_call.callee = bind_call.arguments.at(0);
   bound_call.arguments = std::vector<Expression_Ptr>(
@@ -65,7 +67,6 @@ Ast_Expression builtin_bind(Ast_Call& bind_call) {
 
   Ast_Expression expansion_result = bound_lambda;
   expansion_result.set_value_type(Expression_Meta::RVALUE);
-
   return expansion_result;
 }
 

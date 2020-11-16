@@ -70,12 +70,13 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
       return std::make_pair(referenced_type ? type : nullptr, symbol);
     },
     pattern(as<LambdaType>(arg)) = [&](auto& lambda_type) {
-      // Args, return type
-      auto [return_type, return_symbol] = resolve_type(scope, lambda_type.return_type);
-      lambda_type.return_type = return_type;
+      if (lambda_type.return_type) { // hack solution to returing nothing
+        auto [return_type, return_symbol] = resolve_type(scope, lambda_type.return_type);
+        lambda_type.return_type = return_type;
 
-      if (!return_type) {
-        return std::make_pair(Type_Ptr(nullptr), return_symbol);
+        if (!return_type) {
+          return std::make_pair(Type_Ptr(nullptr), return_symbol);
+        }
       }
 
       for (auto& arg_type: lambda_type.argument_types) {

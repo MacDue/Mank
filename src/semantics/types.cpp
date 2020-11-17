@@ -43,6 +43,10 @@ bool match_types(Type const * a, Type const * b) {
           return match_type_lists(a.argument_types, b.argument_types)
             && match_types(a.return_type.get(), b.return_type.get());
         },
+      pattern(as<TypeVar>(arg), as<TypeVar>(arg)) =
+        [](auto const & a, auto const & b) {
+          return a.id == b.id;
+        },
       pattern(_, _) = []{ return false; });
   }
   return false;

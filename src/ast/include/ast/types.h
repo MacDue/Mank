@@ -7,6 +7,10 @@
 #include "ast/lambda.h"
 #include "ast/primative_types.h"
 
+struct TypeVar {
+  uint32_t id;
+};
+
 struct UncheckedType {
   Ast_Identifier identifier;
 };
@@ -17,6 +21,7 @@ struct ReferenceType {
 
 // (Great name! The type of the type that represents our types...)
 using Type_Type = std::variant<
+  TypeVar,
   UncheckedType,
   PrimativeType,
   Ast_Function_Declaration,

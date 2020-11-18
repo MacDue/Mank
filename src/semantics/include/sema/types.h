@@ -48,8 +48,8 @@ inline Type_Ptr make_refernce(Type_Ptr type) {
   return to_type_ptr(ReferenceType{ .references = type });
 }
 
-bool match_types(Type const * a, Type const * b,
-  std::set<Infer::Constraint>* constraints = nullptr);
+bool match_types(Type_Ptr a, Type_Ptr b,
+  Infer::ConstraintSet* constraints = nullptr);
 
 template <typename T>
 T min_type(T a, T b) {

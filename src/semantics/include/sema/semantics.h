@@ -4,6 +4,7 @@
 #include <vector>
 #include <formatxx/std_string.h>
 
+#include "sema/types.h"
 #include "sema/type_infer.h"
 
 #include "ast/ast.h"
@@ -19,11 +20,13 @@ struct Semantics {
   CompilerWarnings const & get_warnings() { return warnings; }
 private:
   // Simply because it's a pain to pass this around (top of stack == current function)
-  std::stack<Type*> expected_returns;
+  std::stack<Type_Ptr> expected_returns;
 
-  std::set<Infer::Constraint> type_constraints;
+  Infer::ConstraintSet type_constraints;
 
-  bool match_or_constrain_types(Type* a, Type* b);
+  inline bool match_or_constrain_types(Type_Ptr a, Type_Ptr b) {
+    return match_types(a, b, &type_constraints);
+  }
 
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);

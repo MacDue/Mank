@@ -4,7 +4,7 @@
 
 bool assert_valid_binding(
   Ast_Identifier const & lvalue,
-  Type const * type,
+  Type_Ptr type,
   Ast_Expression const * expression,
-  std::set<Infer::Constraint>* constraints
+  Infer::ConstraintSet* constraints
 );

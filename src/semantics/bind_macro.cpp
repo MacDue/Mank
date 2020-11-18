@@ -35,7 +35,7 @@ Ast_Expression builtin_bind(Ast_Call& bind_call) {
         return nullptr;
       }
       auto& target_type = lambda_type->argument_types.at(current_bind);
-      if (!match_types(target_type.get(), arg_type.get())) {
+      if (!match_types(target_type, arg_type)) {
         throw_sema_error_at(arg, "cannot bind {} to {}",
           type_to_string(arg_type.get()), type_to_string(target_type.get()));
       }

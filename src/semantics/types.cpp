@@ -3,21 +3,21 @@
 static bool match_type_lists(
   std::vector<Type_Ptr> const & a,
   std::vector<Type_Ptr> const & b,
-  std::set<Infer::Constraint>* constraints
+  Infer::ConstraintSet* constraints
 ) {
   if (a.size() != b.size()) {
     return false;
   }
   for (size_t idx = 0; idx < a.size(); idx++) {
-    if (!match_types(a.at(idx).get(), b.at(idx).get(), constraints)) {
+    if (!match_types(a.at(idx), b.at(idx), constraints)) {
       return false;
     }
   }
   return true;
 }
 
-bool match_types(Type const * a, Type const * b,
-  std::set<Infer::Constraint>* constraints
+bool match_types(Type_Ptr a, Type_Ptr b,
+  Infer::ConstraintSet* constraints
 ) {
   using namespace mpark::patterns;
 
@@ -45,12 +45,12 @@ bool match_types(Type const * a, Type const * b,
       pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) =
         [&](auto const & a, auto const & b) {
           return a.size == b.size
-            && match_types(a.element_type.get(), b.element_type.get(), constraints);
+            && match_types(a.element_type, b.element_type, constraints);
         },
       pattern(as<LambdaType>(arg), as<LambdaType>(arg)) =
         [&](auto const & a, auto const & b) {
           return match_type_lists(a.argument_types, b.argument_types, constraints)
-            && match_types(a.return_type.get(), b.return_type.get(), constraints);
+            && match_types(a.return_type, b.return_type, constraints);
         },
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) =
         [](auto const & a, auto const & b) {

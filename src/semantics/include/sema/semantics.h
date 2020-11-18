@@ -4,6 +4,8 @@
 #include <vector>
 #include <formatxx/std_string.h>
 
+#include "sema/type_infer.h"
+
 #include "ast/ast.h"
 #include "errors/compiler_message.h"
 
@@ -18,6 +20,10 @@ struct Semantics {
 private:
   // Simply because it's a pain to pass this around (top of stack == current function)
   std::stack<Type*> expected_returns;
+
+  std::set<Infer::Constraint> type_constraints;
+
+  bool match_or_constrain_types(Type* a, Type* b);
 
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);

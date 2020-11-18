@@ -1,29 +1,38 @@
-#include <mpark/patterns.hpp>
-
 #include "sema/types.h"
 
 static bool match_type_lists(
   std::vector<Type_Ptr> const & a,
-  std::vector<Type_Ptr> const & b
+  std::vector<Type_Ptr> const & b,
+  std::set<Infer::Constraint>* constraints
 ) {
   if (a.size() != b.size()) {
     return false;
   }
   for (size_t idx = 0; idx < a.size(); idx++) {
-    if (!match_types(a.at(idx).get(), b.at(idx).get())) {
+    if (!match_types(a.at(idx).get(), b.at(idx).get(), constraints)) {
       return false;
     }
   }
   return true;
 }
 
-bool match_types(Type const * a, Type const * b) {
+bool match_types(Type const * a, Type const * b,
+  std::set<Infer::Constraint>* constraints
+) {
   using namespace mpark::patterns;
 
   // Reference types should be matched like normal versions of their type
   // only when binding them should their be special treatment
   a = remove_reference(a);
   b = remove_reference(b);
+
+  if (constraints) {
+    auto min_t = min_type(a, b);
+    if (min_t && std::holds_alternative<TypeVar>(min_t->v)) {
+      constraints->insert(std::make_pair(a, b));
+      return true;
+    }
+  }
 
   if (a == b) {
     return true;
@@ -34,14 +43,14 @@ bool match_types(Type const * a, Type const * b) {
           return a.tag == b.tag;
         },
       pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) =
-        [](auto const & a, auto const & b) {
+        [&](auto const & a, auto const & b) {
           return a.size == b.size
-            && match_types(a.element_type.get(), b.element_type.get());
+            && match_types(a.element_type.get(), b.element_type.get(), constraints);
         },
       pattern(as<LambdaType>(arg), as<LambdaType>(arg)) =
-        [](auto const & a, auto const & b) {
-          return match_type_lists(a.argument_types, b.argument_types)
-            && match_types(a.return_type.get(), b.return_type.get());
+        [&](auto const & a, auto const & b) {
+          return match_type_lists(a.argument_types, b.argument_types, constraints)
+            && match_types(a.return_type.get(), b.return_type.get(), constraints);
         },
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) =
         [](auto const & a, auto const & b) {

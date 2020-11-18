@@ -10,12 +10,13 @@
 bool assert_valid_binding(
   Ast_Identifier const & lvalue,
   Type const * type,
-  Ast_Expression const * expression
+  Ast_Expression const * expression,
+  std::set<Infer::Constraint>* constraints
 ) {
   // If there's an expression it must match the type.
   if (expression) {
     auto expression_type = extract_type_nullable(expression->meta.type);
-    if (!match_types(type, expression_type.get())) {
+    if (!match_types(type, expression_type.get(), constraints)) {
       throw_sema_error_at(*expression, "cannot bind expression with type {} to {}",
         type_to_string(expression_type.get()), type_to_string(type));
     }

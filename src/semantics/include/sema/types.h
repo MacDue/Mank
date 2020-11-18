@@ -3,9 +3,12 @@
 #include <utility>
 #include <optional>
 #include <type_traits>
+#include <mpark/patterns.hpp>
 
 #include "ast/types.h"
 #include "ast/ast_builder.h"
+
+#include "sema/type_infer.h"
 #include "sema/sema_errors.h"
 
 #define make_primative_type(type_tag) \
@@ -45,7 +48,18 @@ inline Type_Ptr make_refernce(Type_Ptr type) {
   return to_type_ptr(ReferenceType{ .references = type });
 }
 
-bool match_types(Type const * a, Type const * b);
+bool match_types(Type const * a, Type const * b,
+  std::set<Infer::Constraint>* constraints = nullptr);
+
+template <typename T>
+T min_type(T a, T b) {
+  using namespace mpark::patterns;
+  return match(a->v, b->v)(
+    pattern(as<TypeVar>(_), _) = [&]{ return a; },
+    pattern(_, as<TypeVar>(_)) = [&]{ return b; },
+    pattern(_, _) = [&]{ return a; }
+  );
+}
 
 TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 

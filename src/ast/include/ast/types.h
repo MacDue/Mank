@@ -9,6 +9,22 @@
 
 struct TypeVar {
   uint32_t id;
+  // OR
+  enum {
+    TYPE_VAR = 0,
+    NUMERIC, // any int or float
+    INTEGER, // any int
+  } special_constraint = TYPE_VAR;
+
+  TypeVar() {
+    static auto next_id = 0;
+    id = next_id++;
+  }
+
+  TypeVar(auto constraint): special_constraint{constraint} {}
+
+  static Type_Ptr integer();
+  static Type_Ptr numeric();
 };
 
 struct UncheckedType {

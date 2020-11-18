@@ -4,6 +4,7 @@
 #include <formatxx/std_string.h>
 
 #include "ast/types.h"
+#include "ast/ast_builder.h"
 
 /* String helpers */
 
@@ -45,6 +46,20 @@ std::string type_to_string(Type const & type) {
       lambda_str += " -> " + type_to_string(lambda_type.return_type.get());
       return lambda_str;
     },
+    pattern(as<TypeVar>(arg)) = [](auto const & type_var) {
+      if (type_var.special_constraint) {
+        switch (type_var.special_constraint)
+        {
+          case TypeVar::INTEGER:
+            return "IntegerType"s;
+          case TypeVar::NUMERIC:
+            return "NumericType"s;
+          default:
+            return "???"s;
+        }
+      }
+      return formatxx::format_string("T{}", type_var.id);
+    },
     pattern(_) = []{
       return "???"s;
     });
@@ -72,4 +87,16 @@ Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
     return type_ptr;
   }
   assert(false && "fix me! expression type imformation is missing!");
+}
+
+/* Type Var */
+
+Type_Ptr TypeVar::integer() {
+  static Type_Ptr _integer = to_type_ptr(TypeVar(INTEGER));
+  return _integer;
+}
+
+Type_Ptr TypeVar::numeric() {
+  static Type_Ptr _numeric = to_type_ptr(TypeVar(NUMERIC));
+  return _numeric;
 }

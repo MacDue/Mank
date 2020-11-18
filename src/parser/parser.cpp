@@ -713,7 +713,13 @@ Type_Ptr Parser::parse_base_type() {
   // Array/simple types
   auto type_name = this->parse_identifier();
   if (type_name) {
-    auto type = to_type_ptr(UncheckedType{*type_name});
+    // Hack for testing
+    Type_Ptr type;
+    if (type_name->name == "T") {
+      type = to_type_ptr(TypeVar());
+    } else {
+      type = to_type_ptr(UncheckedType{*type_name});
+    }
     if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
       return this->parse_array_type(type);
     } else {

@@ -196,7 +196,7 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
     auto subs = Infer::unify(std::move(type_constraints));
     for (auto& [tvar, sub]: subs) {
-      std::cout << "T" << tvar << " -> " << type_to_string(sub.get()) << '\n';
+      std::cout << "T" << tvar.id << " -> " << type_to_string(sub.get()) << '\n';
     }
   }
 }

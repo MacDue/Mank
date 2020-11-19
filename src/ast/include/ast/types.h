@@ -8,20 +8,27 @@
 #include "ast/primative_types.h"
 
 struct TypeVar {
-  uint32_t id;
+  int32_t id;
   // OR
-  enum {
-    TYPE_VAR = 0,
-    NUMERIC, // any int or float
-    INTEGER, // any int
-  } special_constraint = TYPE_VAR;
+  enum Constraint {
+    NUMERIC = -1, // any int or float
+    INTEGER = -2, // any int
+  };
+
+  inline static const Constraint Constraints[] = { NUMERIC, INTEGER };
 
   TypeVar() {
     static auto next_id = 0;
     id = next_id++;
   }
 
-  TypeVar(auto constraint): special_constraint{constraint} {}
+  TypeVar(Constraint constraint)
+    : id{static_cast<int32_t>(constraint)} {}
+
+  inline bool special() const { return id < 0; }
+  inline bool operator <(TypeVar const & other) const {
+    return this->id < other.id;
+  }
 
   static Type_Ptr integer();
   static Type_Ptr numeric();

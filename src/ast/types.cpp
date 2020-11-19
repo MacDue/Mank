@@ -47,8 +47,8 @@ std::string type_to_string(Type const & type) {
       return lambda_str;
     },
     pattern(as<TypeVar>(arg)) = [](auto const & type_var) {
-      if (type_var.special_constraint) {
-        switch (type_var.special_constraint)
+      if (type_var.special()) {
+        switch (type_var.id)
         {
           case TypeVar::INTEGER:
             return "IntegerType"s;

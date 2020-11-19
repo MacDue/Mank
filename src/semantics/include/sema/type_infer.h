@@ -10,7 +10,7 @@ namespace Infer {
 
 using Constraint = std::pair<Type_Ptr, Type_Ptr>;
 using ConstraintSet = std::set<Constraint>;
-using Substitution = std::map<uint32_t, Type_Ptr>;
+using Substitution = std::map<TypeVar, Type_Ptr>;
 
 Substitution unify(ConstraintSet && constraints);
 

@@ -9,25 +9,25 @@
 namespace Infer {
 
 static Type_Ptr substitute(
-  Type_Ptr currentType, uint32_t type_id, Type_Ptr replacement,
+  Type_Ptr current_type, TypeVar tvar, Type_Ptr replacement,
   Substitution const & subs
 ) {
   using namespace mpark::patterns;
-  return match(currentType->v)(
-    pattern(as<PrimativeType>(_)) = [&]{ return currentType; },
+  return match(current_type->v)(
+    pattern(as<PrimativeType>(_)) = [&]{ return current_type; },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
       lambda_type.return_type = substitute(
-        lambda_type.return_type, type_id, replacement, subs);
+        lambda_type.return_type, tvar, replacement, subs);
       for (auto& arg_type: lambda_type.argument_types) {
-        arg_type = substitute(arg_type, type_id, replacement, subs);
+        arg_type = substitute(arg_type, tvar, replacement, subs);
       }
       return to_type_ptr(lambda_type);
     },
-    pattern(as<TypeVar>(arg)) = [&](auto const & type_var) {
-      if (!type_var.special_constraint && type_var.id == type_id) {
+    pattern(as<TypeVar>(arg)) = [&](auto const & current_tvar) {
+      if (current_tvar.id == tvar.id) {
         return replacement;
-      } // TODO special constraints
-      return currentType;
+      }
+      return current_type;
     },
     pattern(_) = []() -> Type_Ptr {
       assert(false && "unknown type substitution");
@@ -38,8 +38,8 @@ static Type_Ptr substitute(
 
 static Type_Ptr apply_type(Type_Ptr type, Substitution const & subs) {
   auto result = type;
-  for (auto& [type_id, solved_type]: subs) {
-    result = substitute(result, type_id, solved_type, subs);
+  for (auto& [tvar, solved_type]: subs) {
+    result = substitute(result, tvar, solved_type, subs);
   }
   return result;
 }
@@ -58,18 +58,18 @@ static void apply_subs(std::vector<Constraint>& constraints, Substitution const 
   }
 }
 
-static bool occurs(uint32_t type_id, Type_Ptr type) {
+static bool occurs(TypeVar tvar, Type_Ptr type) {
   using namespace mpark::patterns;
   return match(type->v)(
     pattern(as<LambdaType>(arg)) =
       [&](auto const & lambda) {
-        return occurs(type_id, lambda.return_type)
+        return occurs(tvar, lambda.return_type)
           || std::any_of(lambda.argument_types.begin(), lambda.argument_types.end(),
-            [&](auto arg_type){ return occurs(type_id, arg_type); });
+            [&](auto arg_type){ return occurs(tvar, arg_type); });
       },
     pattern(as<TypeVar>(arg)) =
-      [&](auto const & type_var) {
-        return type_id == type_var.id;
+      [&](auto const & current_tvar) {
+        return current_tvar.id == tvar.id;
       },
     pattern(_) = []{ return false; });
 }
@@ -80,12 +80,12 @@ static Substitution unify_var(TypeVar tvar, Type_Ptr type) {
     if (type_var->id == tvar.id) {
       return Substitution{};
     } else {
-      return Substitution{{tvar.id, type}};
+      return Substitution{{tvar, type}};
     }
-  } else if (occurs(tvar.id, type)) {
+  } else if (occurs(tvar, type)) {
     assert(false && "circular type use");
   } else {
-    return Substitution{{tvar.id, type}};
+    return Substitution{{tvar, type}};
   }
 }
 
@@ -93,8 +93,10 @@ static Substitution unify_one(Constraint constraint) {
   using namespace mpark::patterns;
   auto [a, b] = constraint;
   return match(a->v, b->v)(
-    pattern(as<PrimativeType>(_), as<PrimativeType>(_)) = []{
-      return Substitution{};
+    pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [](auto& p1, auto& p2){
+      WHEN(p1.tag == p2.tag) {
+        return Substitution{};
+      };
     },
     pattern(as<LambdaType>(arg), as<LambdaType>(arg)) = [](auto& l1, auto& l2) {
       ConstraintSet new_constraints;
@@ -107,11 +109,30 @@ static Substitution unify_one(Constraint constraint) {
       }
       return unify(std::move(new_constraints));
     },
-    pattern(as<TypeVar>(arg), _) = [&](auto& type_var){
-      return unify_var(type_var, b);
+    pattern(as<TypeVar>(_), as<TypeVar>(arg)) = [&](auto& tvar) {
+      WHEN (tvar.special()) {
+        /*
+          Something like T1 = IntegerType
+          They will always appear in this form due to how the constraints are generated.
+
+          If this is unified first then we add:
+            { IntegerType: T1 } to the solutions
+
+            Then after all the solutions are solved if T1 is not an
+            IntegerType, something has gone wrong -- fail, otherwise checks pass.
+
+          If another constraint { T1 = Integer } is unified first then
+            T1 = IntegerType may become { Integer = IntegerType }
+            Which is also fine if T1 check fine then they all must be IntegerTypes.
+        */
+        return unify_var(tvar, a);
+      };
     },
-    pattern(_, as<TypeVar>(arg)) = [&](auto& type_var){
-      return unify_var(type_var, a);
+    pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
+      return unify_var(tvar, b);
+    },
+    pattern(_, as<TypeVar>(arg)) = [&](auto& tvar){
+      return unify_var(tvar, a);
     },
     pattern(_, _) = []() -> Substitution {
       assert(false && "can't unify");
@@ -126,11 +147,41 @@ static Substitution unify_one(Constraint constraint) {
 //   }
 // }
 
-static void compose(Substitution& a, Substitution const & b) {
-  for (auto& [_, s]: a) {
-    s = apply_type(s, b);
+static void merge_left(Substitution& target, Substitution const & other) {
+  // Merge 'other' into target (left)
+  for (auto& [_, s]: target) {
+    s = apply_type(s, other);
   }
-  a.insert(b.begin(), b.end());
+  target.insert(other.begin(), other.end());
+}
+
+static bool satisfies_special_constraints(Substitution& subs) {
+  auto sat_constraint = [&](TypeVar::Constraint constraint, Type const & type) {
+    using namespace mpark::patterns;
+    return match(type.v)(
+      pattern(as<TypeVar>(_)) = []{ return true; },
+      pattern(as<PrimativeType>(arg)) = [&](auto const & primative) {
+        // The constraint can now be removed from the solutions.
+        subs.erase(constraint);
+        switch (constraint) {
+          case TypeVar::NUMERIC: return primative.is_numeric_type();
+          case TypeVar::INTEGER: return primative.is_integer_type();
+          default: return false;
+        }
+      },
+      pattern(_) = []{ return false; }
+    );
+  };
+
+  for (auto const constraint: TypeVar::Constraints) {
+    if (subs.contains(constraint)) {
+      auto type = subs.at(constraint);
+      if (!sat_constraint(constraint, *type)) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 static Substitution unify(std::vector<Constraint>&& constraints) {
@@ -141,19 +192,10 @@ static Substitution unify(std::vector<Constraint>&& constraints) {
   Constraint top_constraint = constraints.back();
   constraints.pop_back();
   auto subs = unify_one(top_constraint);
-  // std::cout << "Unify one:\n";
-  // print_subs(subs);
   apply_subs(constraints, subs);
-  // std::cout << "Constraints\n";
-  // for (auto& [a, b]: constraints) {
-  //   std::cout << type_to_string(a.get()) << " = " << type_to_string(b.get()) << '\n';
-  // }
-
   auto more_subs = unify(std::move(constraints));
-  compose(subs, more_subs);
-  // std::cout << '\n';
-  // std::cout << "Unify Rest:\n";
-  // print_subs(subs);
+  merge_left(subs, more_subs);
+  assert(satisfies_special_constraints(subs));
   return subs;
 }
 

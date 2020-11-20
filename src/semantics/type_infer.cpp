@@ -30,8 +30,7 @@ static Type_Ptr substitute(
       return current_type;
     },
     pattern(_) = []() -> Type_Ptr {
-      assert(false && "unknown type substitution");
-      return nullptr;
+      throw UnifyError("unknown type substitution");
     }
   );
 }
@@ -83,7 +82,7 @@ static Substitution unify_var(TypeVar tvar, Type_Ptr type) {
       return Substitution{{tvar, type}};
     }
   } else if (occurs(tvar, type)) {
-    assert(false && "circular type use");
+    throw UnifyError("circular type usage detected");
   } else {
     return Substitution{{tvar, type}};
   }
@@ -135,17 +134,10 @@ static Substitution unify_one(Constraint constraint) {
       return unify_var(tvar, a);
     },
     pattern(_, _) = []() -> Substitution {
-      assert(false && "can't unify");
-      return Substitution{};
+      throw UnifyError("can't unify types");
     }
   );
 }
-
-// static void print_subs(Substitution const & subs) {
-//   for (auto& [tvar, sub]: subs) {
-//     std::cout << "T" << tvar << " -> " << type_to_string(sub.get()) << '\n';
-//   }
-// }
 
 static void merge_left(Substitution& target, Substitution const & other) {
   // Merge 'other' into target (left)
@@ -202,6 +194,16 @@ static Substitution unify(std::vector<Constraint>&& constraints) {
 Substitution unify(ConstraintSet&& constraints) {
   // Sets are not that fun to deal with & mutate
   return unify(std::vector<Constraint>(constraints.begin(), constraints.end()));
+}
+
+Substitution unify_and_apply(ConstraintSet && constraints) {
+  auto subs = unify(std::move(constraints));
+  for (auto& [tvar, sub]: subs) {
+    if (auto target = tvar.substitute.lock()) {
+      *target = *sub;
+    }
+  }
+  return subs;
 }
 
 }

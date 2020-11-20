@@ -3,6 +3,7 @@
 #include <set>
 #include <map>
 #include <utility>
+#include <stdexcept>
 
 #include "ast/types.h"
 
@@ -12,6 +13,18 @@ using Constraint = std::pair<Type_Ptr, Type_Ptr>;
 using ConstraintSet = std::set<Constraint>;
 using Substitution = std::map<TypeVar, Type_Ptr>;
 
+class UnifyError: public std::exception {
+  std::string error_message;
+public:
+  UnifyError(std::string error_message)
+    : error_message{error_message} {}
+
+  char const * what() const noexcept override {
+    return error_message.c_str();
+  }
+};
+
 Substitution unify(ConstraintSet && constraints);
+Substitution unify_and_apply(ConstraintSet && constraints);
 
 }

@@ -15,6 +15,12 @@ struct TypeVar {
     INTEGER = -2, // any int
   };
 
+  /*
+    Knowing it's own containing type pointer makes it
+    easy to apply the solved types back onto the AST without walking it.
+  */
+  std::weak_ptr<Type> substitute;
+
   inline static const Constraint Constraints[] = { NUMERIC, INTEGER };
 
   TypeVar() {

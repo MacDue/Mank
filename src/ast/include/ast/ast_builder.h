@@ -21,7 +21,11 @@ Expression_Ptr to_expr_ptr(TExpr && expr) {
 
 template <typename T>
 Type_Ptr to_type_ptr(T && type) {
-  return std::make_shared<Type>(type);
+  auto type_ptr = std::make_shared<Type>(type);
+  if (auto tvar = std::get_if<TypeVar>(&type_ptr->v)) {
+    tvar->substitute = type_ptr;
+  }
+  return type_ptr;
 }
 
 /* -- Constructs -- */

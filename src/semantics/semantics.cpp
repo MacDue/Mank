@@ -606,47 +606,6 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   return expr_type;
 }
 
-Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
-  auto operand_type = remove_reference(analyse_expression(*unary.operand, scope));
-  PrimativeType* primative_type = get_if_dereferenced_type<PrimativeType>(operand_type);
-
-  if (primative_type)
-  switch (unary.operation) {
-    case Ast_Operator::MINUS:
-    case Ast_Operator::PLUS: {
-      if (primative_type->is_numeric_type()) {
-        return operand_type;
-      }
-      break;
-    }
-    case Ast_Operator::BITWISE_NOT: {
-      if (primative_type->is_integer_type()) {
-        return operand_type;
-      }
-      break;
-    }
-    case Ast_Operator::LOGICAL_NOT: {
-      if (primative_type->is_boolean_type()) {
-        return operand_type;
-      }
-      break;
-    }
-    default: break;
-  }
-
-  if (unary.operation == Ast_Operator::REF) {
-    if (!operand_type || !unary.operand->is_lvalue()) {
-      throw_sema_error_at(unary.operand, "cannot take reference to non-lvalue expression");
-    }
-    unary.get_meta().value_type = Expression_Meta::LVALUE;
-    unary.operand->meta.owned_type = make_refernce(operand_type);
-    return unary.operand->meta.owned_type;
-  }
-
-  throw_sema_error_at(unary, "invalid unary operation for {}",
-    type_to_string(operand_type.get()));
-}
-
 #define ADD_SPECIAL_CONSTRAINT(constraints, constraint) \
   ({  if (!constraints.empty()) constraints.insert(constraint); true;  })
 
@@ -664,6 +623,45 @@ static bool match_special_constraint(
     },
     pattern(_) = []{ return false; }
   );
+}
+
+Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope) {
+  auto operand_type = remove_reference(analyse_expression(*unary.operand, scope));
+
+  if (unary.operation == Ast_Operator::REF) {
+    if (!operand_type || !unary.operand->is_lvalue()) {
+      throw_sema_error_at(unary.operand, "cannot take reference to non-lvalue expression");
+    }
+    unary.get_meta().value_type = Expression_Meta::LVALUE;
+    unary.operand->meta.owned_type = make_refernce(operand_type);
+    return unary.operand->meta.owned_type;
+  }
+
+  switch (unary.operation) {
+    case Ast_Operator::MINUS:
+    case Ast_Operator::PLUS: {
+      if (match_special_constraint(operand_type, TypeVar::NUMERIC, type_constraints)) {
+        return operand_type;
+      }
+      break;
+    }
+    case Ast_Operator::BITWISE_NOT: {
+      if (match_special_constraint(operand_type, TypeVar::INTEGER, type_constraints)) {
+        return operand_type;
+      }
+      break;
+    }
+    case Ast_Operator::LOGICAL_NOT: {
+      if (match_or_constrain_types(operand_type, Primative::BOOL)) {
+        return operand_type;
+      }
+      break;
+    }
+    default: break;
+  }
+
+  throw_sema_error_at(unary, "invalid unary operation for {}",
+    type_to_string(operand_type.get()));
 }
 
 Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {

@@ -149,7 +149,7 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   block.scope.destroy_locals();
   return block_type;
 }
-#include <iostream>
+
 void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     func.body.scope.add(
@@ -188,16 +188,14 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   }
 
   this->expected_returns.pop();
-
   if (!func.lambda) {
-    for (auto [a,b]: type_constraints) {
-      std::cout << type_to_string(a.get()) << " = " << type_to_string(b.get()) << '\n';
+    try {
+      Infer::unify_and_apply(std::move(type_constraints));
+    } catch (Infer::UnifyError const & e) {
+      throw_sema_error_at(func.identifier, "type inference failed (maybe annotate some types)");
     }
-
-    auto subs = Infer::unify_and_apply(std::move(type_constraints));
-    for (auto& [tvar, sub]: subs) {
-      std::cout << "T" << tvar.id << " -> " << type_to_string(sub.get()) << '\n';
-    }
+    // clear constraints for the next function -- only local inference
+    reset_type_constraints();
   }
 }
 

@@ -23,6 +23,7 @@ private:
   std::stack<Type_Ptr> expected_returns;
 
   Infer::ConstraintSet type_constraints;
+  inline void reset_type_constraints() { type_constraints = {}; }
 
   inline bool match_or_constrain_types(Type_Ptr a, Type_Ptr b) {
     return match_types(a, b, &type_constraints);

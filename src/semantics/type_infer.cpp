@@ -206,4 +206,18 @@ Substitution unify_and_apply(ConstraintSet && constraints) {
   return subs;
 }
 
+void generate_call_constraints(
+  Type_Ptr& callee_type, Ast_Call const & call, ConstraintSet& constraints
+) {
+  if (std::holds_alternative<TypeVar>(callee_type->v)) {
+    LambdaType call_type;
+    call_type.return_type = to_type_ptr(TypeVar());
+    std::generate_n(std::back_inserter(call_type.argument_types),
+      call.arguments.size(), []{ return to_type_ptr(TypeVar()); });
+    auto call_type_ptr = to_type_ptr(call_type);
+    constraints.insert(Constraint(callee_type, call_type_ptr));
+    callee_type = call_type_ptr;
+  }
+}
+
 }

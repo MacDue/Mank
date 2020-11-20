@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <variant>
 
+#include "ast/type_var.h"
+
 using PrimativeValue = std::variant<
   std::monostate,
   float,
@@ -38,4 +40,6 @@ struct PrimativeType {
   bool is_float_type() const;
   bool is_string_type() const;
   bool is_boolean_type() const;
+
+  bool satisfies(TypeVar::Constraint constraint) const;
 };

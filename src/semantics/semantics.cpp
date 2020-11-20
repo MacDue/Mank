@@ -647,29 +647,42 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
     type_to_string(operand_type.get()));
 }
 
+#define ADD_SPECIAL_CONSTRAINT(constraints, constraint) \
+  ({  if (!constraints.empty()) constraints.insert(constraint); true;  })
+
+static bool match_special_constraint(
+  Type_Ptr type, TypeVar::Constraint constraint, Infer::ConstraintSet& constraints
+) {
+  using namespace mpark::patterns;
+  return match(type->v)(
+    pattern(as<PrimativeType>(arg)) = [&](auto const & primative) {
+      return primative.satisfies(constraint);
+    },
+    pattern(as<TypeVar>(_)) = [&] {
+      return ADD_SPECIAL_CONSTRAINT(constraints,
+        Infer::Constraint(type, TypeVar::get(constraint)));
+    },
+    pattern(_) = []{ return false; }
+  );
+}
+
 Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
   auto left_type = remove_reference(analyse_expression(*binop.left, scope));
   auto right_type = analyse_expression(*binop.right, scope);
 
-  auto pre_constraints_size = type_constraints.size();
   if (!match_or_constrain_types(left_type, right_type)) {
     throw_sema_error_at(binop, "incompatible types {} and {}",
       type_to_string(left_type.get()), type_to_string(right_type.get()));
   }
-  bool added_constraints = type_constraints.size() > pre_constraints_size;
 
-  PrimativeType* primative_type = get_if_dereferenced_type<PrimativeType>(left_type);
+  left_type = min_type(left_type, right_type);
   auto binop_type = match(binop.operation)(
     pattern(anyof(
       Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,
       Ast_Operator::DIVIDE
     )) = [&]{
-      WHEN(added_constraints || primative_type->is_numeric_type()) {
-        if (added_constraints) {
-          type_constraints.insert(
-            std::make_pair(left_type, TypeVar::numeric()));
-        }
+      WHEN(match_special_constraint(left_type, TypeVar::NUMERIC, type_constraints)) {
         return left_type;
       };
     },
@@ -677,11 +690,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::LEFT_SHIFT, Ast_Operator::RIGHT_SHIFT, Ast_Operator::BITWISE_AND,
       Ast_Operator::BITWISE_OR, Ast_Operator::BITWISE_XOR, Ast_Operator::MODULO
     )) = [&]{
-      WHEN(added_constraints || primative_type->is_integer_type()) {
-        if (added_constraints) {
-          type_constraints.insert(
-            std::make_pair(left_type, TypeVar::integer()));
-        }
+      WHEN(match_special_constraint(left_type, TypeVar::INTEGER, type_constraints)) {
         return left_type;
       };
     },
@@ -689,11 +698,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::LESS_THAN, Ast_Operator::LESS_EQUAL, Ast_Operator::GREATER_THAN,
       Ast_Operator::GREATER_EQUAL, Ast_Operator::EQUAL_TO, Ast_Operator::NOT_EQUAL_TO
     )) = [&]{
-      WHEN(added_constraints || primative_type->is_numeric_type()) {
-        if (added_constraints) {
-          type_constraints.insert(
-            std::make_pair(left_type, TypeVar::numeric()));
-        }
+      WHEN(match_special_constraint(left_type, TypeVar::NUMERIC, type_constraints)) {
         return Primative::BOOL;
       };
     },
@@ -723,21 +728,9 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   } else {
     callee_type = analyse_expression(*call.callee, scope);
   }
-  // if callee type var then replace with lambda type
-  // of \t... tn -> t n + 1 & match
 
   auto deref_callee_type = remove_reference(callee_type);
-
-  if (std::holds_alternative<TypeVar>(deref_callee_type->v)) {
-    LambdaType call_type;
-    call_type.return_type = to_type_ptr(TypeVar());
-    std::generate_n(std::back_inserter(call_type.argument_types),
-      call.arguments.size(), []{ return to_type_ptr(TypeVar()); });
-    auto call_type_ptr = to_type_ptr(call_type);
-    type_constraints.insert(
-      std::make_pair(deref_callee_type, call_type_ptr));
-    deref_callee_type = call_type_ptr;
-  }
+  Infer::generate_call_constraints(deref_callee_type, call, type_constraints);
 
   // Fairly hackly updated to support lambdas (will need a rework)
   return match(deref_callee_type->v)(

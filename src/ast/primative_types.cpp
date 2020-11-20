@@ -63,6 +63,17 @@ bool PrimativeType::is_boolean_type() const {
   return tag == PrimativeType::BOOL;
 }
 
+bool PrimativeType::satisfies(TypeVar::Constraint constraint) const {
+  switch (constraint) {
+    case TypeVar::Constraint::NUMERIC:
+      return is_numeric_type();
+    case TypeVar::Constraint::INTEGER:
+      return is_integer_type();
+    default:
+      assert(false && "fix me! unknown constraint");
+  }
+}
+
 /* AST Literal */
 
 int32_t Ast_Literal::as_int32() {

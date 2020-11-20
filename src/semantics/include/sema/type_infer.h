@@ -27,4 +27,7 @@ public:
 Substitution unify(ConstraintSet && constraints);
 Substitution unify_and_apply(ConstraintSet && constraints);
 
+void generate_call_constraints(
+  Type_Ptr& callee_type, Ast_Call const & call, ConstraintSet& constraints);
+
 }

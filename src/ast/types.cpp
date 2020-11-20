@@ -100,3 +100,12 @@ Type_Ptr TypeVar::numeric() {
   static Type_Ptr _numeric = to_type_ptr(TypeVar(NUMERIC));
   return _numeric;
 }
+
+Type_Ptr TypeVar::get(Constraint constraint) {
+  switch (constraint) {
+    case NUMERIC: return numeric();
+    case INTEGER: return integer();
+    default:
+      assert(false && "fix me! unknown constraint");
+  }
+}

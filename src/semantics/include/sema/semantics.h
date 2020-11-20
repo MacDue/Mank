@@ -28,6 +28,8 @@ private:
     return match_types(a, b, &type_constraints);
   }
 
+  // void bind_or_constrain_types()
+
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);
 

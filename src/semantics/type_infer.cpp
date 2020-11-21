@@ -67,7 +67,7 @@ static bool occurs(TypeVar tvar, Type_Ptr type) {
       },
     pattern(as<TypeVar>(arg)) =
       [&](auto const & current_tvar) {
-        return current_tvar.id == tvar.id;
+        return tvar.id == TypeVar::ANY || current_tvar.id == tvar.id;
       },
     pattern(_) = []{ return false; });
 }
@@ -199,6 +199,9 @@ Substitution unify_and_apply(ConstraintSet && constraints) {
   auto subs = unify(std::move(constraints));
   for (auto& [tvar, sub]: subs) {
     if (auto target = tvar.substitute.lock()) {
+      if (occurs(TypeVar(TypeVar::ANY), sub)) {
+        throw UnifyError("incomplete substitution");
+      }
       *target = *sub;
     }
   }

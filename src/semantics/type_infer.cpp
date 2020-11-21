@@ -98,15 +98,16 @@ static Substitution unify_one(Constraint constraint) {
       };
     },
     pattern(as<LambdaType>(arg), as<LambdaType>(arg)) = [](auto& l1, auto& l2) {
-      ConstraintSet new_constraints;
-      new_constraints.insert(Constraint(l1.return_type, l2.return_type));
-      assert(l1.argument_types.size() == l2.argument_types.size());
-      for (auto type_pair: boost::combine(l1.argument_types, l2.argument_types)) {
-        Constraint arg_constraint;
-        boost::tie(arg_constraint.first, arg_constraint.second) = type_pair;
-        new_constraints.insert(arg_constraint);
-      }
-      return unify(std::move(new_constraints));
+      WHEN(l1.argument_types.size() == l2.argument_types.size()) {
+        ConstraintSet new_constraints;
+        new_constraints.insert(Constraint(l1.return_type, l2.return_type));
+        for (auto type_pair: boost::combine(l1.argument_types, l2.argument_types)) {
+          Constraint arg_constraint;
+          boost::tie(arg_constraint.first, arg_constraint.second) = type_pair;
+          new_constraints.insert(arg_constraint);
+        }
+        return unify(std::move(new_constraints));
+      };
     },
     pattern(as<TypeVar>(_), as<TypeVar>(arg)) = [&](auto& tvar) {
       WHEN (tvar.special()) {
@@ -155,11 +156,7 @@ static bool satisfies_special_constraints(Substitution& subs) {
       pattern(as<PrimativeType>(arg)) = [&](auto const & primative) {
         // The constraint can now be removed from the solutions.
         subs.erase(constraint);
-        switch (constraint) {
-          case TypeVar::NUMERIC: return primative.is_numeric_type();
-          case TypeVar::INTEGER: return primative.is_integer_type();
-          default: return false;
-        }
+        return primative.satisfies(constraint);
       },
       pattern(_) = []{ return false; }
     );
@@ -187,7 +184,10 @@ static Substitution unify(std::vector<Constraint>&& constraints) {
   apply_subs(constraints, subs);
   auto more_subs = unify(std::move(constraints));
   merge_left(subs, more_subs);
-  assert(satisfies_special_constraints(subs));
+
+  if (!satisfies_special_constraints(subs)) {
+    throw UnifyError("additional type constraints not met");
+  }
   return subs;
 }
 

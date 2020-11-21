@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <iostream>
 
 #include "ast/ast.h"
 #include "parser/lexer.h"

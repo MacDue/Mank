@@ -1,4 +1,3 @@
-#include <iostream>
 #include <mpark/patterns.hpp>
 #include <boost/range/combine.hpp>
 

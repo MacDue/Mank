@@ -121,7 +121,7 @@ Function_Ptr Parser::parse_function() {
 }
 
 std::vector<Ast_Argument> Parser::parse_arguments(
-  TokenType left_delim, TokenType right_delim
+  TokenType left_delim, TokenType right_delim, bool insert_tvars
 ) {
   std::vector<Ast_Argument> arguments;
   expect(left_delim);
@@ -131,10 +131,15 @@ std::vector<Ast_Argument> Parser::parse_arguments(
       throw_error_here("identifier expected");
     }
     /* arg type */
-    expect(TokenType::COLON);
-    auto arg_type = this->parse_type();
-    if (!arg_type) {
-      throw_error_here("type name expected");
+    Type_Ptr arg_type;
+    if (!insert_tvars || peek(TokenType::COLON)) {
+      expect(TokenType::COLON);
+      arg_type = this->parse_type();
+      if (!arg_type) {
+        throw_error_here("type name expected");
+      }
+    } else {
+      arg_type = to_type_ptr(TypeVar());
     }
 
     arguments.emplace_back(Ast_Argument {
@@ -681,8 +686,8 @@ Expression_Ptr Parser::parse_array_literal() {
 Expression_Ptr Parser::parse_lambda() {
   Ast_Lambda parsed_lambda;
   parsed_lambda.arguments = this->parse_arguments(
-    TokenType::BACKSLASH, TokenType::ARROW);
-  parsed_lambda.return_type = this->parse_type();
+    TokenType::BACKSLASH, TokenType::ARROW, true);
+  parsed_lambda.return_type = this->parse_type(true);
   auto body = this->parse_block();
   if (!body) {
     throw_error_here("expected lambda body");
@@ -693,40 +698,44 @@ Expression_Ptr Parser::parse_lambda() {
 
 /* Types */
 
-Type_Ptr Parser::parse_type() {
+Type_Ptr Parser::parse_type(bool default_tvar) {
   // Type modifiers
   if (consume(TokenType::REF)) {
+    // TODO: ref infer
     ReferenceType ref_type;
-    ref_type.references = this->parse_base_type();
+                          // allow incomplete refs
+    ref_type.references = this->parse_base_type(true);
     if (!ref_type.references) {
       throw_error_here("expected referenced type");
     }
     return to_type_ptr(ref_type);
   }
-  return this->parse_base_type();
+  return this->parse_base_type(default_tvar);
 }
 
-Type_Ptr Parser::parse_base_type() {
+Type_Ptr Parser::parse_base_type(bool default_tvar) {
   if (peek(TokenType::BACKSLASH)) {
     return this->parse_lambda_type();
   }
   // Array/simple types
   auto type_name = this->parse_identifier();
-  if (type_name) {
-    // Hack for testing
-    Type_Ptr type;
-    if (type_name->name == "T") {
+  Type_Ptr type;
+
+  if (!type_name) {
+    if (default_tvar) {
       type = to_type_ptr(TypeVar());
     } else {
-      type = to_type_ptr(UncheckedType{*type_name});
+      return nullptr;
     }
-    if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
-      return this->parse_array_type(type);
-    } else {
-      return type;
-    }
+  } else {
+    type = to_type_ptr(UncheckedType{*type_name});
   }
-  return nullptr;
+
+  if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
+    return this->parse_array_type(type);
+  } else {
+    return type;
+  }
 }
 
 Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {

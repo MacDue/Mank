@@ -48,8 +48,8 @@ private:
   }
 
   /* Types */
-  Type_Ptr parse_type();
-  Type_Ptr parse_base_type();
+  Type_Ptr parse_type(bool default_tvar = false);
+  Type_Ptr parse_base_type(bool default_tvar = false);
   Type_Ptr parse_array_type(Type_Ptr base_type);
   Type_Ptr parse_lambda_type();
   Type_Ptr parse_pod();
@@ -58,7 +58,8 @@ private:
   /* Constructs */
   std::vector<Ast_Argument> parse_arguments(
     TokenType left_delim = TokenType::LEFT_PAREN,
-    TokenType right_delim = TokenType::RIGHT_PAREN);
+    TokenType right_delim = TokenType::RIGHT_PAREN,
+    bool insert_tvars = false);
   std::optional<Ast_Identifier> parse_identifier();
   std::optional<Ast_Block> parse_block();
 

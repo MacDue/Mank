@@ -134,7 +134,7 @@ std::vector<Ast_Argument> Parser::parse_arguments(
     Type_Ptr arg_type;
     if (!insert_tvars || peek(TokenType::COLON)) {
       expect(TokenType::COLON);
-      arg_type = this->parse_type();
+      arg_type = this->parse_type(insert_tvars);
       if (!arg_type) {
         throw_error_here("type name expected");
       }
@@ -703,8 +703,7 @@ Type_Ptr Parser::parse_type(bool default_tvar) {
   if (consume(TokenType::REF)) {
     // TODO: ref infer
     ReferenceType ref_type;
-                          // allow incomplete refs
-    ref_type.references = this->parse_base_type(true);
+    ref_type.references = this->parse_base_type(default_tvar);
     if (!ref_type.references) {
       throw_error_here("expected referenced type");
     }

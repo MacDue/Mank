@@ -66,7 +66,7 @@ std::string type_to_string(Type const & type) {
 }
 
 std::string type_to_string(Type const * type) {
-  if (type) {
+  if (type && !std::holds_alternative<VoidType>(type->v)) {
     return type_to_string(*type);
   } else {
     return "Void";

@@ -7,6 +7,9 @@
 
 namespace Infer {
 
+using SpecialConstraints = std::vector<std::pair<TypeVar, TypeVar>>;
+static Substitution unify(ConstraintSet&& constraints);
+
 static Type_Ptr substitute(
   Type_Ptr current_type, TypeVar tvar, Type_Ptr replacement,
   Substitution const & subs
@@ -108,25 +111,6 @@ static Substitution unify_one(Constraint constraint) {
         return unify(std::move(new_constraints));
       };
     },
-    pattern(as<TypeVar>(_), as<TypeVar>(arg)) = [&](auto& tvar) {
-      WHEN (tvar.special()) {
-        /*
-          Something like T1 = IntegerType
-          They will always appear in this form due to how the constraints are generated.
-
-          If this is unified first then we add:
-            { IntegerType: T1 } to the solutions
-
-            Then after all the solutions are solved if T1 is not an
-            IntegerType, something has gone wrong -- fail, otherwise checks pass.
-
-          If another constraint { T1 = Integer } is unified first then
-            T1 = IntegerType may become { Integer = IntegerType }
-            Which is also fine if T1 check fine then they all must be IntegerTypes.
-        */
-        return unify_var(tvar, a);
-      };
-    },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
       return unify_var(tvar, b);
     },
@@ -147,24 +131,21 @@ static void merge_left(Substitution& target, Substitution const & other) {
   target.insert(other.begin(), other.end());
 }
 
-static bool satisfies_special_constraints(Substitution& subs) {
+static bool satisfies_special_constraints(Substitution const & subs, SpecialConstraints const & constraints) {
   auto sat_constraint = [&](TypeVar::Constraint constraint, Type const & type) {
     using namespace mpark::patterns;
     return match(type.v)(
-      pattern(as<TypeVar>(_)) = []{ return true; },
       pattern(as<PrimativeType>(arg)) = [&](auto const & primative) {
-        // The constraint can now be removed from the solutions.
-        subs.erase(constraint);
         return primative.satisfies(constraint);
       },
       pattern(_) = []{ return false; }
     );
   };
 
-  for (auto const constraint: TypeVar::Constraints) {
-    if (subs.contains(constraint)) {
-      auto type = subs.at(constraint);
-      if (!sat_constraint(constraint, *type)) {
+  for (auto [tvar, constraint]: constraints) {
+    if (subs.contains(tvar)) {
+      auto type = subs.at(tvar);
+      if (!sat_constraint(static_cast<TypeVar::Constraint>(constraint.id), *type)) {
         return false;
       }
     }
@@ -183,26 +164,44 @@ static Substitution unify(std::vector<Constraint>&& constraints) {
   apply_subs(constraints, subs);
   auto more_subs = unify(std::move(constraints));
   merge_left(subs, more_subs);
-
-  if (!satisfies_special_constraints(subs)) {
-    throw UnifyError("additional type constraints not met");
-  }
   return subs;
 }
 
-Substitution unify(ConstraintSet&& constraints) {
+static Substitution unify(ConstraintSet&& constraints) {
   // Sets are not that fun to deal with & mutate
   return unify(std::vector<Constraint>(constraints.begin(), constraints.end()));
 }
 
 Substitution unify_and_apply(ConstraintSet && constraints) {
-  auto subs = unify(std::move(constraints));
+  SpecialConstraints special_constraints;
+  std::vector<Constraint> constraints_vec;
+
+  // Collect special constraints
+  for (auto& [t1, t2]: constraints) {
+    using namespace mpark::patterns;
+    match(t1->v, t2->v)(
+      pattern(as<TypeVar>(arg), as<TypeVar>(arg)) = [&](auto const& t1, auto const& t2) {
+        WHEN(t2.special()) {
+          special_constraints.push_back(std::make_pair(t1, t2));
+        };
+      },
+      pattern(_,_) = [&]{
+        constraints_vec.push_back(Constraint(t1, t2));
+      }
+    );
+  }
+
+  auto subs = unify(std::move(constraints_vec));
+  if (!satisfies_special_constraints(subs, special_constraints)) {
+    throw UnifyError("additional type constraints not met");
+  }
+
   for (auto& [tvar, sub]: subs) {
     if (auto target = tvar.substitute.lock()) {
       if (occurs(TypeVar(TypeVar::ANY), sub)) {
         throw UnifyError("incomplete substitution");
       }
-      *target = *sub;
+      *target = sub ? *sub : Type(VoidType{});
     }
   }
   return subs;

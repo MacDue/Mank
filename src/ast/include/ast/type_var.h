@@ -4,6 +4,7 @@
 
 struct TypeVar {
   int32_t id;
+  bool is_return_type = false;
   // OR
   enum Constraint {
     NUMERIC = -1, // any int or float
@@ -16,8 +17,6 @@ struct TypeVar {
     easy to apply the solved types back onto the AST without walking it.
   */
   std::weak_ptr<Type> substitute;
-
-  inline static const Constraint Constraints[] = { NUMERIC, INTEGER };
 
   explicit TypeVar(int32_t id): id{id} {}
 

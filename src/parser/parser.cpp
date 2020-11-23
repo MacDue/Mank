@@ -688,6 +688,10 @@ Expression_Ptr Parser::parse_lambda() {
   parsed_lambda.arguments = this->parse_arguments(
     TokenType::BACKSLASH, TokenType::ARROW, true);
   parsed_lambda.return_type = this->parse_type(true);
+  // FIXME: This is a had to allow void infers
+  if (auto tvar = std::get_if<TypeVar>(&parsed_lambda.return_type->v)) {
+    tvar->is_return_type = true;
+  }
   auto body = this->parse_block();
   if (!body) {
     throw_error_here("expected lambda body");

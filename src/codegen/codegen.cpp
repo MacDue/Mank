@@ -142,7 +142,7 @@ llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, S
 
 llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
   using namespace mpark::patterns;
-  if (!type) {
+  if (!type || std::holds_alternative<VoidType>(type->v)) {
     return llvm::Type::getVoidTy(llvm_context);
   }
   return match(type->v)(
@@ -301,6 +301,9 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol*
 #define FUNCTION_RETURN_LOCAL "!return_value"
 
 void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func) {
+  // I think this is safe after the function is checked
+  func.procedure = match_types(func.return_type, nullptr);
+
   if (!llvm_func) {
     llvm_func = this->get_function(func);
   }

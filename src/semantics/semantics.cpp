@@ -33,6 +33,13 @@ Symbol* Semantics::emit_warning_if_shadows(
   return pior_symbol;
 }
 
+static bool is_return_tvar(Type const * type) {
+  if (auto tvar = std::get_if<TypeVar>(&type->v)) {
+    return tvar->is_return_type;
+  }
+  return false;
+}
+
 void Semantics::analyse_file(Ast_File& file) {
   Scope& global_scope = file.scope;
 
@@ -150,18 +157,19 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   return block_type;
 }
 
-void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
+Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     func.body.scope.add(
       Symbol(arg.name, arg.type, Symbol::INPUT));
   }
   this->expected_returns.push(func.return_type);
   auto body_type = analyse_block(func.body, *func.body.scope.get_parent());
+  auto expected_return = expected_returns.top();
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
     if (body_type) {
-      assert_valid_binding({}, expected_returns.top(), final_expr.get(), &type_constraints);
+      assert_valid_binding({}, expected_return, final_expr.get(), &type_constraints);
       /* Desugar implict return for codegen + return checking ease */
       func.body.has_final_expr = false;
       Ast_Return_Statement implicit_return;
@@ -180,12 +188,20 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   Ast_Statement* first_unreachable_stmt = nullptr;
   bool all_paths_return = AstHelper::all_paths_return(func.body, &first_unreachable_stmt);
   if (!func.procedure && !all_paths_return) {
-    throw_sema_error_at(func.identifier, "function possibly fails to return a value");
+    // It could be a void returning lambda (with return to be infered)
+    if (func.lambda && is_return_tvar(expected_return.get())) {
+      expected_return = nullptr;
+    } else {
+      throw_sema_error_at(func.identifier, "function possibly fails to return a value");
+    }
   }
 
   if (first_unreachable_stmt) {
     emit_warning_at(*first_unreachable_stmt, "unreachable code");
   }
+
+  // FIXME: Hack lambda return type might be resolved
+  func.return_type = expected_return;
 
   this->expected_returns.pop();
   if (!func.lambda) {
@@ -197,6 +213,7 @@ void Semantics::analyse_function_body(Ast_Function_Declaration& func) {
     // clear constraints for the next function -- only local inference
     reset_type_constraints();
   }
+  return func.return_type;
 }
 
 static bool expression_may_have_side_effects(Ast_Expression& expr) {
@@ -284,11 +301,16 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       analyse_for_loop(for_loop, scope);
     },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
+      auto& expected_return = expected_returns.top();
       Type_Ptr expr_type;
-      auto expected_return = expected_returns.top();
       if (return_stmt.expression) {
         expr_type = analyse_expression(*return_stmt.expression, scope);
-      } else if (expected_return) {
+      }
+      if (is_return_tvar(expected_return.get())) {
+        // FIXME hack: inside a lambda with a infered return that must be void
+        expected_return = expr_type;
+      }
+      if (!expr_type && expected_return) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
       assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get(), &type_constraints);
@@ -587,12 +609,11 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Lambda>(arg)) = [&](auto& lambda) {
       lambda.body.scope.set_parent(scope);
       analyse_function_header(lambda);
-      analyse_function_body(lambda);
       LambdaType lambda_type;
+      lambda_type.return_type = analyse_function_body(lambda);
       std::transform(lambda.arguments.begin(), lambda.arguments.end(),
         std::back_inserter(lambda_type.argument_types),
         [&](auto & arg){ return arg.type; });
-      lambda_type.return_type = lambda.return_type;
       return expr.meta.owned_type = to_type_ptr(lambda_type);
     },
     pattern(_) = [&]{

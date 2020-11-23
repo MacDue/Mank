@@ -442,7 +442,7 @@ void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_
     (void) analyse_expression(*arg, scope);
   }
 
-  Ast_Expression expansion = (*expander)(macro_call);
+  Ast_Expression expansion = (*expander)(macro_call, &type_constraints);
 
   // Some book keeping or the metas go funky
   std::visit([&](auto& expansion){

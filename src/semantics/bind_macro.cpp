@@ -6,7 +6,7 @@
 
 namespace Macros {
 
-Ast_Expression builtin_bind(Ast_Call& bind_call) {
+Ast_Expression builtin_bind(Ast_Call& bind_call, Infer::ConstraintSet* constraints) {
   auto arg_count = bind_call.arguments.size();
   if (arg_count <= 0) {
     throw_sema_error_at(bind_call, "bind needs some arguments");
@@ -35,7 +35,7 @@ Ast_Expression builtin_bind(Ast_Call& bind_call) {
         return nullptr;
       }
       auto& target_type = lambda_type->argument_types.at(current_bind);
-      if (!match_types(target_type, arg_type)) {
+      if (!match_types(target_type, arg_type, constraints)) {
         throw_sema_error_at(arg, "cannot bind {} to {}",
           type_to_string(arg_type.get()), type_to_string(target_type.get()));
       }

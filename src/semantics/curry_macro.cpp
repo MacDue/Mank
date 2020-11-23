@@ -8,7 +8,7 @@
 
 namespace Macros {
 
-Ast_Expression builtin_curry(Ast_Call& curry_call) {
+Ast_Expression builtin_curry(Ast_Call& curry_call, Infer::ConstraintSet*) {
   if (curry_call.arguments.size() != 1) {
     throw_sema_error_at(curry_call, "curry expects one function");
   }

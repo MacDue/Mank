@@ -179,7 +179,7 @@ Substitution unify_and_apply(ConstraintSet && constraints) {
   for (auto& c: constraints) {
     using namespace mpark::patterns;
     match(c.first->v, c.second->v)(
-      pattern(as<TypeVar>(arg), as<TypeVar>(arg)) = [&](auto const& t1, auto const& t2) {
+      pattern(as<TypeVar>(arg), as<TypeVar>(arg)) = [&](auto t1, auto t2) {
         WHEN(t2.special()) {
           special_constraints.push_back(std::make_pair(t1, t2));
           constraints.erase(c); // remove special constraints

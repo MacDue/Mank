@@ -204,7 +204,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   func.return_type = expected_return;
 
   this->expected_returns.pop();
-  if (!func.lambda) {
+  if (!func.lambda && !this->disable_type_infer) {
     try {
       Infer::unify_and_apply(std::move(type_constraints));
     } catch (Infer::UnifyError const & e) {

@@ -1,8 +1,9 @@
-#include "catch/catch.hpp"
-
 /* core */
 #include "parser/parser.h"
 #include "sema/semantics.h"
+
+#undef WHEN
+#include "catch/catch.hpp"
 
 #include "helpers/warning_matchers.h"
 

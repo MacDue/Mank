@@ -4,7 +4,8 @@ add_executable(UnitTests
   parsing.cpp
   simple_semantics.cpp
   reachability.cpp
-  codegen.cpp)
+  codegen.cpp
+  inference.cpp)
 
 target_link_libraries(UnitTests
   MankParser

@@ -18,7 +18,16 @@ struct Semantics {
   void analyse_file(Ast_File& file);
 
   CompilerWarnings const & get_warnings() { return warnings; }
+
+  inline void disable_type_inference_for_testing() {
+    // Sema must only be run on one function or this will create bugs
+    this->disable_type_infer = true;
+  }
+  inline Infer::ConstraintSet get_constraint_test_for_testing() { return type_constraints; }
 private:
+  // Only used for testing allows to seperate sema + infer
+  bool disable_type_infer = false;
+
   // Simply because it's a pain to pass this around (top of stack == current function)
   std::stack<Type_Ptr> expected_returns;
 

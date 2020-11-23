@@ -1,9 +1,11 @@
 #include <gc/gc.h>
-#include "catch/catch.hpp"
 
 #include "parser/parser.h"
 #include "sema/semantics.h"
 #include "codegen/codegen.h"
+
+#undef WHEN
+#include "catch/catch.hpp"
 
 CodeGen compile(std::string source) {
   // Setup libgc for unit tests (I don't think this is even needed)

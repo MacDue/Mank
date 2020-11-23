@@ -1,11 +1,11 @@
-#include "catch/catch.hpp"
-
 /* core */
 #include "parser/parser.h"
 #include "sema/semantics.h"
 
-#include "helpers/warning_matchers.h"
+#undef WHEN
+#include "catch/catch.hpp"
 
+#include "helpers/warning_matchers.h"
 
 WarningsMatcher HasWarning(std::string needle) {
   return Catch::Matchers::Predicate<std::vector<CompilerMessage>>(

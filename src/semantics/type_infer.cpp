@@ -174,24 +174,22 @@ static Substitution unify(ConstraintSet&& constraints) {
 
 Substitution unify_and_apply(ConstraintSet && constraints) {
   SpecialConstraints special_constraints;
-  std::vector<Constraint> constraints_vec;
 
   // Collect special constraints
-  for (auto& [t1, t2]: constraints) {
+  for (auto& c: constraints) {
     using namespace mpark::patterns;
-    match(t1->v, t2->v)(
+    match(c.first->v, c.second->v)(
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) = [&](auto const& t1, auto const& t2) {
         WHEN(t2.special()) {
           special_constraints.push_back(std::make_pair(t1, t2));
+          constraints.erase(c); // remove special constraints
         };
       },
-      pattern(_,_) = [&]{
-        constraints_vec.push_back(Constraint(t1, t2));
-      }
+      pattern(_,_) = [&]{}
     );
   }
 
-  auto subs = unify(std::move(constraints_vec));
+  auto subs = unify(std::move(constraints));
   if (!satisfies_special_constraints(subs, special_constraints)) {
     throw UnifyError("additional type constraints not met");
   }

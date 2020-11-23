@@ -176,16 +176,16 @@ Substitution unify_and_apply(ConstraintSet && constraints) {
   SpecialConstraints special_constraints;
 
   // Collect special constraints
-  for (auto& c: constraints) {
+  for (auto it = constraints.begin(); it != constraints.end(); ) {
     using namespace mpark::patterns;
-    match(c.first->v, c.second->v)(
+    match(it->first->v, it->second->v)(
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) = [&](auto t1, auto t2) {
         WHEN(t2.special()) {
           special_constraints.push_back(std::make_pair(t1, t2));
-          constraints.erase(c); // remove special constraints
+          constraints.erase(it++); // remove special constraints
         };
       },
-      pattern(_,_) = [&]{}
+      pattern(_,_) = [&]{ ++it; }
     );
   }
 

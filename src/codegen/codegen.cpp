@@ -142,7 +142,7 @@ llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, S
 
 llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
   using namespace mpark::patterns;
-  if (!type || std::holds_alternative<VoidType>(type->v)) {
+  if (!type) {
     return llvm::Type::getVoidTy(llvm_context);
   }
   return match(type->v)(

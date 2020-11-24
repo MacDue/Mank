@@ -62,11 +62,7 @@ bool match_types(Type_Ptr a, Type_Ptr b,
         [](auto const & a, auto const & b) {
           return a.id == b.id;
         },
-      pattern(as<VoidType>(_), as<VoidType>(_)) = []{ return true; },
       pattern(_, _) = []{ return false; });
-  } else {
-    return (a && std::holds_alternative<VoidType>(a->v))
-      || (b && std::holds_alternative<VoidType>(b->v));
   }
   return false;
 }

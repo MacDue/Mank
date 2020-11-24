@@ -199,7 +199,8 @@ Substitution unify_and_apply(ConstraintSet && constraints) {
       if (occurs(TypeVar(TypeVar::ANY), sub)) {
         throw UnifyError("incomplete substitution");
       }
-      *target = sub ? *sub : Type(VoidType{});
+      assert(sub != nullptr && "fix me! void not supported in infer");
+      *target = *sub;
     }
   }
   return subs;

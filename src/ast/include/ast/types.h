@@ -16,12 +16,8 @@ struct ReferenceType {
   Type_Ptr references;
 };
 
-// TODO: Replace with empty tuple?
-struct VoidType {};
-
 // (Great name! The type of the type that represents our types...)
 using Type_Type = std::variant<
-  VoidType,
   TypeVar,
   UncheckedType,
   PrimativeType,

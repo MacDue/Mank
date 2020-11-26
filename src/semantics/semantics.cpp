@@ -616,6 +616,19 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         [&](auto & arg){ return arg.type; });
       return expr.meta.owned_type = to_type_ptr(lambda_type);
     },
+    pattern(as<Ast_Tuple_Literal>(arg)) = [&](auto& tuple) {
+      TupleType tuple_type;
+      std::transform(tuple.elements.begin(), tuple.elements.end(),
+        std::back_inserter(tuple_type.element_types),
+        [&](auto& element){
+          auto element_type = analyse_expression(*element, scope);
+          // If all elements are lvalues then this tuple is & could be
+          // used as a pattern
+          expr.inherit_value_type(*element);
+          return element_type;
+        });
+      return expr.meta.owned_type = to_type_ptr(tuple_type);
+    },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
       return Type_Ptr(nullptr);

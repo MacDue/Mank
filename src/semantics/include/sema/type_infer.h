@@ -9,6 +9,11 @@
 
 namespace Infer {
 
+// struct Constraint {
+//   std::pair<Type_Ptr, Type_Ptr> types;
+//   SourceLocation origin;
+// };
+
 using Constraint = std::pair<Type_Ptr, Type_Ptr>;
 using ConstraintSet = std::set<Constraint>;
 using Substitution = std::map<TypeVar, Type_Ptr>;

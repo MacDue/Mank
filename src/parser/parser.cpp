@@ -438,13 +438,35 @@ Expression_Ptr Parser::parse_primary_expression() {
   }
 }
 
+Expression_Ptr Parser::parse_tuple_literal(Expression_Ptr first_element) {
+  /*
+    tuple_literal = "(" expression "," [expression_list] ")"
+                  | "(" ")" ;
+  */
+  Ast_Tuple_Literal parsed_tuple;
+  parsed_tuple.elements.push_back(first_element);
+  while (!peek(TokenType::RIGHT_PAREN)) {
+    expect(TokenType::COMMA);
+    if (peek(TokenType::RIGHT_PAREN)) break; // Allow optional trailing comma
+    parsed_tuple.elements.push_back(this->parse_expression());
+  }
+  expect(TokenType::RIGHT_PAREN);
+  return to_expr_ptr(parsed_tuple);
+}
+
 Expression_Ptr Parser::parse_parenthesised_expression() {
   /*
     parenthesised_expression = "(" expression ")" ;
   */
   using namespace mpark::patterns;
   expect(TokenType::LEFT_PAREN);
+  if (consume(TokenType::RIGHT_PAREN)) {
+    return to_expr_ptr(Ast_Tuple_Literal{}); // empty tuple
+  }
   auto expr = this->parse_expression();
+  if (peek(TokenType::COMMA)) { // >= 1 element tuple
+    return this->parse_tuple_literal(expr);
+  }
   expect(TokenType::RIGHT_PAREN);
   match(expr->v)(
     pattern(as<Ast_Binary_Operation>(arg)) = [](auto & binary_op) {

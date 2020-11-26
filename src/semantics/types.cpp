@@ -58,6 +58,12 @@ bool match_types(Type_Ptr a, Type_Ptr b,
           return match_type_lists(a.argument_types, b.argument_types, constraints, false)
             && match_types(a.return_type, b.return_type, constraints, false);
         },
+      pattern(as<TupleType>(arg), as<TupleType>(arg)) =
+        [&](auto const & a, auto const & b) {
+          // Don't match (ref i32, i32) = (i32, i32)
+          // (will need special case for patterns)
+          return match_type_lists(a.element_types, b.element_types, constraints, false);
+        },
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) =
         [](auto const & a, auto const & b) {
           return a.id == b.id;

@@ -134,8 +134,8 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access){
       return all_paths_return(*access.object, unreachable_stmt);
     },
-    pattern(as<Ast_Array_Literal>(arg)) = [&](auto& array) {
-      return std::any_of(array.elements.begin(), array.elements.end(),
+    pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) = [&](auto& aggregate) {
+      return std::any_of(aggregate.elements.begin(), aggregate.elements.end(),
         [&](auto& el){ return all_paths_return(*el, unreachable_stmt); });
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) {

@@ -85,6 +85,7 @@ private:
   Expression_Ptr parse_literal();
   Expression_Ptr parse_array_literal();
   Expression_Ptr parse_lambda();
+  Expression_Ptr parse_tuple_literal(Expression_Ptr first_element);
 
   /* Simple helpers */
   bool consume(TokenType token_type);

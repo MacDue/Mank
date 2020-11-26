@@ -86,6 +86,8 @@ void AstPrinter::print_stmt(Ast_Return_Statement& return_stmt) {
 
 void AstPrinter::print_stmt(Ast_Assign& assign) {
   putf("* Assign statement");
+  putf("- Target:");
+  self->print_expr(*assign.target);
   putf("- Value:");
   self->print_expr(*assign.expression);
 }
@@ -246,4 +248,15 @@ void AstPrinter::print_expr(Ast_Lambda& lambda) {
   }
   putf("- Body:");
   self->print_expr(lambda.body);
+}
+
+void AstPrinter::print_expr(Ast_Tuple_Literal& tuple) {
+  putf("* Tuple literal");
+  putf("- {} elements", tuple.elements.size());
+  uint element_idx = 0;
+  for (auto& element: tuple.elements) {
+    indent(); putf(".{}:", element_idx);
+    self->print_expr(*element);
+    ++element_idx;
+  }
 }

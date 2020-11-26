@@ -50,13 +50,17 @@ struct Ast_Field_Access: Expression_Node {
   int field_index = -1;
 };
 
-struct Ast_Array_Literal: Expression_Node {
+struct Ast_Expression_List: Expression_Node {
   std::vector<Expression_Ptr> elements;
 };
+
+struct Ast_Array_Literal: Ast_Expression_List {};
 
 struct Ast_Index_Access: Expression_Node {
   Expression_Ptr object, index;
 };
+
+struct Ast_Tuple_Literal: Ast_Expression_List {};
 
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
@@ -73,7 +77,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Array_Literal,
   Ast_Index_Access,
   Ast_Lambda,
-  Ast_Macro_Identifier>;
+  Ast_Macro_Identifier,
+  Ast_Tuple_Literal>;
 
 struct Ast_Expression {
   Ast_Expression_Type v;

@@ -8,6 +8,24 @@
 
 /* String helpers */
 
+static std::string type_list_to_string(
+  std::vector<Type_Ptr> const & types,
+  std::string_view seperator, std::string_view begin_padding = ""
+) {
+  std::string out;
+  for (
+    auto it = types.begin(); it != types.end(); it++
+  ) {
+    if (it != types.begin()) {
+      out += seperator;
+    } else {
+      out += begin_padding;
+    }
+    out += type_to_string(it->get());
+  }
+  return out;
+}
+
 std::string type_to_string(Type const & type) {
   using namespace std::string_literals;
   using namespace mpark::patterns;
@@ -31,20 +49,13 @@ std::string type_to_string(Type const & type) {
     },
     pattern(as<LambdaType>(arg)) = [](auto const & lambda_type) {
       std::string lambda_str = "lambda";
-      for (
-        auto it = lambda_type.argument_types.begin();
-        it != lambda_type.argument_types.end();
-        it++
-      ) {
-        if (it != lambda_type.argument_types.begin()) {
-          lambda_str += ", ";
-        } else {
-          lambda_str += ' ';
-        }
-        lambda_str += type_to_string(it->get());
-      }
+      lambda_str += type_list_to_string(lambda_type.argument_types, ", ", " ");
       lambda_str += " -> " + type_to_string(lambda_type.return_type.get());
       return lambda_str;
+    },
+    pattern(as<TupleType>(arg)) = [](auto const & tuple_type) {
+      return formatxx::format_string("({})",
+        type_list_to_string(tuple_type.element_types, ","));
     },
     pattern(as<TypeVar>(arg)) = [](auto const & type_var) {
       if (type_var.special()) {

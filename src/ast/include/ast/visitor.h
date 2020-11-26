@@ -65,7 +65,8 @@ struct BaseAstVisitor: public AstVisitor<
   Ast_Array_Literal,
   Ast_Index_Access,
   Ast_Lambda,
-  Ast_Macro_Identifier
+  Ast_Macro_Identifier,
+  Ast_Tuple_Literal
 > {
   void operator()(Ast_File& file) override;
   void operator()(Ast_Function_Declaration& func) override;
@@ -88,4 +89,5 @@ struct BaseAstVisitor: public AstVisitor<
   void operator()(Ast_Index_Access& index) override;
   void operator()(Ast_Lambda& lambda) override;
   void operator()(Ast_Macro_Identifier& macro_ident) override;
+  void operator()(Ast_Tuple_Literal& tuple) override;
 };

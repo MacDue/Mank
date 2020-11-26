@@ -169,6 +169,13 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
     pattern(as<LambdaType>(arg)) = [&](auto const & lambda_type) -> llvm::Type* {
       return map_lambda_type_to_llvm(lambda_type, scope);
     },
+    pattern(as<TupleType>(arg)) = [&](auto const & tuple_type) -> llvm::Type* {
+      std::vector<llvm::Type*> element_types;
+      std::transform(tuple_type.element_types.begin(), tuple_type.element_types.end(),
+        std::back_inserter(element_types),
+        [&](auto const & element_type){ return map_type_to_llvm(element_type.get(), scope); });
+      return llvm::StructType::get(llvm_context, element_types);
+    },
     pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");
       return nullptr;
@@ -389,23 +396,58 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
   ir_builder.CreateBr(return_meta->return_block);
 }
 
+void LLVMCodeGen::codegen_tuple_assign(Ast_Tuple_Literal& tuple_pattern, Ast_Expression& tuple, Scope& scope) {
+  using namespace mpark::patterns;
+  if (std::holds_alternative<Ast_Tuple_Literal>(tuple.v)) {
+    // In the semantics I lie and say a tuple literal with all lvalue values
+    // is an lvalue (this is true semantically -- but not really for code gen)
+    tuple.set_value_type(Expression_Meta::RVALUE); // make sure it's a rvalue (like all literals)
+  }
+  auto tuple_extract = get_value_extractor(tuple, scope);
+  uint gep_idx = 0;
+  for (auto& el: tuple_pattern.elements) {
+    match(el->v) (
+      pattern(as<Ast_Tuple_Literal>(arg)) = [&](auto& next_pattern) {
+        codegen_tuple_assign(next_pattern, *el, scope);
+      },
+      pattern(_) = [&]{
+        llvm::Value* tuple_el = tuple_extract.get_value({ gep_idx }, "tuple_element");
+        llvm::Value* target_ptr = address_of(*el, scope);
+        ir_builder.CreateStore(tuple_el, target_ptr);
+      }
+    );
+    ++gep_idx;
+  }
+}
+
 void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
+  if (auto tuple_pattern = std::get_if<Ast_Tuple_Literal>(&assign.target->v)) {
+    codegen_tuple_assign(*tuple_pattern, *assign.expression, scope);
+    return;
+  }
   llvm::Value* target_ptr = address_of(*assign.target, scope);
   llvm::Value* expression_value = codegen_expression(*assign.expression, scope);
   ir_builder.CreateStore(expression_value, target_ptr);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope) {
+  using namespace mpark::patterns;
   llvm::Function* current_function = get_current_function();
 
   llvm::Value* initializer = nullptr;
-  auto array_initializer = std::get_if<Ast_Array_Literal>(&var_decl.initializer->v);
+
+  Ast_Expression_List* agg_initializer = nullptr;
+  match(var_decl.initializer->v)(
+    pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) =
+    [&](auto& agg) { agg_initializer = &agg; },
+    pattern(_) = []{}
+  );
 
   /*
     (Non-const) array inits are not simple expressions.
     Best I know is they have to be compiled to a bunch of geps + stores.
   */
-  if (var_decl.initializer && !array_initializer) {
+  if (var_decl.initializer && !agg_initializer) {
     initializer = codegen_bind(*var_decl.initializer, var_decl.type.get(), scope);
   }
 
@@ -427,12 +469,12 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
 
   if (initializer) {
     ir_builder.CreateStore(initializer, alloca);
-  } else if (array_initializer) {
+  } else if (agg_initializer) {
     // "Remove" the symbol temporarily to avoid issues in array init.
     auto name_backup = local_symbol.name.name;
     local_symbol.name.name.clear();
     // needs to be done before sym addd
-    initialize_array(alloca, *array_initializer, scope);
+    initialize_aggregate(alloca, *agg_initializer, scope);
     local_symbol.name.name = name_backup;
   }
 }
@@ -976,16 +1018,18 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
   return get_value_extractor(source_object, scope).get_value(idx_list, access.field.name);
 }
 
-void LLVMCodeGen::initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& values, Scope& scope) {
+void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope) {
   using namespace mpark::patterns;
-  auto array_type = extract_type(values.get_type());
+  auto agg_type = extract_type(values.get_type());
+  llvm::Type* llvm_agg_type = map_type_to_llvm(agg_type.get(), scope);
   uint gep_idx = 0;
   for (auto& el: values.elements) {
     llvm::Value* element_ptr = ir_builder.CreateConstGEP2_32(
-      map_type_to_llvm(array_type.get(), scope), array_ptr, 0, gep_idx, "array_element");
+      llvm_agg_type, ptr, 0, gep_idx, "agg_element");
     match(el->v)(
-      pattern(as<Ast_Array_Literal>(arg)) = [&](auto& nested) {
-        initialize_array(element_ptr, nested, scope);
+      pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) =
+      [&](auto& nested) {
+        initialize_aggregate(element_ptr, nested, scope);
       },
       pattern(_) = [&]{
         llvm::Value* value = codegen_expression(*el, scope);
@@ -996,16 +1040,19 @@ void LLVMCodeGen::initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& va
   }
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Literal& array, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression_List& array_like, Scope& scope) {
   /*
     I'm not sure this is much use as feature and may remove it
     It'd also be better codegen-ed with insertvalue, but that's more special cases
+
+    This is the same for tuple expressions and array expressions.
+    The LLVM types differ but gepping and setting elements is identical.
   */
-  auto array_type = extract_type(array.get_type());
-  llvm::AllocaInst* array_alloca = create_entry_alloca(
-    get_current_function(), scope, array_type.get(), "array_temp");
-  initialize_array(array_alloca, array, scope);
-  return ir_builder.CreateLoad(array_alloca, "array_expr");
+  auto agg_type = extract_type(array_like.get_type());
+  llvm::AllocaInst* agg_alloca = create_entry_alloca(
+    get_current_function(), scope, agg_type.get(), "agg_temp");
+  initialize_aggregate(agg_alloca, array_like, scope);
+  return ir_builder.CreateLoad(agg_alloca, "agg_expr");
 }
 
 Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
@@ -1109,6 +1156,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
 
   return create_lambda(llvm_lambda_type, lambda_func, env_ptr);
 }
+
+// llvm::Value* LLVMCodeGen::codegen_expression(Ast_Tuple_Literal& tuple, Scope& scope) {
+//   assert(false && "fix me! tuple literal codegen");
+// }
+
 
 /* JIT tools */
 

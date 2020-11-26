@@ -163,3 +163,12 @@ void BaseAstVisitor::operator()(Ast_Macro_Identifier& macro_ident) {
   visit(macro_ident);
   after(macro_ident);
 };
+
+void BaseAstVisitor::operator()(Ast_Tuple_Literal& tuple) {
+  before(tuple);
+  visit(tuple);
+  for (auto& element: tuple.elements) {
+    std::visit(recur, element->v);
+  }
+  after(tuple);
+}

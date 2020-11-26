@@ -6,6 +6,7 @@
 #include "ast/type_var.h"
 #include "ast/construct.h"
 #include "ast/array_type.h"
+#include "ast/tuple_type.h"
 #include "ast/primative_types.h"
 
 struct UncheckedType {
@@ -19,6 +20,7 @@ struct ReferenceType {
 // (Great name! The type of the type that represents our types...)
 using Type_Type = std::variant<
   TypeVar,
+  TupleType,
   UncheckedType,
   PrimativeType,
   Ast_Function_Declaration,

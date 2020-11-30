@@ -51,8 +51,10 @@ private:
   Type_Ptr parse_type(bool default_tvar = false);
   Type_Ptr parse_base_type(bool default_tvar = false);
   Type_Ptr parse_array_type(Type_Ptr base_type);
+  std::vector<Type_Ptr> parse_type_list(TokenType left_delim, TokenType right_delim);
   Type_Ptr parse_lambda_type();
   Type_Ptr parse_pod();
+  Type_Ptr parse_tuple_type();
   Function_Ptr parse_function();
 
   /* Constructs */

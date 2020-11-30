@@ -792,7 +792,10 @@ Type_Ptr Parser::parse_type(bool default_tvar) {
 Type_Ptr Parser::parse_base_type(bool default_tvar) {
   if (peek(TokenType::BACKSLASH)) {
     return this->parse_lambda_type();
+  } else if (peek(TokenType::LEFT_PAREN)) {
+    return this->parse_tuple_type();
   }
+
   // Array/simple types
   auto type_name = this->parse_identifier();
   Type_Ptr type;
@@ -846,19 +849,31 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
   return to_type_ptr(top_array_type);
 }
 
-Type_Ptr Parser::parse_lambda_type() {
-  LambdaType lambda_type;
-  expect(TokenType::BACKSLASH);
-  while (!peek(TokenType::ARROW)) {
-    lambda_type.argument_types.emplace_back(
+std::vector<Type_Ptr> Parser::parse_type_list(TokenType left_delim, TokenType right_delim) {
+  std::vector<Type_Ptr> type_list;
+  expect(left_delim);
+  while (!peek(right_delim)) {
+    type_list.emplace_back(
       this->parse_type());
     if (!consume(TokenType::COMMA)) {
       break;
     }
   }
-  expect(TokenType::ARROW);
+  expect(right_delim);
+  return type_list;
+}
+
+Type_Ptr Parser::parse_lambda_type() {
+  LambdaType lambda_type;
+  lambda_type.argument_types = parse_type_list(TokenType::BACKSLASH, TokenType::ARROW);
   lambda_type.return_type = this->parse_type();
   return to_type_ptr(lambda_type);
+}
+
+Type_Ptr Parser::parse_tuple_type() {
+  TupleType tuple_type;
+  tuple_type.element_types = parse_type_list(TokenType::LEFT_PAREN, TokenType::RIGHT_PAREN);
+  return to_type_ptr(tuple_type);
 }
 
 /* Helpers */

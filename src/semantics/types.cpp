@@ -114,6 +114,16 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
 
       return std::make_pair(type, null_symbol);
     },
+    pattern(as<TupleType>(arg)) = [&](auto& tuple_type) {
+      for (auto& el_type: tuple_type.element_types) {
+        auto [resolved_el_type, el_symbol] = resolve_type(scope, el_type);
+        el_type = resolved_el_type;
+        if (!el_type) {
+          return std::make_pair(Type_Ptr(nullptr), el_symbol);
+        }
+      }
+      return std::make_pair(type, null_symbol);
+    },
     pattern(_) = [&] {
       // Possible it's already resolved
       // TODO: Make sure code does not recurse over already resolved types.

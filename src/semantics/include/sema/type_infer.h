@@ -34,4 +34,10 @@ Substitution unify_and_apply(ConstraintSet && constraints);
 void generate_call_constraints(
   Type_Ptr& callee_type, Ast_Call& call, ConstraintSet& constraints);
 
+void generate_tuple_assign_constraints(
+  Ast_Assign& tuple_assign, ConstraintSet& constraints);
+
+void generate_tuple_destructure_constraints(
+  TupleBinding const & bindings, Type_Ptr& init_type, ConstraintSet& constraints);
+
 }

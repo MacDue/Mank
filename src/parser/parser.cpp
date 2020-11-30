@@ -339,10 +339,11 @@ TupleBinding Parser::parse_tuple_binding() {
         throw_error_here("sdhsjdhsjd");
       }
       // Require types for now
-      expect(TokenType::COLON);
-      auto type = this->parse_type();
-      if (!type) {
-        throw_error_here("sdhshdjk");
+      Type_Ptr type;
+      if(consume(TokenType::COLON)) {
+        type = this->parse_type(true);
+      } else {
+        type = to_type_ptr(TypeVar());
       }
       binding.binds.push_back(Ast_Argument{
         .type = type,

@@ -25,6 +25,12 @@ static Type_Ptr substitute(
       }
       return to_type_ptr(lambda_type);
     },
+    pattern(as<TupleType>(arg)) = [&](auto tuple_type) {
+      for (auto& el_type: tuple_type.element_types) {
+        el_type = substitute(el_type, tvar, replacement, subs);
+      }
+      return to_type_ptr(tuple_type);
+    },
     pattern(as<TypeVar>(arg)) = [&](auto const & current_tvar) {
       if (current_tvar.id == tvar.id) {
         return replacement;
@@ -68,6 +74,11 @@ static bool occurs(TypeVar tvar, Type_Ptr type) {
           || std::any_of(lambda.argument_types.begin(), lambda.argument_types.end(),
             [&](auto arg_type){ return occurs(tvar, arg_type); });
       },
+    pattern(as<TupleType>(arg)) =
+      [&](auto const & tuple) {
+          return std::any_of(tuple.element_types.begin(), tuple.element_types.end(),
+            [&](auto el_type){ return occurs(tvar, el_type); });
+      },
     pattern(as<TypeVar>(arg)) =
       [&](auto const & current_tvar) {
         return tvar.id == TypeVar::ANY || current_tvar.id == tvar.id;
@@ -109,6 +120,17 @@ static Substitution unify_one(Constraint constraint) {
           new_constraints.insert(arg_constraint);
         }
         return unify(std::move(new_constraints));
+      };
+    },
+    pattern(as<TupleType>(arg), as<TupleType>(arg)) = [](auto& t1, auto& t2) {
+      WHEN(t1.element_types.size() == t2.element_types.size()) {
+        ConstraintSet tuple_constraints;
+        for (auto type_pair: boost::combine(t1.element_types, t2.element_types)) {
+          Constraint constraint;
+          boost::tie(constraint.first, constraint.second) = type_pair;
+          tuple_constraints.insert(constraint);
+        }
+        return unify(std::move(tuple_constraints));
       };
     },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
@@ -217,6 +239,43 @@ void generate_call_constraints(
     auto call_type_ptr = to_type_ptr(call_type);
     constraints.insert(Constraint(callee_type, call_type_ptr));
     callee_type = call.get_meta().owned_type = call_type_ptr;
+  }
+}
+
+void generate_array_index_constraints(
+  Type_Ptr& array_type, Ast_Index_Access& index, ConstraintSet& constraints
+) {
+  // TODO
+}
+
+void generate_tuple_assign_constraints(
+  Ast_Assign& tuple_assign, ConstraintSet& constraints
+) {
+  auto tuple_type = extract_type(tuple_assign.expression->meta.type);
+  if (std::holds_alternative<TypeVar>(tuple_type->v)) {
+    TupleType assign_type;
+    std::generate_n(std::back_inserter(assign_type.element_types),
+      std::get<Ast_Tuple_Literal>(tuple_assign.target->v).elements.size(),
+      []{ return to_type_ptr(TypeVar()); });
+    auto assign_type_ptr = to_type_ptr(assign_type);
+    constraints.insert(Constraint(tuple_type, assign_type_ptr));
+    tuple_assign.expression->meta.type
+      = tuple_assign.expression->meta.owned_type
+      = assign_type_ptr;
+  }
+}
+
+void generate_tuple_destructure_constraints(
+  TupleBinding const & bindings, Type_Ptr& init_type, ConstraintSet& constraints
+) {
+  // Almost the same as assign
+  if (std::holds_alternative<TypeVar>(init_type->v)) {
+    TupleType binding_type;
+    std::generate_n(std::back_inserter(binding_type.element_types), bindings.binds.size(),
+      []{ return to_type_ptr(TypeVar()); });
+    auto binding_type_ptr = to_type_ptr(binding_type);
+    constraints.insert(Constraint(init_type, binding_type_ptr));
+    init_type = binding_type_ptr;
   }
 }
 

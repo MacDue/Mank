@@ -208,7 +208,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
     try {
       Infer::unify_and_apply(std::move(type_constraints));
     } catch (Infer::UnifyError const & e) {
-      throw_sema_error_at(func.identifier, "type inference failed (maybe annotate some types)");
+      throw_sema_error_at(func.identifier, "type inference failed ({})", e.what());
     }
     // clear constraints for the next function -- only local inference
     reset_type_constraints();
@@ -392,16 +392,17 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   }
 }
 
-void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& init, Type& init_type, Scope& scope) {
+void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope) {
   using namespace mpark::patterns;
-  if (auto tuple_type = std::get_if<TupleType>(&init_type.v)) {
+  Infer::generate_tuple_destructure_constraints(bindings, init_type, type_constraints);
+  if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {
     uint bind_idx = 0;
     for (auto& el_type: tuple_type->element_types) {
       auto& binding = bindings.binds.at(bind_idx);
       match(binding, el_type->v)(
         pattern(as<TupleBinding>(arg), as<TupleType>(_)) =
           [&](auto& nested_binds) {
-            check_tuple_bindings(nested_binds, init, *el_type, scope);
+            check_tuple_bindings(nested_binds, init, el_type, scope);
           },
         pattern(as<Ast_Argument>(arg), _) =
           [&](auto& bind) {
@@ -418,7 +419,7 @@ void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& ini
       bind_idx += 1;
     }
   } else {
-    assert(false && "todo impl some kind to tuple inference...");
+    throw_sema_error_at(init, "sad binding initializer must be a tuple");
   }
 }
 
@@ -426,7 +427,12 @@ void Semantics::analyse_tuple_binding_decl(
   Ast_Tuple_Structural_Binding& binding, Scope& scope
 ) {
   auto init_type = analyse_expression(*binding.initializer, scope);
-  check_tuple_bindings(binding.bindings, *binding.initializer, *init_type, scope);
+  auto pior_type = init_type.get();
+  check_tuple_bindings(binding.bindings, *binding.initializer, init_type, scope);
+  if (pior_type != init_type.get()) {
+    // Tuple type must have been replaced (to infered type)
+    binding.initializer->meta.owned_type = init_type;
+  }
 }
 
 static std::pair<Ast_Argument*, int> resolve_pod_field_index(

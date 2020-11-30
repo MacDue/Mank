@@ -652,3 +652,34 @@ TEST_CASE("Curry marco", "[Codegen]") {
   }
 
 }
+
+TEST_CASE("Really like haskell", "[Codegen]") {
+  auto codegen = compile(R"(
+    fun sum: i32 {
+      # Curried without a macro
+      add4 := \a -> {
+        \b -> {
+          \c -> {
+            \d -> {
+              a + b + c + d }}}};
+      add4(1)(2)(3)(4)
+    }
+  )");
+  auto sum = codegen.extract_function_from_jit<int()>("sum");
+  REQUIRE(sum() == 1 + 2 + 3 + 4);
+}
+
+TEST_CASE("Tuples", "[Codegen]") {
+  SECTION("Tuple pattern assignment") {
+    auto codegen = compile(R"(
+      proc swap(a: ref i32, b: ref i32) {
+        (a, b) = (b, a);
+      }
+    )");
+    auto swap = codegen.extract_function_from_jit<int(int*, int*)>("swap");
+    int x = 10, y = 20;
+    REQUIRE((x == 10 && y == 20));
+    swap(&x, &y);
+    REQUIRE((x == 20 && y == 10));
+  }
+}

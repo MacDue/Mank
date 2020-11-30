@@ -58,6 +58,9 @@ bool all_paths_return(Ast_Statement& statement, Ast_Statement** unreachable_stmt
 
       return start_range_returns || end_range_returns || body_returns;
     },
+    pattern(as<Ast_Tuple_Structural_Binding>(arg)) = [&](auto& sad_binding) {
+      return all_paths_return(*sad_binding.initializer, unreachable_stmt);
+    },
     pattern(_) = []{
       assert(false && "fix me! unknown statement in reachability checking");
       return false;

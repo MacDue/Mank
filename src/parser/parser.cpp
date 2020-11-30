@@ -209,6 +209,8 @@ Statement_Ptr Parser::parse_statement() {
     stmt = to_stmt_ptr(return_stmt);
   } else if (peek(TokenType::FOR)) {
     stmt = this->parse_for_loop();
+  } else if (peek(TokenType::COLON)) {
+    return this->parse_tuple_structural_binding();
   } else if (auto expr = this->parse_expression()) {
     bool simple_expression = false;
     if (stmt = this->parse_assign(expr)) {
@@ -323,6 +325,54 @@ Statement_Ptr Parser::parse_for_loop() {
   } else {
     return nullptr; // impossible
   }
+}
+
+TupleBinding Parser::parse_tuple_binding() {
+  TupleBinding binding;
+  expect(TokenType::LEFT_PAREN);
+  while (!peek(TokenType::RIGHT_PAREN)) {
+    if (peek(TokenType::LEFT_PAREN)) {
+      binding.binds.push_back(this->parse_tuple_binding());
+    } else {
+      auto named_bind = this->parse_identifier();
+      if (!named_bind) {
+        throw_error_here("sdhsjdhsjd");
+      }
+      // Require types for now
+      expect(TokenType::COLON);
+      auto type = this->parse_type();
+      if (!type) {
+        throw_error_here("sdhshdjk");
+      }
+      binding.binds.push_back(Ast_Argument{
+        .type = type,
+        .name = *named_bind
+      });
+      if (!consume(TokenType::COMMA)) {
+        break;
+      }
+    }
+  }
+  expect(TokenType::RIGHT_PAREN);
+  return binding;
+}
+
+Statement_Ptr Parser::parse_tuple_structural_binding() {
+  /*
+    sad_binding = ":", "(" [binding_list] ")"
+    binding_list = binding, {",", binding}
+    binding = (identifier, [":" type]) | ("(" binding ")")
+  */
+  // :(x, y)
+  // :(x: i32, y: i32)
+  // :(x: i32, (y: i32))
+  Ast_Tuple_Structural_Binding parsed_sad_binding;
+  expect(TokenType::COLON);
+  parsed_sad_binding.bindings = this->parse_tuple_binding();
+  expect(TokenType::ASSIGN);
+  parsed_sad_binding.initializer = this->parse_expression();
+  expect(TokenType::SEMICOLON);
+  return to_stmt_ptr(parsed_sad_binding);
 }
 
 /* Expressions */

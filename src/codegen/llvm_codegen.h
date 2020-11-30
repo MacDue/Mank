@@ -114,6 +114,9 @@ public:
     ExpressionExtract(LLVMCodeGen* codegen, Ast_Expression& expr, Scope& scope);
     llvm::Value* get_value(
       std::vector<unsigned> const & idx_list, llvm::Twine const & name);
+
+    llvm::Value* get_bind(
+      std::vector<unsigned> const & idx_list, llvm::Twine const & name);
   };
 
   inline ExpressionExtract get_value_extractor(Ast_Expression& expr, Scope& scope) {
@@ -138,7 +141,10 @@ public:
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);
   void codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func = nullptr);
 
-  void codegen_tuple_assign(Ast_Tuple_Literal& pattern, Ast_Expression& tuple, Scope& scope);
+  ExpressionExtract get_tuple_extractor(Ast_Expression& tuple, Scope& scope);
+
+  void codegen_tuple_assign(
+    Ast_Tuple_Literal& tuple_pattern, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
 
   /* Statements */
   void codegen_statement(Ast_Statement& stmt, Scope& scope);
@@ -147,6 +153,11 @@ public:
   void codegen_statement(Ast_Assign& assign, Scope& scope);
   void codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope);
   void codegen_statement(Ast_For_Loop& for_loop, Scope& scope);
+
+  void codegen_tuple_bindings(
+    TupleBinding& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
+
+  void codegen_statement(Ast_Tuple_Structural_Binding& binding, Scope& scope);
 
   Ast_Expression& flatten_nested_array_indexes(
     Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);

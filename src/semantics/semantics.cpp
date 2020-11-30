@@ -268,6 +268,9 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
 }
 
 void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
+  // Note that when a tuple is used as a lhs the actual tuple type
+  // is not used it's justed used as a (nested) list of lvalue idents.
+  // (the types of the contained lvaues is what matters)
   auto target_type = analyse_expression(*assign.target, scope);
   if (!assign.target->is_lvalue()) {
     throw_sema_error_at(assign.target,
@@ -343,6 +346,9 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
       scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
+    },
+    pattern(as<Ast_Tuple_Structural_Binding>(arg)) = [&](auto& binding) {
+      analyse_tuple_binding_decl(binding, scope);
     }
   );
 }
@@ -384,6 +390,43 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   if (body_type) {
     throw_sema_error_at(body.get_final_expr(), "loop body should not evaluate to a value");
   }
+}
+
+void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& init, Type& init_type, Scope& scope) {
+  using namespace mpark::patterns;
+  if (auto tuple_type = std::get_if<TupleType>(&init_type.v)) {
+    uint bind_idx = 0;
+    for (auto& el_type: tuple_type->element_types) {
+      auto& binding = bindings.binds.at(bind_idx);
+      match(binding, el_type->v)(
+        pattern(as<TupleBinding>(arg), as<TupleType>(_)) =
+          [&](auto& nested_binds) {
+            check_tuple_bindings(nested_binds, init, *el_type, scope);
+          },
+        pattern(as<Ast_Argument>(arg), _) =
+          [&](auto& bind) {
+            resolve_type_or_fail(scope, bind.type, "undeclared bind type {}");
+            assert_valid_binding(
+              Ast_Identifier{}/*todo*/,
+              SourceLocation{}/*todo*/,
+              bind.type, el_type, &init, &type_constraints);
+              emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
+              scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
+          },
+        pattern(_, _) = [](){ assert(false && "no" ); }
+      );
+      bind_idx += 1;
+    }
+  } else {
+    assert(false && "todo impl some kind to tuple inference...");
+  }
+}
+
+void Semantics::analyse_tuple_binding_decl(
+  Ast_Tuple_Structural_Binding& binding, Scope& scope
+) {
+  auto init_type = analyse_expression(*binding.initializer, scope);
+  check_tuple_bindings(binding.bindings, *binding.initializer, *init_type, scope);
 }
 
 static std::pair<Ast_Argument*, int> resolve_pod_field_index(
@@ -621,7 +664,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       std::transform(tuple.elements.begin(), tuple.elements.end(),
         std::back_inserter(tuple_type.element_types),
         [&](auto& element){
-          auto element_type = analyse_expression(*element, scope);
+          auto element_type = remove_reference(analyse_expression(*element, scope));
           // If all elements are lvalues then this tuple is & could be
           // used as a pattern
           expr.inherit_value_type(*element);

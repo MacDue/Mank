@@ -24,6 +24,16 @@ struct Ast_Variable_Declaration: Ast_Node {
   Expression_Ptr initializer = nullptr;
 };
 
+struct TupleBinding {
+  std::vector<std::variant<Ast_Argument, TupleBinding>> binds;
+};
+
+struct Ast_Tuple_Structural_Binding: Ast_Node {
+  TupleBinding bindings;
+  Expression_Ptr initializer;
+};
+using Ast_Sad_Binding = Ast_Tuple_Structural_Binding;
+
 struct Ast_For_Loop: Ast_Node {
   Type_Ptr type; // of loop variable
   Ast_Identifier loop_variable;
@@ -37,7 +47,8 @@ using Ast_Statement_Type = std::variant<
   Ast_Return_Statement,
   Ast_Assign,
   Ast_Variable_Declaration,
-  Ast_For_Loop>;
+  Ast_For_Loop,
+  Ast_Tuple_Structural_Binding>;
 
 struct Ast_Statement {
   Ast_Statement_Type v;

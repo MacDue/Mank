@@ -67,16 +67,26 @@ LLVMCodeGen::ExpressionExtract::ExpressionExtract(
   }
 }
 
-llvm::Value* LLVMCodeGen::ExpressionExtract::get_value(
+llvm::Value* LLVMCodeGen::ExpressionExtract::get_bind(
   std::vector<unsigned> const & idx_list, llvm::Twine const & name
 ) {
   if (is_lvalue) {
     llvm::Value* value_addr = codegen->ir_builder.CreateGEP(
       value_or_address, codegen->make_idx_list_for_gep(idx_list), name);
-    return codegen->ir_builder.CreateLoad(value_addr, name);
+    return value_addr;
   } else {
     return codegen->ir_builder.CreateExtractValue(value_or_address, idx_list, name);
   }
+}
+
+llvm::Value* LLVMCodeGen::ExpressionExtract::get_value(
+  std::vector<unsigned> const & idx_list, llvm::Twine const & name
+) {
+  llvm::Value* value = this->get_bind(idx_list, name);
+  if (is_lvalue) {
+    value = codegen->ir_builder.CreateLoad(value, name);
+  }
+  return value;
 }
 
 /* Types */
@@ -396,33 +406,43 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
   ir_builder.CreateBr(return_meta->return_block);
 }
 
-void LLVMCodeGen::codegen_tuple_assign(Ast_Tuple_Literal& tuple_pattern, Ast_Expression& tuple, Scope& scope) {
+void LLVMCodeGen::codegen_tuple_assign(
+  Ast_Tuple_Literal& tuple_pattern, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope
+) {
   using namespace mpark::patterns;
+  uint gep_idx = 0;
+  for (auto& el: tuple_pattern.elements) {
+    idxs.push_back(gep_idx);
+    match(el->v) (
+      pattern(as<Ast_Tuple_Literal>(arg)) = [&](auto& next_pattern) {
+        codegen_tuple_assign(next_pattern, tuple, idxs, scope);
+      },
+      pattern(_) = [&]{
+        llvm::Value* tuple_el = tuple.get_value(idxs, "tuple_element");
+        llvm::Value* target_ptr = address_of(*el, scope);
+        ir_builder.CreateStore(tuple_el, target_ptr);
+      }
+    );
+    idxs.pop_back();
+    ++gep_idx;
+  }
+}
+
+LLVMCodeGen::ExpressionExtract LLVMCodeGen::get_tuple_extractor(
+  Ast_Expression& tuple, Scope& scope
+) {
   if (std::holds_alternative<Ast_Tuple_Literal>(tuple.v)) {
     // In the semantics I lie and say a tuple literal with all lvalue values
     // is an lvalue (this is true semantically -- but not really for code gen)
     tuple.set_value_type(Expression_Meta::RVALUE); // make sure it's a rvalue (like all literals)
   }
-  auto tuple_extract = get_value_extractor(tuple, scope);
-  uint gep_idx = 0;
-  for (auto& el: tuple_pattern.elements) {
-    match(el->v) (
-      pattern(as<Ast_Tuple_Literal>(arg)) = [&](auto& next_pattern) {
-        codegen_tuple_assign(next_pattern, *el, scope);
-      },
-      pattern(_) = [&]{
-        llvm::Value* tuple_el = tuple_extract.get_value({ gep_idx }, "tuple_element");
-        llvm::Value* target_ptr = address_of(*el, scope);
-        ir_builder.CreateStore(tuple_el, target_ptr);
-      }
-    );
-    ++gep_idx;
-  }
+  return get_value_extractor(tuple, scope);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
   if (auto tuple_pattern = std::get_if<Ast_Tuple_Literal>(&assign.target->v)) {
-    codegen_tuple_assign(*tuple_pattern, *assign.expression, scope);
+    auto tuple_extract = get_tuple_extractor(*assign.expression, scope);
+    codegen_tuple_assign(*tuple_pattern, tuple_extract, {}, scope);
     return;
   }
   llvm::Value* target_ptr = address_of(*assign.target, scope);
@@ -568,6 +588,44 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
 
   current_function->getBasicBlockList().push_back(for_end);
   ir_builder.SetInsertPoint(for_end);
+}
+
+void LLVMCodeGen::codegen_tuple_bindings(
+  TupleBinding& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope
+){
+  using namespace mpark::patterns;
+  uint gep_idx = 0;
+  for (auto& binding: tuple_binds.binds) {
+    idxs.push_back(gep_idx);
+    match(binding) (
+      pattern(as<TupleBinding>(arg)) = [&](auto& nested_bind) {
+        codegen_tuple_bindings(nested_bind, tuple, idxs, scope);
+      },
+      pattern(as<Ast_Argument>(arg)) = [&](auto& bind){
+        llvm::Value* value;
+        if (is_reference_type(bind.type.get())) {
+          // the tuple expression must be an lvalue
+          value = tuple.get_bind(idxs, "bound_tuple_ref");
+        } else {
+          value = tuple.get_value(idxs, "bound_tuple_value");
+        }
+        llvm::Function* current_function = get_current_function();
+        auto& local_symbol = scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
+        llvm::AllocaInst* alloca = create_entry_alloca(current_function, &local_symbol);
+        // This my generate worse IR than using a var decl
+        // (since if you have an array it will copy it rather than inplace init)
+        // but llvm should be able to figure that out.
+        ir_builder.CreateStore(value, alloca);
+      }
+    );
+    idxs.pop_back();
+    ++gep_idx;
+  }
+}
+
+void LLVMCodeGen::codegen_statement(Ast_Tuple_Structural_Binding& bindings, Scope& scope) {
+  auto tuple_extract = get_tuple_extractor(*bindings.initializer, scope);
+  codegen_tuple_bindings(bindings.bindings, tuple_extract, {}, scope);
 }
 
 /* Expressions */

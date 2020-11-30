@@ -113,6 +113,30 @@ void AstPrinter::print_stmt(Ast_For_Loop& for_loop) {
   self->print_expr(for_loop.body);
 }
 
+void AstPrinter::print_binding(TupleBinding& binding) {
+  using namespace mpark::patterns;
+  for (auto& binding: binding.binds) {
+    match(binding)(
+      pattern(as<Ast_Argument>(arg)) = [&](auto& arg) {
+        self->print_args({ arg });
+      },
+      pattern(as<TupleBinding>(arg)) = [&](auto& nested) {
+        // FIXME: Hack
+        indent(); indent(); self->putf("- Nested bindings");
+        self->print_binding(nested);
+      }
+    );
+  }
+}
+
+void AstPrinter::print_stmt(Ast_Tuple_Structural_Binding& tuple_binding) {
+  putf("* Tuple structural binding");
+  putf("- Bindings");
+  this->print_binding(tuple_binding.bindings);
+  putf("- Initializer");
+  self->print_expr(*tuple_binding.initializer);
+}
+
 /* Expressions */
 
 void AstPrinter::print_expr(Ast_Expression& expr) {

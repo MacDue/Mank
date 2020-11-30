@@ -68,6 +68,9 @@ private:
   Statement_Ptr parse_assign(Expression_Ptr lhs);
   Statement_Ptr parse_for_loop();
 
+  TupleBinding parse_tuple_binding();
+  Statement_Ptr parse_tuple_structural_binding();
+
   /* Expressions */
   std::vector<Expression_Ptr> parse_expression_list(
     TokenType left_delim = TokenType::LEFT_PAREN,

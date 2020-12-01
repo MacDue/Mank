@@ -17,7 +17,7 @@
 Semantics::Semantics() {
   static bool macros_loaded = false;
   if (!macros_loaded) {
-    Macros::register_macro("bind", Macros::builtin_bind);
+    Macros::register_macro("pbind", Macros::builtin_bind);
     Macros::register_macro("curry", Macros::builtin_curry);
     macros_loaded = true;
   }

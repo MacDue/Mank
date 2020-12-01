@@ -209,7 +209,7 @@ Statement_Ptr Parser::parse_statement() {
     stmt = to_stmt_ptr(return_stmt);
   } else if (peek(TokenType::FOR)) {
     stmt = this->parse_for_loop();
-  } else if (peek(TokenType::COLON)) {
+  } else if (peek(TokenType::BIND)) {
     stmt = this->parse_tuple_structural_binding();
   } else if (auto expr = this->parse_expression()) {
     bool simple_expression = false;
@@ -360,15 +360,15 @@ TupleBinding Parser::parse_tuple_binding() {
 
 Statement_Ptr Parser::parse_tuple_structural_binding() {
   /*
-    sad_binding = ":", "(" [binding_list] ")"
+    sad_binding = "bind", "(" [binding_list] ")"
     binding_list = binding, {",", binding}
     binding = (identifier, [":" type]) | ("(" binding ")")
   */
-  // :(x, y)
-  // :(x: i32, y: i32)
-  // :(x: i32, (y: i32))
+  // bind (x, y)
+  // bind (x: i32, y: i32)
+  // bind (x: i32, (y: i32))
   Ast_Tuple_Structural_Binding parsed_sad_binding;
-  expect(TokenType::COLON);
+  expect(TokenType::BIND);
   parsed_sad_binding.bindings = this->parse_tuple_binding();
   expect(TokenType::ASSIGN);
   parsed_sad_binding.initializer = this->parse_expression();

@@ -4,13 +4,14 @@ static bool match_type_lists(
   std::vector<Type_Ptr> const & a,
   std::vector<Type_Ptr> const & b,
   Infer::ConstraintSet* constraints,
+  Infer::Constraint blank_constraint,
   bool ignore_refs
 ) {
   if (a.size() != b.size()) {
     return false;
   }
   for (size_t idx = 0; idx < a.size(); idx++) {
-    if (!match_types(a.at(idx), b.at(idx), constraints, ignore_refs)) {
+    if (!match_types(a.at(idx), b.at(idx), constraints, blank_constraint, ignore_refs)) {
       return false;
     }
   }
@@ -18,7 +19,9 @@ static bool match_type_lists(
 }
 
 bool match_types(Type_Ptr a, Type_Ptr b,
-  Infer::ConstraintSet* constraints, bool ignore_refs
+  Infer::ConstraintSet* constraints,
+  Infer::Constraint blank_constraint,
+  bool ignore_refs
 ) {
   using namespace mpark::patterns;
 
@@ -34,7 +37,9 @@ bool match_types(Type_Ptr a, Type_Ptr b,
   if (constraints) {
     auto min_t = min_type(a, b);
     if (min_t && std::holds_alternative<TypeVar>(min_t->v)) {
-      constraints->insert(std::make_pair(a, b));
+      auto new_constraint = blank_constraint;
+      new_constraint.types = std::make_pair(a, b);
+      constraints->push_back(new_constraint);
       return true;
     }
   }
@@ -51,18 +56,18 @@ bool match_types(Type_Ptr a, Type_Ptr b,
         [&](auto const & a, auto const & b) {
            // refs can't appear in arrays
           return a.size == b.size
-            && match_types(a.element_type, b.element_type, constraints);
+            && match_types(a.element_type, b.element_type, constraints, blank_constraint);
         },
       pattern(as<LambdaType>(arg), as<LambdaType>(arg)) =
         [&](auto const & a, auto const & b) {
-          return match_type_lists(a.argument_types, b.argument_types, constraints, false)
-            && match_types(a.return_type, b.return_type, constraints, false);
+          return match_type_lists(a.argument_types, b.argument_types, constraints, blank_constraint, false)
+            && match_types(a.return_type, b.return_type, constraints, blank_constraint, false);
         },
       pattern(as<TupleType>(arg), as<TupleType>(arg)) =
         [&](auto const & a, auto const & b) {
           // Don't match (ref i32, i32) = (i32, i32)
           // (will need special case for patterns)
-          return match_type_lists(a.element_types, b.element_types, constraints, false);
+          return match_type_lists(a.element_types, b.element_types, constraints, blank_constraint, false);
         },
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) =
         [](auto const & a, auto const & b) {

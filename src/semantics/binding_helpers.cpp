@@ -1,26 +1,24 @@
 
+#include "ast/util.h"
 #include "sema/types.h"
 #include "sema/sema_errors.h"
-#include "binding_helpers.h"
+#include "sema/semantics.h"
 
 /*
   A binding is when a variable is first initialized.
   e.g. when a variable is declared or a function is called (and expressions are bound to it's params)
 */
 
-bool assert_valid_binding(
+bool Semantics::assert_valid_binding(
   Ast_Identifier const& lvalue,
   SourceLocation bind_location,
   Type_Ptr type,
   Type_Ptr to_bind,
-  Ast_Expression const * expression,
-  Infer::ConstraintSet* constraints
+  Ast_Expression const * expression
 ) {
   if (expression) {
-    if (!match_types(type, to_bind, constraints)) {
-      throw_compile_error(bind_location, "cannot bind expression with type {} to {}",
-        type_to_string(to_bind.get()), type_to_string(type.get()));
-    }
+    match_or_constrain_types_at(bind_location, type, to_bind,
+      "cannot bind expression with type {1} to {0}");
   }
 
   if (is_reference_type(type.get())) {
@@ -35,18 +33,17 @@ bool assert_valid_binding(
   return true;
 }
 
-bool assert_valid_binding(
+bool Semantics::assert_valid_binding(
   Ast_Identifier const & lvalue,
   Type_Ptr type,
-  Ast_Expression const * expression,
-  Infer::ConstraintSet* constraints
+  Ast_Expression const * expression
 ) {
   return assert_valid_binding(lvalue,
     expression
-      ? std::visit([](auto const & ast){ return ast.location; }, expression->v)
+      ? AstHelper::extract_location(*expression)
       : SourceLocation{}, type,
     expression
       ? extract_type_nullable(expression->meta.type)
       : Type_Ptr(nullptr),
-    expression, constraints);
+    expression);
 }

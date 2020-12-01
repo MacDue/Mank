@@ -8,8 +8,6 @@
 #include "sema/const_propagate.h"
 #include "sema/return_reachability.h"
 
-#include "binding_helpers.h"
-
 // Macros
 #include "macros/bind_macro.h"
 #include "macros/curry_macro.h"
@@ -21,6 +19,19 @@ Semantics::Semantics() {
     Macros::register_macro("curry", Macros::builtin_curry);
     macros_loaded = true;
   }
+}
+
+bool Semantics::match_or_constrain_types_at(
+  SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const* error_template
+) {
+  Infer::Constraint constraint_template;
+  constraint_template.origin = loc;
+  constraint_template.error_template = error_template;
+  if (!match_types(t1, t2, &type_constraints, constraint_template)) {
+    throw_compile_error(loc, error_template,
+      type_to_string(t1.get()), type_to_string(t2.get()));
+  }
+  return true;
 }
 
 Symbol* Semantics::emit_warning_if_shadows(
@@ -169,7 +180,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   auto final_expr = func.body.get_final_expr();
   if (final_expr) {
     if (body_type) {
-      assert_valid_binding({}, expected_return, final_expr.get(), &type_constraints);
+      assert_valid_binding({}, expected_return, final_expr.get());
       /* Desugar implict return for codegen + return checking ease */
       func.body.has_final_expr = false;
       Ast_Return_Statement implicit_return;
@@ -279,10 +290,8 @@ void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
 
   auto expr_type = analyse_expression(*assign.expression, scope);
 
-  if (!match_or_constrain_types(target_type, expr_type)) {
-    throw_sema_error_at(assign, "cannot assign variable of type {} to {}",
-      type_to_string(target_type.get()), type_to_string(expr_type.get()));
-  }
+  match_or_constrain_types_at(assign, target_type, expr_type,
+    "cannot assign variable of type {} to {}");
 }
 
 static bool is_explict_reference(Ast_Expression& expr) {
@@ -316,7 +325,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       if (!expr_type && expected_return) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
-      assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get(), &type_constraints);
+      assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get());
     },
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto& var_decl) {
       if (var_decl.type) {
@@ -342,7 +351,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       } else {
         emit_warning_at(var_decl, "default initialization is currently unimplemented");
       }
-      assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer.get(),  &type_constraints);
+      assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer.get());
       emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
       scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
@@ -360,12 +369,8 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
     if (is_reference_type(for_loop.type.get())) {
       throw_sema_error_at(for_loop.loop_variable, "reference loop variables are not yet supported");
     }
-
-    if (!match_or_constrain_types(for_loop.type, start_range_type)) {
-      throw_sema_error_at(for_loop.start_range,
-        "start range type type {} does not match loop variable type {}",
-        type_to_string(start_range_type.get()), type_to_string(for_loop.type.get()));
-    }
+    match_or_constrain_types_at(for_loop.start_range, for_loop.type, start_range_type,
+      "start range type type {1} does not match loop variable type {0}");
   } else {
     if (!start_range_type) {
       throw_sema_error_at(for_loop.start_range, "loop variable cannot be type {}",
@@ -376,11 +381,9 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
 
   auto end_range_type = analyse_expression(*for_loop.end_range, scope);
   for_loop.end_range->meta.type = end_range_type;
-  if (!match_or_constrain_types(start_range_type, end_range_type)) {
-    throw_sema_error_at(for_loop.end_range,
-      "end range type {} does not match start range type {}",
-      type_to_string(end_range_type.get()), type_to_string(start_range_type.get()));
-  }
+
+  match_or_constrain_types_at(for_loop.end_range, start_range_type, end_range_type,
+    "end range type {1} does not match start range type {0}");
 
   emit_warning_if_shadows(for_loop.loop_variable, scope, "loop variable shadows existing symbol");
   auto& body = for_loop.body;
@@ -396,6 +399,9 @@ void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& ini
   using namespace mpark::patterns;
   Infer::generate_tuple_destructure_constraints(bindings, init_type, type_constraints);
   if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {
+    if (tuple_type->element_types.size() != bindings.binds.size()) {
+      throw_sema_error_at(init, "tuple not the right shape for binding");
+    }
     uint bind_idx = 0;
     for (auto& el_type: tuple_type->element_types) {
       auto& binding = bindings.binds.at(bind_idx);
@@ -410,7 +416,7 @@ void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& ini
             assert_valid_binding(
               Ast_Identifier{}/*todo*/,
               SourceLocation{}/*todo*/,
-              bind.type, el_type, &init, &type_constraints);
+              bind.type, el_type, &init);
               emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
               scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
           },
@@ -419,7 +425,7 @@ void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& ini
       bind_idx += 1;
     }
   } else {
-    throw_sema_error_at(init, "sad binding initializer must be a tuple");
+    throw_sema_error_at(init, "tuple bind initializer must be a tuple");
   }
 }
 
@@ -531,18 +537,13 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_expr){
       auto cond_type = analyse_expression(*if_expr.cond, scope);
-      if (!match_or_constrain_types(cond_type, Primative::BOOL)) {
-        throw_sema_error_at(if_expr.cond,
-          "if condition must be a {}", type_to_string(*Primative::BOOL));
-      }
+      match_or_constrain_types_at(if_expr.cond, cond_type, Primative::BOOL,
+        "if condition must be a {1}");
       auto then_type = analyse_expression(*if_expr.then_block, scope);
       if (if_expr.has_else) {
         auto else_type = analyse_expression(*if_expr.else_block, scope);
-        if (!match_or_constrain_types(then_type, else_type)) {
-          throw_sema_error_at(if_expr,
-            "type of then block {} does not match else block {}",
-            type_to_string(then_type.get()), type_to_string(else_type.get()));
-        }
+        match_or_constrain_types_at(if_expr, then_type, else_type,
+          "type of then block {} does not match else block {}");
         if (is_reference_type(then_type.get()) && is_reference_type(else_type.get()) ) {
           expr.set_value_type(Expression_Meta::LVALUE);
         }
@@ -629,12 +630,9 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
           [&](auto& prev, auto& next){
             array_type.element_type = remove_reference(analyse_expression(*prev, scope));
             auto next_type = analyse_expression(*next, scope);
-            if (!match_or_constrain_types(array_type.element_type, next_type)) {
-              throw_sema_error_at(next, "element type {} does not match array type of {}",
-                type_to_string(next_type.get()),
-                type_to_string(array_type.element_type.get()));
-              return true;
-            }
+
+            match_or_constrain_types_at(next, next_type, array_type.element_type,
+              "element type {} does not match array type of {}");
             return false;
           });
       }
@@ -644,10 +642,8 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       auto object_type = analyse_expression(*index.object, scope);
       auto index_type = analyse_expression(*index.index, scope);
       if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type)) {
-        if (!match_or_constrain_types(index_type, Primative::INTEGER)) {
-          throw_sema_error_at(index.index, "invalid index type {}",
-            type_to_string(index_type.get()));
-        }
+        match_or_constrain_types_at(index.index, index_type, Primative::INTEGER,
+          "invalid index type {}");
         expr.inherit_value_type(*index.object);
         return array_type->element_type;
       } else {
@@ -688,9 +684,9 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
 }
 
 #define ADD_SPECIAL_CONSTRAINT(constraints, constraint) \
-  ({  if (!constraints.empty()) constraints.insert(constraint); true;  })
+  ({  if (!constraints.empty()) constraints.push_back(constraint); true;  })
 
-static bool match_special_constraint(
+static bool match_special_constraint_at(SourceLocation loc,
   Type_Ptr type, TypeVar::Constraint constraint, Infer::ConstraintSet& constraints
 ) {
   using namespace mpark::patterns;
@@ -700,7 +696,7 @@ static bool match_special_constraint(
     },
     pattern(as<TypeVar>(_)) = [&] {
       return ADD_SPECIAL_CONSTRAINT(constraints,
-        Infer::Constraint(type, TypeVar::get(constraint)));
+        Infer::Constraint(loc, type, TypeVar::get(constraint)));
     },
     pattern(_) = []{ return false; }
   );
@@ -718,22 +714,24 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
     return unary.operand->meta.owned_type;
   }
 
+  auto loc = AstHelper::extract_location(unary);
   switch (unary.operation) {
     case Ast_Operator::MINUS:
     case Ast_Operator::PLUS: {
-      if (match_special_constraint(operand_type, TypeVar::NUMERIC, type_constraints)) {
+      if (match_special_constraint_at(loc, operand_type, TypeVar::NUMERIC, type_constraints)) {
         return operand_type;
       }
       break;
     }
     case Ast_Operator::BITWISE_NOT: {
-      if (match_special_constraint(operand_type, TypeVar::INTEGER, type_constraints)) {
+      if (match_special_constraint_at(loc, operand_type, TypeVar::INTEGER, type_constraints)) {
         return operand_type;
       }
       break;
     }
     case Ast_Operator::LOGICAL_NOT: {
-      if (match_or_constrain_types(operand_type, Primative::BOOL)) {
+      if (match_or_constrain_types_at(unary, operand_type, Primative::BOOL,
+          "cannot perform logical not on {}")) {
         return operand_type;
       }
       break;
@@ -750,18 +748,17 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
   auto left_type = remove_reference(analyse_expression(*binop.left, scope));
   auto right_type = analyse_expression(*binop.right, scope);
 
-  if (!match_or_constrain_types(left_type, right_type)) {
-    throw_sema_error_at(binop, "incompatible types {} and {}",
-      type_to_string(left_type.get()), type_to_string(right_type.get()));
-  }
+  match_or_constrain_types_at(binop, left_type, right_type,
+    "incompatible types {} and {}");
 
   left_type = min_type(left_type, right_type);
+  auto loc = AstHelper::extract_location(binop);
   auto binop_type = match(binop.operation)(
     pattern(anyof(
       Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,
       Ast_Operator::DIVIDE
     )) = [&]{
-      WHEN(match_special_constraint(left_type, TypeVar::NUMERIC, type_constraints)) {
+      WHEN(match_special_constraint_at(loc, left_type, TypeVar::NUMERIC, type_constraints)) {
         return left_type;
       };
     },
@@ -769,7 +766,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::LEFT_SHIFT, Ast_Operator::RIGHT_SHIFT, Ast_Operator::BITWISE_AND,
       Ast_Operator::BITWISE_OR, Ast_Operator::BITWISE_XOR, Ast_Operator::MODULO
     )) = [&]{
-      WHEN(match_special_constraint(left_type, TypeVar::INTEGER, type_constraints)) {
+      WHEN(match_special_constraint_at(loc, left_type, TypeVar::INTEGER, type_constraints)) {
         return left_type;
       };
     },
@@ -777,7 +774,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::LESS_THAN, Ast_Operator::LESS_EQUAL, Ast_Operator::GREATER_THAN,
       Ast_Operator::GREATER_EQUAL, Ast_Operator::EQUAL_TO, Ast_Operator::NOT_EQUAL_TO
     )) = [&]{
-      WHEN(match_special_constraint(left_type, TypeVar::NUMERIC, type_constraints)) {
+      WHEN(match_special_constraint_at(loc, left_type, TypeVar::NUMERIC, type_constraints)) {
         return Primative::BOOL;
       };
     },
@@ -839,11 +836,11 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
 
         if constexpr (!is_lambda) {
           auto& expected = function_type.arguments.at(arg_idx);
-          assert_valid_binding(expected.name, expected.type, &argument, &type_constraints);
+          assert_valid_binding(expected.name, expected.type, &argument);
         } else {
           // Lambda args are not named (will need a better error reporting method...)
           auto& expected = function_type.argument_types.at(arg_idx);
-          assert_valid_binding(*called_function_ident, expected, &argument, &type_constraints);
+          assert_valid_binding(*called_function_ident, expected, &argument);
         }
       }
 

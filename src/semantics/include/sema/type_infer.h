@@ -9,13 +9,17 @@
 
 namespace Infer {
 
-// struct Constraint {
-//   std::pair<Type_Ptr, Type_Ptr> types;
-//   SourceLocation origin;
-// };
+struct Constraint {
+  SourceLocation origin;
+  std::pair<Type_Ptr, Type_Ptr> types;
+  char const * error_template = "infer failed {} {}";
 
-using Constraint = std::pair<Type_Ptr, Type_Ptr>;
-using ConstraintSet = std::set<Constraint>;
+  Constraint() { origin = {}; }
+  Constraint(SourceLocation loc, Type_Ptr t1, Type_Ptr t2)
+    : origin{loc}, types{std::make_pair(t1, t2)} {}
+};
+
+using ConstraintSet = std::vector<Constraint>;
 using Substitution = std::map<TypeVar, Type_Ptr>;
 
 class UnifyError: public std::exception {

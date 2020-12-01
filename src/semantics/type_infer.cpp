@@ -1,9 +1,11 @@
 #include <mpark/patterns.hpp>
 #include <boost/range/combine.hpp>
 
+#include "ast/util.h"
 #include "ast/visitor.h"
 #include "ast/ast_builder.h"
 #include "sema/type_infer.h"
+#include "errors/compiler_errors.h"
 
 namespace Infer {
 
@@ -12,22 +14,22 @@ static Substitution unify(ConstraintSet&& constraints);
 
 static Type_Ptr substitute(
   Type_Ptr current_type, TypeVar tvar, Type_Ptr replacement,
-  Substitution const & subs
+  Substitution const & subs, SourceLocation origin
 ) {
   using namespace mpark::patterns;
   return match(current_type->v)(
     pattern(as<PrimativeType>(_)) = [&]{ return current_type; },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
       lambda_type.return_type = substitute(
-        lambda_type.return_type, tvar, replacement, subs);
+        lambda_type.return_type, tvar, replacement, subs, origin);
       for (auto& arg_type: lambda_type.argument_types) {
-        arg_type = substitute(arg_type, tvar, replacement, subs);
+        arg_type = substitute(arg_type, tvar, replacement, subs, origin);
       }
       return to_type_ptr(lambda_type);
     },
     pattern(as<TupleType>(arg)) = [&](auto tuple_type) {
       for (auto& el_type: tuple_type.element_types) {
-        el_type = substitute(el_type, tvar, replacement, subs);
+        el_type = substitute(el_type, tvar, replacement, subs, origin);
       }
       return to_type_ptr(tuple_type);
     },
@@ -43,10 +45,10 @@ static Type_Ptr substitute(
   );
 }
 
-static Type_Ptr apply_type(Type_Ptr type, Substitution const & subs) {
+static Type_Ptr apply_type(Type_Ptr type, Substitution const & subs, SourceLocation origin) {
   auto result = type;
   for (auto& [tvar, solved_type]: subs) {
-    result = substitute(result, tvar, solved_type, subs);
+    result = substitute(result, tvar, solved_type, subs, origin);
   }
   return result;
 }
@@ -54,8 +56,8 @@ static Type_Ptr apply_type(Type_Ptr type, Substitution const & subs) {
 static void apply_constraint(
   Constraint& c, Substitution const & subs
 ) {
-  c.first = apply_type(c.first, subs);
-  c.second = apply_type(c.second, subs);
+  c.types.first = apply_type(c.types.first, subs, c.origin);
+  c.types.second = apply_type(c.types.second, subs, c.origin);
 }
 
 static void apply_subs(std::vector<Constraint>& constraints, Substitution const & subs
@@ -101,36 +103,55 @@ static Substitution unify_var(TypeVar tvar, Type_Ptr type) {
   }
 }
 
+[[ noreturn ]]
+static void throw_unify_error(Constraint const & constraint) {
+  throw_compile_error(constraint.origin, constraint.error_template,
+    type_to_string(constraint.types.first.get()),
+    type_to_string(constraint.types.second.get()));
+}
+
+static Substitution try_unify_sub_constraints(
+  Constraint const & parent,
+  ConstraintSet&& sub_constraints
+) {
+  // Kinda a hack...
+  try {
+    return unify(std::move(sub_constraints));
+  } catch (...) {
+    throw_unify_error(parent);
+  }
+}
+
 static Substitution unify_one(Constraint constraint) {
   using namespace mpark::patterns;
-  auto [a, b] = constraint;
+  auto [a, b] = constraint.types;
   return match(a->v, b->v)(
     pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [](auto& p1, auto& p2){
       WHEN(p1.tag == p2.tag) {
         return Substitution{};
       };
     },
-    pattern(as<LambdaType>(arg), as<LambdaType>(arg)) = [](auto& l1, auto& l2) {
+    pattern(as<LambdaType>(arg), as<LambdaType>(arg)) = [&](auto& l1, auto& l2) {
       WHEN(l1.argument_types.size() == l2.argument_types.size()) {
         ConstraintSet new_constraints;
-        new_constraints.insert(Constraint(l1.return_type, l2.return_type));
+        new_constraints.push_back(Constraint(constraint.origin, l1.return_type, l2.return_type));
         for (auto type_pair: boost::combine(l1.argument_types, l2.argument_types)) {
-          Constraint arg_constraint;
-          boost::tie(arg_constraint.first, arg_constraint.second) = type_pair;
-          new_constraints.insert(arg_constraint);
+          Constraint arg_constraint = constraint;
+          boost::tie(arg_constraint.types.first, arg_constraint.types.second) = type_pair;
+          new_constraints.push_back(arg_constraint);
         }
-        return unify(std::move(new_constraints));
+        return try_unify_sub_constraints(constraint, std::move(new_constraints));
       };
     },
-    pattern(as<TupleType>(arg), as<TupleType>(arg)) = [](auto& t1, auto& t2) {
+    pattern(as<TupleType>(arg), as<TupleType>(arg)) = [&](auto& t1, auto& t2) {
       WHEN(t1.element_types.size() == t2.element_types.size()) {
         ConstraintSet tuple_constraints;
         for (auto type_pair: boost::combine(t1.element_types, t2.element_types)) {
-          Constraint constraint;
-          boost::tie(constraint.first, constraint.second) = type_pair;
-          tuple_constraints.insert(constraint);
+          Constraint tup_constraint = constraint;
+          boost::tie(tup_constraint.types.first, tup_constraint.types.second) = type_pair;
+          tuple_constraints.push_back(tup_constraint);
         }
-        return unify(std::move(tuple_constraints));
+        return try_unify_sub_constraints(constraint, std::move(tuple_constraints));
       };
     },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
@@ -139,16 +160,14 @@ static Substitution unify_one(Constraint constraint) {
     pattern(_, as<TypeVar>(arg)) = [&](auto& tvar){
       return unify_var(tvar, a);
     },
-    pattern(_, _) = []() -> Substitution {
-      throw UnifyError("can't unify types");
-    }
+    pattern(_, _) = [&]() -> Substitution { throw_unify_error(constraint); }
   );
 }
 
 static void merge_left(Substitution& target, Substitution const & other) {
   // Merge 'other' into target (left)
   for (auto& [_, s]: target) {
-    s = apply_type(s, other);
+    s = apply_type(s, other, {}); // I think it's safe to ignore the origin here
   }
   target.insert(other.begin(), other.end());
 }
@@ -175,7 +194,7 @@ static bool satisfies_special_constraints(Substitution const & subs, SpecialCons
   return true;
 }
 
-static Substitution unify(std::vector<Constraint>&& constraints) {
+static Substitution unify(ConstraintSet&& constraints) {
   if (constraints.size() == 0) {
     return {};
   }
@@ -189,27 +208,24 @@ static Substitution unify(std::vector<Constraint>&& constraints) {
   return subs;
 }
 
-static Substitution unify(ConstraintSet&& constraints) {
-  // Sets are not that fun to deal with & mutate
-  return unify(std::vector<Constraint>(constraints.begin(), constraints.end()));
-}
-
 Substitution unify_and_apply(ConstraintSet && constraints) {
   SpecialConstraints special_constraints;
 
   // Collect special constraints
-  for (auto it = constraints.begin(); it != constraints.end(); ) {
+  auto res = std::remove_if(constraints.begin(), constraints.end(), [&](auto& constraint) {
     using namespace mpark::patterns;
-    match(it->first->v, it->second->v)(
+    return match(constraint.types.first->v, constraint.types.second->v)(
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) = [&](auto t1, auto t2) {
         WHEN(t2.special()) {
           special_constraints.push_back(std::make_pair(t1, t2));
-          constraints.erase(it++); // remove special constraints
+          return true; // remove
         };
       },
-      pattern(_,_) = [&]{ ++it; }
+      pattern(_,_) = [&]{ return false; }
     );
-  }
+  });
+
+  constraints.erase(res, constraints.end());
 
   auto subs = unify(std::move(constraints));
   if (!satisfies_special_constraints(subs, special_constraints)) {
@@ -237,7 +253,8 @@ void generate_call_constraints(
     std::generate_n(std::back_inserter(call_type.argument_types),
       call.arguments.size(), []{ return to_type_ptr(TypeVar()); });
     auto call_type_ptr = to_type_ptr(call_type);
-    constraints.insert(Constraint(callee_type, call_type_ptr));
+    constraints.push_back(Constraint(
+      AstHelper::extract_location(call), callee_type, call_type_ptr));
     callee_type = call.get_meta().owned_type = call_type_ptr;
   }
 }
@@ -258,7 +275,9 @@ void generate_tuple_assign_constraints(
       std::get<Ast_Tuple_Literal>(tuple_assign.target->v).elements.size(),
       []{ return to_type_ptr(TypeVar()); });
     auto assign_type_ptr = to_type_ptr(assign_type);
-    constraints.insert(Constraint(tuple_type, assign_type_ptr));
+    constraints.push_back(
+      Constraint(AstHelper::extract_location(tuple_assign),
+        tuple_type, assign_type_ptr));
     tuple_assign.expression->meta.type
       = tuple_assign.expression->meta.owned_type
       = assign_type_ptr;
@@ -274,7 +293,9 @@ void generate_tuple_destructure_constraints(
     std::generate_n(std::back_inserter(binding_type.element_types), bindings.binds.size(),
       []{ return to_type_ptr(TypeVar()); });
     auto binding_type_ptr = to_type_ptr(binding_type);
-    constraints.insert(Constraint(init_type, binding_type_ptr));
+    // FIXME: Add loc
+    constraints.push_back(
+      Constraint({}, init_type, binding_type_ptr));
     init_type = binding_type_ptr;
   }
 }

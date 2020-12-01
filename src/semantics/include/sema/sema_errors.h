@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast/ast.h"
+#include "ast/util.h"
 #include "errors/compiler_errors.h"
 #include "errors/compiler_message.h"
 
@@ -18,13 +19,6 @@ template< typename TAst, typename TPattern, typename... TArgs>
 [[ noreturn ]] void throw_sema_error_at(
   TAst const & ast, TPattern format_pattern, TArgs const & ... args
 ) {
-  FORWARD_MESSAGE(throw_compile_error);
+  throw_compile_error(AstHelper::extract_location(ast), format_pattern, args...);
   IMPOSSIBLE();
-}
-
-template< template<typename T> class TPointer, typename TAst, typename TPattern, typename... TArgs>
-[[ noreturn ]] void throw_sema_error_at(
-  TPointer<TAst> const & ast, TPattern format_pattern, TArgs const & ... args
-) {
-  throw_sema_error_at(*ast, format_pattern, args...);
 }

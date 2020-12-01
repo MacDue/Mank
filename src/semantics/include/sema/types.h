@@ -50,6 +50,7 @@ inline Type_Ptr make_refernce(Type_Ptr type) {
 
 bool match_types(Type_Ptr a, Type_Ptr b,
   Infer::ConstraintSet* constraints = nullptr,
+  Infer::Constraint blank_constraint = {},
   bool ignore_refs = true);
 
 template <typename T>

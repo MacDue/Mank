@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ast/util.h"
+
 /*
   Nasty stack of templates for emitting formattted warnings.
   Not very important.
@@ -16,10 +18,5 @@ void append_warning(SourceLocation location, TPattern format_pattern, TArgs cons
 
 template <typename TAst, typename TPattern, typename... TArgs>
 void emit_warning_at(TAst const & ast, TPattern format_pattern, TArgs const & ... args) {
-  FORWARD_MESSAGE(append_warning);
-}
-
-template< template<typename T> class TPointer, typename TAst, typename TPattern, typename... TArgs>
-void emit_warning_at(TPointer<TAst> const & ast, TPattern format_pattern, TArgs const & ... args) {
-  emit_warning_at(*ast, format_pattern, args...);
+  append_warning(AstHelper::extract_location(ast), format_pattern, args...);
 }

@@ -8,6 +8,7 @@
 #include "sema/type_infer.h"
 
 #include "ast/ast.h"
+#include "ast/util.h"
 #include "errors/compiler_message.h"
 
 struct Semantics {
@@ -34,11 +35,28 @@ private:
   Infer::ConstraintSet type_constraints;
   inline void reset_type_constraints() { type_constraints = {}; }
 
-  inline bool match_or_constrain_types(Type_Ptr a, Type_Ptr b) {
-    return match_types(a, b, &type_constraints);
+  bool match_or_constrain_types_at(
+    SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const * error_template);
+
+  template<typename TAst>
+  inline bool match_or_constrain_types_at(
+    TAst& ast, Type_Ptr t1, Type_Ptr t2, char const * error_template
+  ) {
+    return match_or_constrain_types_at(
+      AstHelper::extract_location(ast), t1, t2, error_template);
   }
 
-  // void bind_or_constrain_types()
+  bool assert_valid_binding(
+    Ast_Identifier const& lvalue,
+    SourceLocation bind_location,
+    Type_Ptr type,
+    Type_Ptr to_bind,
+    Ast_Expression const * expression);
+
+  bool assert_valid_binding(
+    Ast_Identifier const & lvalue,
+    Type_Ptr type,
+    Ast_Expression const * expression);
 
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);

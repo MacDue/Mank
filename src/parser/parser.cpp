@@ -210,7 +210,7 @@ Statement_Ptr Parser::parse_statement() {
   } else if (peek(TokenType::FOR)) {
     stmt = this->parse_for_loop();
   } else if (peek(TokenType::COLON)) {
-    return this->parse_tuple_structural_binding();
+    stmt = this->parse_tuple_structural_binding();
   } else if (auto expr = this->parse_expression()) {
     bool simple_expression = false;
     if (stmt = this->parse_assign(expr)) {

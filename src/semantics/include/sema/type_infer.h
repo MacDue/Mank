@@ -6,17 +6,36 @@
 #include <stdexcept>
 
 #include "ast/types.h"
-
+#include "errors/compiler_message.h"
+#include <iostream>
 namespace Infer {
+
+inline std::vector<CompilerMessage>* hack_backtrack_infer = nullptr;
+void extract_tvars(Type_Ptr type, std::vector<TypeVar>& type_vars);
+
 
 struct Constraint {
   SourceLocation origin;
   std::pair<Type_Ptr, Type_Ptr> types;
-  char const * error_template = "infer failed {} {}";
+  // int32_t tvar1 = -1, tvar2 = -1;
+  std::vector<TypeVar> contained_tvars;
+  char const * error_template = "DEBUG: infer failed a = {}, b = {}";
 
   Constraint() { origin = {}; }
   Constraint(SourceLocation loc, Type_Ptr t1, Type_Ptr t2)
     : origin{loc}, types{std::make_pair(t1, t2)} {}
+
+  inline void init() {
+    // if (auto tvar1 = std::get_if<TypeVar>(&types.first->v)) {
+    //   this->tvar1 = tvar1->id;
+    // }
+    // if (auto tvar2 = std::get_if<TypeVar>(&types.second->v)) {
+    //   this->tvar2 = tvar2->id;
+    // }
+    // std::cout << "init: " << tvar1 << ", " << tvar2 << '\n';
+    extract_tvars(types.first, contained_tvars);
+    extract_tvars(types.second, contained_tvars);
+  }
 };
 
 using ConstraintSet = std::vector<Constraint>;
@@ -41,7 +60,8 @@ void generate_call_constraints(
 void generate_tuple_assign_constraints(
   Ast_Assign& tuple_assign, ConstraintSet& constraints);
 
-void generate_tuple_destructure_constraints(
-  TupleBinding const & bindings, Type_Ptr& init_type, ConstraintSet& constraints);
+bool generate_tuple_destructure_constraints(
+  TupleBinding const & bindings, Type_Ptr& init_type, ConstraintSet& constraints,
+  SourceLocation loc);
 
 }

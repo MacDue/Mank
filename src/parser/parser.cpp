@@ -329,6 +329,7 @@ Statement_Ptr Parser::parse_for_loop() {
 
 TupleBinding Parser::parse_tuple_binding() {
   TupleBinding binding;
+  auto binding_start = this->current_location();
   expect(TokenType::LEFT_PAREN);
   while (!peek(TokenType::RIGHT_PAREN)) {
     if (peek(TokenType::LEFT_PAREN)) {
@@ -355,6 +356,7 @@ TupleBinding Parser::parse_tuple_binding() {
     }
   }
   expect(TokenType::RIGHT_PAREN);
+  mark_ast_location(binding_start, binding);
   return binding;
 }
 

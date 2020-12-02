@@ -51,7 +51,8 @@ private:
     SourceLocation bind_location,
     Type_Ptr type,
     Type_Ptr to_bind,
-    Ast_Expression const * expression);
+    Ast_Expression const * expression,
+    bool match_tvars = true);
 
   bool assert_valid_binding(
     Ast_Identifier const & lvalue,
@@ -69,7 +70,9 @@ private:
   void analyse_expression_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);
   void analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope);
 
-  void check_tuple_bindings(TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope);
+  void check_tuple_bindings(
+    TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope,
+    bool to_infer = false);
   void analyse_tuple_binding_decl(Ast_Tuple_Structural_Binding& binding, Scope& scope);
 
   Type_Ptr analyse_block(Ast_Block& block, Scope& scope);

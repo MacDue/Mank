@@ -14,11 +14,19 @@ bool Semantics::assert_valid_binding(
   SourceLocation bind_location,
   Type_Ptr type,
   Type_Ptr to_bind,
-  Ast_Expression const * expression
+  Ast_Expression const * expression,
+  bool match_tvars
 ) {
   if (expression) {
-    match_or_constrain_types_at(bind_location, type, to_bind,
-      "cannot bind expression with type {1} to {0}");
+    // bool should_match = match_tvars;
+    // if (!should_match) {
+    //   auto min_ty = min_type(type, to_bind);
+    //   should_match = !min_ty || !std::holds_alternative<TypeVar>(min_ty->v);
+    // }
+    // if (should_match) {
+      match_or_constrain_types_at(bind_location, type, to_bind,
+        "cannot bind expression with type {1} to {0}");
+    // }
   }
 
   if (is_reference_type(type.get())) {

@@ -13,7 +13,8 @@ struct CompilerMessage {
   std::string message;
   enum Type {
     ERROR,
-    WARNING
+    WARNING,
+    NOTE
   } type = ERROR;
   mutable Lexer* source_lexer = nullptr; // can added later for printing with context
 };

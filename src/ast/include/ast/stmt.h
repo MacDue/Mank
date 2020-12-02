@@ -25,6 +25,7 @@ struct Ast_Variable_Declaration: Ast_Node {
 };
 
 struct TupleBinding {
+  SourceLocation location;
   std::vector<std::variant<Ast_Argument, TupleBinding>> binds;
 };
 

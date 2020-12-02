@@ -13,7 +13,8 @@
 #define ANSI_CODE_RESET "0"
 #define ANSI_CODE_BOLD "1"
 #define ANSI_CODE_RED "31"
-#define ANSI_CODE_CYAN "35"
+#define ANSI_CODE_CYAN "36"
+#define ANSI_CODE_MAGENTA "35"
 
 #define ANSI_RESET ANSI_FORMAT ANSI_CODE_RESET ANSI_END
 #define ANSI_BOLD ANSI_FORMAT ANSI_CODE_BOLD ANSI_END
@@ -21,6 +22,7 @@
 #define ANSI_BOLD_COLOUR(COLOUR_CODE) ANSI_FORMAT ANSI_CODE_BOLD ANSI_SEPERATOR COLOUR_CODE ANSI_END
 #define ANSI_BOLD_RED ANSI_BOLD_COLOUR(ANSI_CODE_RED)
 #define ANSI_BOLD_CYAN ANSI_BOLD_COLOUR(ANSI_CODE_CYAN)
+#define ANSI_BOLD_MAGENTA ANSI_BOLD_COLOUR(ANSI_CODE_MAGENTA)
 
 using ANSIColour = char const *;
 
@@ -76,7 +78,9 @@ message_type_formatting_info(CompilerMessage::Type type)
     case CompilerMessage::ERROR:
       return {"error", ANSI_BOLD_RED};
     case CompilerMessage::WARNING:
-      return {"warning", ANSI_BOLD_CYAN};
+      return {"warning", ANSI_BOLD_MAGENTA};
+    case CompilerMessage::NOTE:
+      return {"note", ANSI_BOLD_CYAN};
     default:
       return {"???", ANSI_BOLD};
   }

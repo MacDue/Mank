@@ -217,6 +217,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   this->expected_returns.pop();
   if (!func.lambda && !this->disable_type_infer) {
     try {
+      Infer::hack_backtrack_infer = &warnings;
       Infer::unify_and_apply(std::move(type_constraints));
     } catch (Infer::UnifyError const & e) {
       throw_sema_error_at(func.identifier, "type inference failed ({})", e.what());
@@ -395,9 +396,14 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   }
 }
 
-void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope) {
+void Semantics::check_tuple_bindings(
+  TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope,
+  bool to_infer
+) {
   using namespace mpark::patterns;
-  Infer::generate_tuple_destructure_constraints(bindings, init_type, type_constraints);
+  bool gen_constraints = Infer::generate_tuple_destructure_constraints(
+    bindings, init_type, type_constraints, bindings.location);
+  to_infer = to_infer | gen_constraints;
   if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {
     if (tuple_type->element_types.size() != bindings.binds.size()) {
       throw_sema_error_at(init, "tuple not the right shape for binding");
@@ -405,22 +411,21 @@ void Semantics::check_tuple_bindings(TupleBinding& bindings, Ast_Expression& ini
     uint bind_idx = 0;
     for (auto& el_type: tuple_type->element_types) {
       auto& binding = bindings.binds.at(bind_idx);
-      match(binding, el_type->v)(
-        pattern(as<TupleBinding>(arg), as<TupleType>(_)) =
-          [&](auto& nested_binds) {
-            check_tuple_bindings(nested_binds, init, el_type, scope);
-          },
-        pattern(as<Ast_Argument>(arg), _) =
+      match(binding)(
+        pattern(as<Ast_Argument>(arg)) =
           [&](auto& bind) {
             resolve_type_or_fail(scope, bind.type, "undeclared bind type {}");
             assert_valid_binding(
-              Ast_Identifier{}/*todo*/,
-              SourceLocation{}/*todo*/,
-              bind.type, el_type, &init);
+              bind.name,
+              bind.name.location,
+              bind.type, el_type, &init, !to_infer);
               emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
               scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
           },
-        pattern(_, _) = [](){ assert(false && "no" ); }
+        pattern(as<TupleBinding>(arg)) =
+          [&](auto& nested_binds) {
+            check_tuple_bindings(nested_binds, init, el_type, scope);
+          }
       );
       bind_idx += 1;
     }

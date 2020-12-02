@@ -49,6 +49,7 @@ std::string type_to_string(Type const & type) {
     },
     pattern(as<LambdaType>(arg)) = [](auto const & lambda_type) {
       std::string lambda_str = "lambda";
+
       lambda_str += type_list_to_string(lambda_type.argument_types, ", ", " ");
       lambda_str += " -> " + type_to_string(lambda_type.return_type.get());
       return lambda_str;

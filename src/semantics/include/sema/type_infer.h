@@ -11,14 +11,14 @@
 namespace Infer {
 
 inline std::vector<CompilerMessage>* hack_backtrack_infer = nullptr;
-void extract_tvars(Type_Ptr type, std::vector<TypeVar>& type_vars);
+void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars);
 
 
 struct Constraint {
   SourceLocation origin;
   std::pair<Type_Ptr, Type_Ptr> types;
   // int32_t tvar1 = -1, tvar2 = -1;
-  std::vector<TypeVar> contained_tvars;
+  std::set<TypeVar> contained_tvars;
   char const * error_template = "DEBUG: infer failed a = {}, b = {}";
 
   Constraint() { origin = {}; }
@@ -60,8 +60,7 @@ void generate_call_constraints(
 void generate_tuple_assign_constraints(
   Ast_Assign& tuple_assign, ConstraintSet& constraints);
 
-bool generate_tuple_destructure_constraints(
-  TupleBinding const & bindings, Type_Ptr& init_type, ConstraintSet& constraints,
-  SourceLocation loc);
+std::optional<Constraint> generate_tuple_destructure_constraints(
+  TupleBinding const & bindings, Type_Ptr& init_type, SourceLocation loc);
 
 }

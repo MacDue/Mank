@@ -15,7 +15,7 @@ Statement_Ptr to_stmt_ptr(TStmt && stmt) {
 
 template <typename TExpr>
 Expression_Ptr to_expr_ptr(TExpr && expr) {
-  expr.location = {};
+  // expr.location = {};
   return std::make_shared<Ast_Expression>(expr);
 }
 

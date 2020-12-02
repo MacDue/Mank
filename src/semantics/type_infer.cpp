@@ -45,14 +45,21 @@ static Type_Ptr substitute(
       return to_type_ptr(tuple_type);
     },
     pattern(as<TypeVar>(arg)) = [&](auto const & current_tvar) {
+      // tvar already unified... to be replaced it needs to have already been unified
       if (current_tvar.id == tvar.id) {
-        if (auto rtvar = std::get_if<TypeVar>(&replacement->v)) {
-          std::cout << "tvar replaced " << current_tvar.id << " " << rtvar->id << '\n';
-          auto& reasons = subs_reasoning[rtvar->id];
-          auto& pior_reasons = subs_reasoning[current_tvar.id];
-          reasons.insert(reasons.end(), pior_reasons.begin(), pior_reasons.end());
-          pior_reasons = reasons;
-        } // } else {
+        // if (auto rtvar = std::get_if<TypeVar>(&replacement->v)) {
+        //   // rtvar already unified
+        //   if (!subs_reasoning.contains(current_tvar.id)) {
+        //     // since current_tvar.id may not get unified now
+        //     subs_reasoning[current_tvar.id] = subs_reasoning[rtvar->id];
+        //   }
+        // }
+        //   std::cout << "tvar replaced " << current_tvar.id << " " << rtvar->id << '\n';
+        //   auto& reasons = subs_reasoning[rtvar->id];
+        //   auto& pior_reasons = subs_reasoning[current_tvar.id];
+        //   reasons.insert(reasons.end(), pior_reasons.begin(), pior_reasons.end());
+        //   pior_reasons = reasons;
+        // } // } else {
         //    subs_reasoning[current_tvar.id].push_back(std::make_pair(origin, replacement));
         // }
 
@@ -79,6 +86,7 @@ static void apply_constraint(
 ) {
   c.types.first = apply_type(c.types.first, subs, c.origin);
   c.types.second = apply_type(c.types.second, subs, c.origin);
+  c.init();
 }
 
 static void apply_subs(std::vector<Constraint>& constraints, Substitution const & subs
@@ -88,7 +96,7 @@ static void apply_subs(std::vector<Constraint>& constraints, Substitution const 
   }
 }
 
-void extract_tvars(Type_Ptr type, std::vector<TypeVar>& type_vars) {
+void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
   using namespace mpark::patterns;
   match(type->v)(
     pattern(as<LambdaType>(arg)) =
@@ -104,7 +112,7 @@ void extract_tvars(Type_Ptr type, std::vector<TypeVar>& type_vars) {
           extract_tvars(el_type, type_vars);
         }
       },
-    pattern(as<TypeVar>(arg)) = [&](auto tvar){ type_vars.push_back(tvar); },
+    pattern(as<TypeVar>(arg)) = [&](auto tvar){ type_vars.insert(tvar); },
     pattern(_) = []{});
 }
 
@@ -136,7 +144,6 @@ static Substitution unify_var(TypeVar tvar, Type_Ptr type, SourceLocation origin
       return Substitution{};
     } else {
       if (!do_not_add_reasons) {
-        std::cout << "unify: " << tvar.id << " " << type_to_string(type.get()) << '\n';
         subs_reasoning[tvar.id].push_back(std::make_pair(origin, type));
       }
       return Substitution{{tvar, type}};
@@ -145,7 +152,7 @@ static Substitution unify_var(TypeVar tvar, Type_Ptr type, SourceLocation origin
     throw UnifyError("circular type usage detected");
   } else {
     if (!do_not_add_reasons) {
-      std::cout << "unify: " << tvar.id << " " << type_to_string(type.get()) << '\n';
+      // std::cout << "unify: " << tvar.id << " " << type_to_string(type.get()) << '\n';
       subs_reasoning[tvar.id].push_back(std::make_pair(origin, type));
     }
     return Substitution{{tvar, type}};
@@ -154,6 +161,8 @@ static Substitution unify_var(TypeVar tvar, Type_Ptr type, SourceLocation origin
 
 [[ noreturn ]]
 static void throw_unify_error(Constraint const & constraint) {
+      std::cout << "bang?\n";
+  // throw false;
   failed_constraint = constraint;
   throw_compile_error(constraint.origin, constraint.error_template,
     type_to_string(constraint.types.first.get()),
@@ -176,7 +185,9 @@ static Substitution try_unify_sub_constraints(
   // }
   do_not_add_reasons = true;
   try {
-    return std::get<0>(unify(std::move(sub_constraints)));
+    auto [subs, e] = unify(std::move(sub_constraints));
+    if (e) { do_not_add_reasons = false; throw_unify_error(parent); }
+    return subs;
   } catch (...) {
     // for (auto tvar: sub_reasons) {
     //   std::cout << tvar << '\n';
@@ -192,14 +203,18 @@ static Substitution try_unify_sub_constraints(
 
     // }
     do_not_add_reasons = false;
+    std::cout << "here????\n";
     throw_unify_error(parent);
   }
   do_not_add_reasons = false;
 }
 
 static Substitution unify_one(Constraint constraint) {
+
   using namespace mpark::patterns;
   auto [a, b] = constraint.types;
+            std::cout << "unify: " << type_to_string(a.get()) << " = " << type_to_string(b.get()) << '\n';
+
   return match(a->v, b->v)(
     pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [](auto& p1, auto& p2){
       WHEN(p1.tag == p2.tag) {
@@ -233,7 +248,10 @@ static Substitution unify_one(Constraint constraint) {
           tup_constraint.init();
           tuple_constraints.push_back(tup_constraint);
         }
-        return try_unify_sub_constraints(constraint, std::move(tuple_constraints));
+        std::cout << "start:\n";
+        auto ret = try_unify_sub_constraints(constraint, std::move(tuple_constraints));
+        std::cout << "end\n";
+        return ret;
       };
     },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
@@ -290,25 +308,28 @@ static std::pair<Substitution, std::optional<CompilerError>> unify(ConstraintSet
     merge_left(subs, more_subs);
     return std::make_pair(subs, e);
   } catch (CompilerError& e) {
+    std::cout << "error!\n";
     return std::make_pair(subs, e);
   }
 }
 
-static void print_subs_reasons(int32_t tvar, Substitution const & subs) {
+static std::vector<CompilerMessage> print_subs_reasons(int32_t tvar, Substitution const & subs) {
   std::cout << tvar <<'\n';
+  std::vector<CompilerMessage> infer_info;
   if (tvar >= 0 && subs_reasoning.contains(tvar)) {
     // std::cout << "T" << tvar << " reasons:\n";
     for (auto const & [loc, type]: subs_reasoning.at(tvar)) {
-      // std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
+      std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
       if (!type) continue;
       auto error_type = apply_type(type, subs, loc);
       if (std::holds_alternative<TypeVar>(error_type->v)) {
         continue; // not informative
       }
-      hack_backtrack_infer->push_back(CompilerMessage{loc, "must be " + type_to_string(error_type.get()), CompilerMessage::NOTE});
+      infer_info.push_back(CompilerMessage{loc, "found to be " + type_to_string(error_type.get()), CompilerMessage::NOTE});
     }
     // std::cout << '\n';
   }
+  return infer_info;
 }
 
 Substitution unify_and_apply(ConstraintSet && constraints) {
@@ -325,7 +346,15 @@ Substitution unify_and_apply(ConstraintSet && constraints) {
           return true; // remove
         };
       },
-      pattern(_,_) = [&]{ return false; }
+      pattern(_,_) = [&]{
+        std::cout << type_to_string(constraint.types.first.get()) << " = "
+          <<  type_to_string(constraint.types.second.get())
+          << " @" << constraint.origin.start_line
+                  << ":" << constraint.origin.start_column << " -> "
+                  << constraint.origin.end_line
+                  << ":" << constraint.origin.end_column
+                  << '\n';
+        return false; }
     );
   });
 
@@ -338,14 +367,32 @@ Substitution unify_and_apply(ConstraintSet && constraints) {
   auto [subs, error] = unify(std::move(constraints));
 
   if (error) {
+      std::vector<CompilerMessage> error_infer_info;
+
     // for (auto c: failed_constraint) {
+        std::cout << type_to_string(failed_constraint.types.first.get()) << " = " <<  type_to_string(failed_constraint.types.second.get()) << '\n';
 
     for (auto& tvar: failed_constraint.contained_tvars) {
       if (tvar.id < 0) continue;
-      print_subs_reasons(tvar.id, subs);
+      auto infer_info = print_subs_reasons(tvar.id, subs);
+      error_infer_info.insert(error_infer_info.end(),
+        std::make_move_iterator(infer_info.begin()),
+        std::make_move_iterator(infer_info.end()));
       // print_subs_reasons(failed_constraint.tvar2, subs);
     }
     subs_reasoning = {}; // proto hack
+
+    std::sort(error_infer_info.begin(), error_infer_info.end(),
+      [](CompilerMessage const & m1, CompilerMessage const & m2){
+        return std::make_pair(m1.location.start_line, m1.location.start_column)
+          < std::make_pair(m2.location.start_line, m2.location.start_column);
+      });
+
+
+    hack_backtrack_infer->insert(hack_backtrack_infer->end(),
+      std::make_move_iterator(error_infer_info.begin()),
+      std::make_move_iterator(error_infer_info.end()));
+
     // }
     // failed_constraint.types.first=  apply_type(failed_constraint.types.first, subs, failed_constraint.origin);
     // failed_constraint.types.second=  apply_type(failed_constraint.types.second, subs, failed_constraint.origin);
@@ -412,9 +459,8 @@ void generate_tuple_assign_constraints(
   }
 }
 
-bool generate_tuple_destructure_constraints(
-  TupleBinding const & bindings, Type_Ptr& init_type, ConstraintSet& constraints,
-  SourceLocation loc
+std::optional<Constraint> generate_tuple_destructure_constraints(
+  TupleBinding const & bindings, Type_Ptr& init_type, SourceLocation loc
 ) {
   // Almost the same as assign
   if (std::holds_alternative<TypeVar>(init_type->v)) {
@@ -424,12 +470,12 @@ bool generate_tuple_destructure_constraints(
     auto binding_type_ptr = to_type_ptr(binding_type);
     // FIXME: Add loc
     auto constraint = Constraint(loc, init_type, binding_type_ptr);
-    constraint.error_template = "binding type {} does not match init type {}";
-    constraints.push_back(constraint);
+    constraint.error_template = "binding type {1} does not match init type {0}";
+    // constraints.push_back(constraint);
     init_type = binding_type_ptr;
-    return true;
+    return constraint;
   }
-  return false;
+  return std::nullopt;
 }
 
 }

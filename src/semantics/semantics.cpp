@@ -401,9 +401,9 @@ void Semantics::check_tuple_bindings(
   bool to_infer
 ) {
   using namespace mpark::patterns;
-  bool gen_constraints = Infer::generate_tuple_destructure_constraints(
-    bindings, init_type, type_constraints, bindings.location);
-  to_infer = to_infer | gen_constraints;
+  auto constraint = Infer::generate_tuple_destructure_constraints(
+    bindings, init_type, bindings.location);
+  // to_infer = to_infer | gen_constraints;
   if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {
     if (tuple_type->element_types.size() != bindings.binds.size()) {
       throw_sema_error_at(init, "tuple not the right shape for binding");
@@ -431,6 +431,10 @@ void Semantics::check_tuple_bindings(
     }
   } else {
     throw_sema_error_at(init, "tuple bind initializer must be a tuple");
+  }
+  if (constraint) {
+    std::cout << "add\n";
+    type_constraints.push_back(*constraint);
   }
 }
 

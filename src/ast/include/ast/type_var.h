@@ -33,7 +33,19 @@ struct TypeVar {
     return this->id < other.id;
   }
 
+  // static get_field_constraint(std::string name)
+
   static Type_Ptr integer();
   static Type_Ptr numeric();
   static Type_Ptr get(Constraint constraint);
+};
+
+struct Ast_Field_Access;
+
+struct TypeFieldConstraint {
+  Type_Ptr type;
+  // Not null just can't be a ref
+  Ast_Field_Access* field_access;
+
+  static Type_Ptr get(Ast_Field_Access& access);
 };

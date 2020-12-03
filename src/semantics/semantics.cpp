@@ -450,20 +450,6 @@ void Semantics::analyse_tuple_binding_decl(
   }
 }
 
-static std::pair<Ast_Argument*, int> resolve_pod_field_index(
-  Ast_Pod_Declaration& pod_type, std::string_view field_name
-) {
-  auto accessed = std::find_if(pod_type.fields.begin(), pod_type.fields.end(),
-    [&](auto& field) {
-      return field.name.name == field_name;
-    });
-  if (accessed == pod_type.fields.end()) {
-    return std::make_pair(nullptr, -1);
-  }
-  auto index = std::distance(pod_type.fields.begin(), accessed);
-  return std::make_pair(&(*accessed), index);
-}
-
 #define AUTO_LAMBDA "!auto_lambda"
 
 static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_func) {
@@ -603,29 +589,22 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) {
       auto object_type = analyse_expression(*access.object, scope);
       if (object_type) {
-        auto access_type = match(remove_reference(object_type.get())->v)(
-          pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
-            auto [accessed, field_index] = resolve_pod_field_index(pod_type, access.field.name);
-            if (field_index < 0) {
-              throw_sema_error_at(access.field, "{} has no field named \"{}\"",
-                  pod_type.identifier.name, access.field.name);
-            }
-            access.field_index = field_index;
-            expr.inherit_value_type(*access.object);
-            return accessed->type;
-          },
-          // FIXME: Hardcoded .length
-          pattern(as<FixedSizeArrayType>(_)) = [&]{
-            WHEN(access.field.name == "length") {
-              return Primative::INTEGER;
-            };
-          },
-          pattern(_) = []() -> Type_Ptr { return nullptr; });
-        if (access_type) {
-          return access_type;
+        if (std::holds_alternative<TypeVar>(object_type->v)) {
+          auto field_constraint = TypeFieldConstraint::get(access);
+          auto field_type = to_type_ptr(TypeVar());
+          type_constraints.push_back(Infer::Constraint(
+            AstHelper::extract_location(access),
+            field_type,
+            field_constraint
+          ));
+          access.get_meta().owned_type = field_type;
+          return field_type;
+        } else {
+          return get_field_type(object_type.get(), access);
         }
+      } else {
+        throw_sema_error_at(access.object, "is void?");
       }
-      throw_sema_error_at(access.object, "not a pod type");
     },
     pattern(as<Ast_Array_Literal>(arg)) = [&](auto& array) {
       FixedSizeArrayType array_type;

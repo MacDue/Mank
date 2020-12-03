@@ -27,7 +27,8 @@ using Type_Type = std::variant<
   Ast_Pod_Declaration,
   FixedSizeArrayType,
   ReferenceType,
-  LambdaType>;
+  LambdaType,
+  TypeFieldConstraint>;
 
 struct Type {
   Type_Type v;

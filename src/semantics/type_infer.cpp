@@ -4,6 +4,7 @@
 #include "ast/util.h"
 #include "ast/visitor.h"
 #include "ast/ast_builder.h"
+#include "sema/types.h"
 #include "sema/type_infer.h"
 #include "errors/compiler_errors.h"
 
@@ -29,7 +30,7 @@ static Type_Ptr substitute(
 ) {
   using namespace mpark::patterns;
   return match(current_type->v)(
-    pattern(as<PrimativeType>(_)) = [&]{ return current_type; },
+    pattern(anyof(as<PrimativeType>(_), as<Ast_Pod_Declaration>(_))) = [&]{ return current_type; },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
       lambda_type.return_type = substitute(
         lambda_type.return_type, tvar, replacement, subs, origin);
@@ -66,6 +67,10 @@ static Type_Ptr substitute(
         return replacement;
       }
       return current_type;
+    },
+    pattern(as<TypeFieldConstraint>(arg)) = [&](auto field_constraint) {
+      field_constraint.type = substitute(field_constraint.type, tvar, replacement, subs, origin);
+      return to_type_ptr(field_constraint);
     },
     pattern(_) = [&]() -> Type_Ptr {
       throw UnifyError("unknown type substitution " + type_to_string(current_type.get()));
@@ -253,6 +258,20 @@ static Substitution unify_one(Constraint constraint) {
         std::cout << "end\n";
         return ret;
       };
+    },
+    pattern(as<TypeFieldConstraint>(arg), _) = [&](auto field_constraint) {
+      auto field_type = get_field_type(field_constraint.type.get(), *field_constraint.field_access);
+      Constraint fc = constraint;
+      fc.types.first = field_type;
+      fc.types.second = b;
+      return try_unify_sub_constraints(constraint, { fc });
+    },
+    pattern(_, as<TypeFieldConstraint>(arg)) = [&](auto field_constraint) {
+      auto field_type = get_field_type(field_constraint.type.get(), *field_constraint.field_access);
+      Constraint fc = constraint;
+      fc.types.first = a;
+      fc.types.second = field_type;
+      return try_unify_sub_constraints(constraint, { fc });
     },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
       return unify_var(tvar, b, constraint.origin);

@@ -65,6 +65,8 @@ T min_type(T a, T b) {
 
 TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 
+Type_Ptr get_field_type(Type* type, Ast_Field_Access& access);
+
 template<typename T>
 static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
   auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);

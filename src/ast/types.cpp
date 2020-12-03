@@ -72,6 +72,11 @@ std::string type_to_string(Type const & type) {
       }
       return formatxx::format_string("T{}", type_var.id);
     },
+    pattern(as<TypeFieldConstraint>(arg)) = [](auto const & field_constraint) {
+      return formatxx::format_string("{}[.{}]",
+        type_to_string(field_constraint.type.get()),
+        field_constraint.field_access->field.name);
+    },
     pattern(_) = []{
       return "???"s;
     });
@@ -120,4 +125,10 @@ Type_Ptr TypeVar::get(Constraint constraint) {
     default:
       assert(false && "fix me! unknown constraint");
   }
+}
+
+Type_Ptr TypeFieldConstraint::get(Ast_Field_Access& access) {
+  return to_type_ptr(TypeFieldConstraint{
+    .type = extract_type(access.object->meta.type),
+    .field_access = &access});
 }

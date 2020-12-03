@@ -5,8 +5,8 @@
 #include <boost/program_options.hpp>
 
 #include "parser/parser.h"
-#include "sema/semantics.h"
-#include "codegen/codegen.h"
+// #include "sema/semantics.h"
+// #include "codegen/codegen.h"
 #include "ast/ast_printer.h"
 
 #include "compiler_message_printer.h"
@@ -79,14 +79,14 @@ int main(int argc, char* argv[]) {
   for (auto const & input_file: selected_options.input_files) {
     lexer.load_file(input_file);
 
-    Semantics sema;
+    // Semantics sema;
     std::optional<Ast_File> parsed_file;
     std::optional<CompilerError> sema_error;
     try {
-      parsed_file = parser.parse_file();
-      if (selected_options.check_sema || selected_options.code_gen) {
-        sema.analyse_file(*parsed_file);
-      }
+      parsed_file.emplace(parser.parse_file());
+      // if (selected_options.check_sema || selected_options.code_gen) {
+      //   sema.analyse_file(*parsed_file);
+      // }
     } catch (CompilerError& e) {
       sema_error = e;
       sema_error->set_lexing_context(lexer);
@@ -98,10 +98,10 @@ int main(int argc, char* argv[]) {
 
     // TODO: the error/warnings should alreadg have a reference to the lexer
     if (!selected_options.suppress_warnings) {
-      for (auto& warning: sema.get_warnings()) {
-        warning.source_lexer = &lexer;
-        std::cerr << warning;
-      }
+      // for (auto& warning: sema.get_warnings()) {
+      //   warning.source_lexer = &lexer;
+      //   std::cerr << warning;
+      // }
     }
 
     if (sema_error) {
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (selected_options.code_gen) {
-      CodeGen codegen(*parsed_file);
+      // CodeGen codegen(*parsed_file);
     }
   }
   return 0;

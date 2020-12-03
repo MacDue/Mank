@@ -13,6 +13,7 @@ class AstContext {
   Expr_Ptr add_expr(Ast_Expression type);
 public:
   AstContext();
+  AstContext(AstContext&& ctx);
 
   template <typename T>
   Type_Ptr new_type(T type) {

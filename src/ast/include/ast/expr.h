@@ -51,7 +51,7 @@ DEF_EXPR(Ast_Field_Access) {
 };
 
 DEF_EXPR(Ast_Expression_List) {
-  std::vector<Ast_Expression*> elements;
+  std::vector<Expr_Ptr> elements;
 };
 
 struct Ast_Array_Literal: Ast_Expression_List {};
@@ -83,7 +83,6 @@ using Ast_Expression_Type = std::variant<
 class Ast_Expression {
   template<typename Expr>
   Ast_Expression(Expr expr) {
-    expr.meta = &meta;
     v = std::move(expr);
     if (std::get_if<Ast_Identifier>(&v)) {
       // ^ for some reason std::is_same_v randomly fails

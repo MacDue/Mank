@@ -76,7 +76,7 @@ private:
   Stmt_Ptr parse_tuple_structural_binding();
 
   /* Expressions */
-  std::vector<Ast_Expression*> parse_expression_list(
+  std::vector<Expr_Ptr> parse_expression_list(
     TokenType left_delim = TokenType::LEFT_PAREN,
     TokenType right_delim = TokenType::RIGHT_PAREN);
   Expr_Ptr parse_expression();

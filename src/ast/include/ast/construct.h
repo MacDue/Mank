@@ -16,6 +16,8 @@ struct Ast_File {
 
   Ast_File(std::string filename)
     : filename{filename} {}
+
+  Ast_File(Ast_File&& file) = default;
 };
 
 DEF_TYPE(Ast_Function_Declaration), Ast_Node {

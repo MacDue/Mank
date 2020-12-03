@@ -62,14 +62,12 @@ struct Expression_Meta {
   }
 };
 
-
-class Ast_Expression_Node {
-  Expression_Meta* meta = nullptr;
+template <typename T>
+class Ast_Expression_Node: public AstSelf<Ast_Expression, T> {
   friend class Ast_Expression;
 public:
   inline Expression_Meta& get_meta() {
-    assert(meta != nullptr && "fix me! expression missing needed meta data");
-    return *meta;
+    return this->get_self().class_ptr()->meta;
   }
 
   inline auto get_type() {
@@ -86,10 +84,6 @@ public:
 
   inline void update_const_value(PrimativeValue value) {
     get_meta().const_value = value;
-  }
-
-  inline void unsafe_move_meta(Expression_Meta* meta) {
-    this->meta = meta;
   }
 };
 

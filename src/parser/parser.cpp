@@ -45,7 +45,7 @@ Ast_File Parser::parse_file() {
     file = { function } ;
   */
   Ast_File parsed_file(this->lexer.input_source_name());
-  this->ctx = &parsed_file.get_ctx();
+  this->ctx = &parsed_file.ctx;
 
   Token next_token;
   while (!this->peek(TokenType::LEX_EOF, next_token)) {
@@ -432,7 +432,7 @@ std::vector<Expr_Ptr> Parser::parse_expression_list(
   return expressions;
 }
 
-Expression_Ptr Parser::parse_call(Expression_Ptr target) {
+Expr_Ptr Parser::parse_call(Expr_Ptr target) {
   /*
     call = expression, "(", [expression_list], ")" ;
     expression_list = expression, {",", expression} ;
@@ -440,10 +440,10 @@ Expression_Ptr Parser::parse_call(Expression_Ptr target) {
   Ast_Call parsed_call;
   parsed_call.callee = std::move(target);
   parsed_call.arguments = this->parse_expression_list();
-  return to_expr_ptr(parsed_call);
+  return ctx->new_expr(parsed_call);
 }
 
-Expression_Ptr Parser::parse_field_access(Expression_Ptr object) {
+Expr_Ptr Parser::parse_field_access(Expr_Ptr object) {
   expect(TokenType::DOT);
   Ast_Field_Access parsed_access;
   parsed_access.object = std::move(object);
@@ -452,19 +452,19 @@ Expression_Ptr Parser::parse_field_access(Expression_Ptr object) {
     throw_error_here("expected field name");
   }
   parsed_access.field = *field;
-  return to_expr_ptr(parsed_access);
+  return ctx->new_expr(parsed_access);
 }
 
-Expression_Ptr Parser::parse_index_access(Expression_Ptr object) {
+Expr_Ptr Parser::parse_index_access(Expr_Ptr object) {
   expect(TokenType::LEFT_SQUARE_BRACKET);
   Ast_Index_Access parsed_index;
   parsed_index.object = std::move(object);
   parsed_index.index = this->parse_expression();
   expect(TokenType::RIGHT_SQUARE_BRACKET);
-  return to_expr_ptr(parsed_index);
+  return ctx->new_expr(parsed_index);
 }
 
-Expression_Ptr Parser::parse_primary_expression() {
+Expr_Ptr Parser::parse_primary_expression() {
   if (peek(TokenType::LITERAL) || peek(TokenType::TRUE) || peek(TokenType::FALSE)) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
@@ -473,16 +473,16 @@ Expression_Ptr Parser::parse_primary_expression() {
     // Works fine for current macro impl though.
     if (this->consume(TokenType::EXCLAMATION_MARK)) {
       Ast_Macro_Identifier macro_ident;
-      *static_cast<Ast_Identifier*>(&macro_ident) = ident;
-      return to_expr_ptr(macro_ident);
+      *static_cast<Ast_Identifier*>(macro_ident.get_raw_self()) = ident;
+      return ctx->new_expr(macro_ident);
     }
-    return to_expr_ptr(ident);
+    return ctx->new_expr(ident);
   } else if (peek(TokenType::LEFT_PAREN)) {
     return this->parse_parenthesised_expression();
   } else if (peek(TokenType::IF)) {
     return this->parse_if();
   } else if (auto block = parse_block()) {
-    return to_expr_ptr(*block);
+    return ctx->new_expr(*block);
   } else if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
     return this->parse_array_literal();
   } else if (peek(TokenType::BACKSLASH)) {
@@ -492,7 +492,7 @@ Expression_Ptr Parser::parse_primary_expression() {
   }
 }
 
-Expression_Ptr Parser::parse_tuple_literal(Expression_Ptr first_element) {
+Expr_Ptr Parser::parse_tuple_literal(Expr_Ptr first_element) {
   /*
     tuple_literal = "(" expression "," [expression_list] ")"
                   | "(" ")" ;
@@ -505,17 +505,17 @@ Expression_Ptr Parser::parse_tuple_literal(Expression_Ptr first_element) {
     parsed_tuple.elements.push_back(this->parse_expression());
   }
   expect(TokenType::RIGHT_PAREN);
-  return to_expr_ptr(parsed_tuple);
+  return ctx->new_expr(parsed_tuple);
 }
 
-Expression_Ptr Parser::parse_parenthesised_expression() {
+Expr_Ptr Parser::parse_parenthesised_expression() {
   /*
     parenthesised_expression = "(" expression ")" ;
   */
   using namespace mpark::patterns;
   expect(TokenType::LEFT_PAREN);
   if (consume(TokenType::RIGHT_PAREN)) {
-    return to_expr_ptr(Ast_Tuple_Literal{}); // empty tuple
+    return ctx->new_expr(Ast_Tuple_Literal{}); // empty tuple
   }
   auto expr = this->parse_expression();
   if (peek(TokenType::COMMA)) { // >= 1 element tuple
@@ -530,7 +530,7 @@ Expression_Ptr Parser::parse_parenthesised_expression() {
   return expr;
 }
 
-Expression_Ptr Parser::parse_if() {
+Expr_Ptr Parser::parse_if() {
   /*
     if = "if", expression, block, ("else", block) | ("else", white_space, if) ;
   */
@@ -545,7 +545,7 @@ Expression_Ptr Parser::parse_if() {
     if (!then_block) {
       throw_error_here("expected (braced) then block");
     }
-    parsed_if.then_block = to_expr_ptr(*then_block);
+    parsed_if.then_block = ctx->new_expr(*then_block);
     if (consume(TokenType::ELSE)) {
       parsed_if.has_else = true;
 
@@ -573,10 +573,10 @@ Expression_Ptr Parser::parse_if() {
         if (!else_block) {
           throw_error_here("expected (braced) else block");
         }
-        parsed_if.else_block = to_expr_ptr(*else_block);
+        parsed_if.else_block = ctx->new_expr(*else_block);
       }
     }
-    return to_expr_ptr(parsed_if);
+    return ctx->new_expr(parsed_if);
   } else {
     return nullptr;
   }
@@ -637,9 +637,10 @@ static bool is_unary_op(TokenType token) {
 }
 
 // Very simple precedence/association as discussed by Jonathan Blow in a stream about Jai
-static Expression_Ptr fix_precedence_and_association(
-  Expression_Ptr lhs,
-  Expression_Ptr rhs,
+static Expr_Ptr fix_precedence_and_association(
+  AstContext& ctx,
+  Expr_Ptr lhs,
+  Expr_Ptr rhs,
   Ast_Operator op
 ) {
   using namespace mpark::patterns;
@@ -656,8 +657,7 @@ static Expression_Ptr fix_precedence_and_association(
           rhs.left = fix(lhs, rhs.left) + 2
                   -> (3 * 1) + 2
         */
-        rhs_binop.left = fix_precedence_and_association(
-          std::move(lhs), std::move(rhs_binop.left), op);
+        rhs_binop.left = fix_precedence_and_association(ctx, lhs, rhs_binop.left, op);
         return rhs;
       };
     },
@@ -667,14 +667,14 @@ static Expression_Ptr fix_precedence_and_association(
         [&](auto& lhs, auto& rhs) {
           new_binop.location = join_source_locations(lhs.location, rhs.location);
         }, lhs->v, rhs->v);
-      new_binop.left = std::move(lhs);
-      new_binop.right = std::move(rhs);
+      new_binop.left = lhs;
+      new_binop.right = rhs;
       new_binop.operation = op;
-      return to_expr_ptr(new_binop);
+      return ctx.new_expr(new_binop);
     });
 }
 
-Expression_Ptr Parser::parse_binary_expression() {
+Expr_Ptr Parser::parse_binary_expression() {
   /*
     binary_operation = expression, operation, expression ;
     operation = (* use your imagination *) ;
@@ -684,13 +684,12 @@ Expression_Ptr Parser::parse_binary_expression() {
   if (is_binary_op(bin_op)) {
     lexer.consume_token();
     auto rhs = this->parse_expression();
-    lhs = fix_precedence_and_association(
-      std::move(lhs), std::move(rhs), static_cast<Ast_Operator>(bin_op));
+    lhs = fix_precedence_and_association(*ctx, lhs, rhs, static_cast<Ast_Operator>(bin_op));
   }
   return lhs;
 }
 
-Expression_Ptr Parser::parse_unary() {
+Expr_Ptr Parser::parse_unary() {
   /*
     unary_operation = operation, expression ;
   */
@@ -708,11 +707,11 @@ Expression_Ptr Parser::parse_unary() {
   this->lexer.consume_token();
   // For nested unary expressions e.g. -------------10 (if you want that?)
   parsed_unary.operand = this->parse_unary();
-  auto unary = to_expr_ptr(parsed_unary);
+  auto unary = ctx->new_expr(parsed_unary);
   return mark_ast_location(unary_start, unary);
 }
 
-Expression_Ptr Parser::parse_literal() {
+Expr_Ptr Parser::parse_literal() {
   /*
     literal = string_literal
             = integer
@@ -736,7 +735,7 @@ Expression_Ptr Parser::parse_literal() {
   }
 
   this->lexer.consume_token();
-  return to_expr_ptr(parsed_literal);
+  return ctx->new_expr(parsed_literal);
 }
 
 std::optional<Ast_Identifier> Parser::parse_identifier() {
@@ -748,7 +747,7 @@ std::optional<Ast_Identifier> Parser::parse_identifier() {
   return std::nullopt;
 }
 
-Expression_Ptr Parser::parse_array_literal() {
+Expr_Ptr Parser::parse_array_literal() {
   /*
     array_literal = "[" [expression_list] "]" ;
   */
@@ -756,10 +755,10 @@ Expression_Ptr Parser::parse_array_literal() {
   parsed_array.elements = this->parse_expression_list(
     TokenType::LEFT_SQUARE_BRACKET,
     TokenType::RIGHT_SQUARE_BRACKET);
-  return to_expr_ptr(parsed_array);
+  return ctx->new_expr(parsed_array);
 }
 
-Expression_Ptr Parser::parse_lambda() {
+Expr_Ptr Parser::parse_lambda() {
   Ast_Lambda parsed_lambda;
   parsed_lambda.arguments = this->parse_arguments(
     TokenType::BACKSLASH, TokenType::ARROW, true);
@@ -773,7 +772,7 @@ Expression_Ptr Parser::parse_lambda() {
     throw_error_here("expected lambda body");
   }
   parsed_lambda.body = *body;
-  return to_expr_ptr(parsed_lambda);
+  return ctx->new_expr(parsed_lambda);
 }
 
 /* Types */
@@ -787,7 +786,7 @@ Type_Ptr Parser::parse_type(bool default_tvar) {
     if (!ref_type.references) {
       throw_error_here("expected referenced type");
     }
-    return to_type_ptr(ref_type);
+    return ctx->new_type(ref_type);
   }
   return this->parse_base_type(default_tvar);
 }
@@ -805,12 +804,12 @@ Type_Ptr Parser::parse_base_type(bool default_tvar) {
 
   if (!type_name) {
     if (default_tvar) {
-      type = to_type_ptr(TypeVar());
+      type = ctx->new_type(TypeVar());
     } else {
       return nullptr;
     }
   } else {
-    type = to_type_ptr(UncheckedType{*type_name});
+    type = ctx->new_type(UncheckedType(*type_name));
   }
 
   if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
@@ -832,7 +831,7 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
     }
   };
   FixedSizeArrayType top_array_type;
-  FixedSizeArrayType* current_array = &top_array_type;
+  auto current_array = &top_array_type;
   expect(TokenType::LEFT_SQUARE_BRACKET);
   while (true) {
     auto& token = lexer.peek_next_token();
@@ -844,12 +843,12 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
     if (!consume(TokenType::COMMA)) {
       break;
     }
-    current_array->element_type = to_type_ptr(FixedSizeArrayType());
+    current_array->element_type = ctx->new_type(FixedSizeArrayType());
     current_array = &std::get<FixedSizeArrayType>(current_array->element_type->v);
   }
   current_array->element_type = base_type;
   expect(TokenType::RIGHT_SQUARE_BRACKET);
-  return to_type_ptr(top_array_type);
+  return ctx->new_type(top_array_type);
 }
 
 std::vector<Type_Ptr> Parser::parse_type_list(TokenType left_delim, TokenType right_delim) {
@@ -870,13 +869,13 @@ Type_Ptr Parser::parse_lambda_type() {
   LambdaType lambda_type;
   lambda_type.argument_types = parse_type_list(TokenType::BACKSLASH, TokenType::ARROW);
   lambda_type.return_type = this->parse_type();
-  return to_type_ptr(lambda_type);
+  return ctx->new_type(lambda_type);
 }
 
 Type_Ptr Parser::parse_tuple_type() {
   TupleType tuple_type;
   tuple_type.element_types = parse_type_list(TokenType::LEFT_PAREN, TokenType::RIGHT_PAREN);
-  return to_type_ptr(tuple_type);
+  return ctx->new_type(tuple_type);
 }
 
 /* Helpers */

@@ -11,6 +11,8 @@
 
 DEF_TYPE(UncheckedType) {
   Ast_Identifier identifier;
+  UncheckedType(Ast_Identifier identifier)
+    : identifier{identifier} {}
 };
 
 DEF_TYPE(ReferenceType) {

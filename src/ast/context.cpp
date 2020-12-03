@@ -20,6 +20,7 @@ struct ContextData {
 };
 
 AstContext::AstContext(): data{std::make_unique<ContextData>()} {}
+AstContext::AstContext(AstContext&& ctx): data{std::move(ctx.data)} {}
 
 Type_Ptr AstContext::add_type(Type type) {
   return data->add(type, data->types);

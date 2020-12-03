@@ -3,8 +3,9 @@
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
 
+#include "ast/ast.h"
 #include "ast/types.h"
-#include "ast/ast_builder.h"
+// #include "ast/ast_builder.h"
 
 /* String helpers */
 
@@ -21,7 +22,7 @@ static std::string type_list_to_string(
     } else {
       out += begin_padding;
     }
-    out += type_to_string(it->get());
+    out += type_to_string(*it->get());
   }
   return out;
 }
@@ -90,32 +91,18 @@ std::string type_to_string(Type const * type) {
   }
 }
 
-/* Helpers */
-
-Type_Ptr extract_type_nullable(std::weak_ptr<Type> weak_type_ptr) {
-  if (auto type_ptr = weak_type_ptr.lock()) {
-    return type_ptr;
-  }
-  return nullptr;
-}
-
-Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr) {
-  if (auto type_ptr = extract_type_nullable(weak_type_ptr)) {
-    return type_ptr;
-  }
-  assert(false && "fix me! expression type imformation is missing!");
-}
-
 /* Type Var */
 
 Type_Ptr TypeVar::integer() {
-  static Type_Ptr _integer = to_type_ptr(TypeVar(INTEGER));
-  return _integer;
+  // static Type_Ptr _integer = to_type_ptr(TypeVar(INTEGER));
+  // return _integer;
+  assert(false && "todo");
 }
 
 Type_Ptr TypeVar::numeric() {
-  static Type_Ptr _numeric = to_type_ptr(TypeVar(NUMERIC));
-  return _numeric;
+  // static Type_Ptr _numeric = to_type_ptr(TypeVar(NUMERIC));
+  // return _numeric;
+  assert(false && "todo");
 }
 
 Type_Ptr TypeVar::get(Constraint constraint) {
@@ -128,7 +115,8 @@ Type_Ptr TypeVar::get(Constraint constraint) {
 }
 
 Type_Ptr TypeFieldConstraint::get(Ast_Field_Access& access) {
-  return to_type_ptr(TypeFieldConstraint{
-    .type = extract_type(access.object->meta.type),
-    .field_access = &access});
+  assert(false && "todo");
+  // return to_type_ptr(TypeFieldConstraint{
+  //   .type = extract_type(access.object->meta.type),
+  //   .field_access = &access});
 }

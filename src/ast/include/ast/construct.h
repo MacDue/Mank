@@ -5,15 +5,20 @@
 #include "ast/node.h"
 #include "ast/scope.h"
 #include "ast/block.h"
+#include "ast/context.h"
 
-struct Ast_File: Ast_Node {
+struct Ast_File {
   Scope scope;
   std::string filename;
-  std::vector<Function_Ptr> functions;
+  std::vector<Type_Ptr> functions;
   std::vector<Type_Ptr> pods;
+  AstContext ctx; // owns EVERYTHING
+
+  Ast_File(std::string filename)
+    : filename{filename} {}
 };
 
-struct Ast_Function_Declaration: Ast_Node {
+DEF_TYPE(Ast_Function_Declaration), Ast_Node {
   bool external = false,
        c_function = false,
        procedure = false,
@@ -24,7 +29,7 @@ struct Ast_Function_Declaration: Ast_Node {
   Ast_Block body;
 };
 
-struct Ast_Pod_Declaration: Ast_Node {
+DEF_TYPE(Ast_Pod_Declaration), Ast_Node {
   Ast_Identifier identifier;
   std::vector<Ast_Argument> fields;
 };

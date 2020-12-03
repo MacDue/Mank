@@ -1,8 +1,8 @@
 #pragma once
 
 #include <vector>
-#include "ast/defs.h"
+#include "ast/self_helper.h"
 
-struct TupleType {
+DEF_TYPE(TupleType) {
   std::vector<Type_Ptr> element_types;
 };

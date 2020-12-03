@@ -12,6 +12,8 @@ struct Parser {
   Parser(Lexer& lexer)
     : lexer{lexer} {}
 
+  AstContext* ctx = nullptr;
+
   Ast_File parse_file();
 
   static Ast_File parse_from_file(std::string file_path);
@@ -30,7 +32,7 @@ private:
   }
 
   template<typename T>
-  auto& mark_ast_location(SourceLocation start, std::shared_ptr<T>& ast) {
+  auto& mark_ast_location(SourceLocation start, AstPtr<T>& ast) {
     std::visit([&](auto & ast){
       mark_ast_location(start, ast);
     }, ast->v);
@@ -55,7 +57,7 @@ private:
   Type_Ptr parse_lambda_type();
   Type_Ptr parse_pod();
   Type_Ptr parse_tuple_type();
-  Function_Ptr parse_function();
+  Type_Ptr parse_function();
 
   /* Constructs */
   std::vector<Ast_Argument> parse_arguments(
@@ -66,31 +68,31 @@ private:
   std::optional<Ast_Block> parse_block();
 
   /* Statements */
-  Statement_Ptr parse_statement();
-  Statement_Ptr parse_assign(Expression_Ptr lhs);
-  Statement_Ptr parse_for_loop();
+  Stmt_Ptr parse_statement();
+  Stmt_Ptr parse_assign(Expr_Ptr lhs);
+  Stmt_Ptr parse_for_loop();
 
   TupleBinding parse_tuple_binding();
-  Statement_Ptr parse_tuple_structural_binding();
+  Stmt_Ptr parse_tuple_structural_binding();
 
   /* Expressions */
-  std::vector<Expression_Ptr> parse_expression_list(
+  std::vector<Ast_Expression*> parse_expression_list(
     TokenType left_delim = TokenType::LEFT_PAREN,
     TokenType right_delim = TokenType::RIGHT_PAREN);
-  Expression_Ptr parse_expression();
-  Expression_Ptr parse_postfix_expression();
-  Expression_Ptr parse_call(Expression_Ptr target);
-  Expression_Ptr parse_field_access(Expression_Ptr object);
-  Expression_Ptr parse_index_access(Expression_Ptr object);
-  Expression_Ptr parse_primary_expression();
-  Expression_Ptr parse_parenthesised_expression();
-  Expression_Ptr parse_if();
-  Expression_Ptr parse_binary_expression();
-  Expression_Ptr parse_unary();
-  Expression_Ptr parse_literal();
-  Expression_Ptr parse_array_literal();
-  Expression_Ptr parse_lambda();
-  Expression_Ptr parse_tuple_literal(Expression_Ptr first_element);
+  Expr_Ptr parse_expression();
+  Expr_Ptr parse_postfix_expression();
+  Expr_Ptr parse_call(Expr_Ptr target);
+  Expr_Ptr parse_field_access(Expr_Ptr object);
+  Expr_Ptr parse_index_access(Expr_Ptr object);
+  Expr_Ptr parse_primary_expression();
+  Expr_Ptr parse_parenthesised_expression();
+  Expr_Ptr parse_if();
+  Expr_Ptr parse_binary_expression();
+  Expr_Ptr parse_unary();
+  Expr_Ptr parse_literal();
+  Expr_Ptr parse_array_literal();
+  Expr_Ptr parse_lambda();
+  Expr_Ptr parse_tuple_literal(Expr_Ptr first_element);
 
   /* Simple helpers */
   bool consume(TokenType token_type);

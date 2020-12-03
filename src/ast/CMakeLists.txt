@@ -6,4 +6,5 @@ add_library(MankAST
   default_ast_visitor.cpp
   scope.cpp
   lambda.cpp
+  context.cpp
 )

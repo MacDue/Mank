@@ -6,14 +6,15 @@
 #include "ast/scope.h"
 #include "ast/construct.h"
 
-struct LambdaType {
+DEF_TYPE(LambdaType) {
   std::vector<Type_Ptr> argument_types;
   Type_Ptr return_type;
 };
 
 using Closure = std::vector<Symbol*>;
 
-struct Ast_Lambda: Ast_Expression_Node, Ast_Function_Declaration {
+struct Ast_Lambda: AstSelf<Ast_Expression, Ast_Lambda>, Ast_Expression_Node, Ast_Function_Declaration {
+  using AstSelf<Ast_Expression, Ast_Lambda>::self;
   Closure closure;
   bool top_level_wrapper = false;
 

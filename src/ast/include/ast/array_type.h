@@ -1,8 +1,8 @@
 #pragma once
 
-#include "node.h"
+#include "ast/node.h"
 
-struct FixedSizeArrayType {
+DEF_TYPE(FixedSizeArrayType) {
   Type_Ptr element_type;
   uint size;
 };

@@ -9,9 +9,7 @@
 #include "ast/primative_types.h"
 #include "ast/source_location.h"
 
-#include "ast/defs.h"
-
-/* Test AST based on std::variant & pattern matching */
+#include "ast/self_helper.h"
 
 struct Ast_Node {
   SourceLocation location;
@@ -42,24 +40,13 @@ struct Expression_Meta {
       - Functions (owned by function node)
       - More complex types will probably be nodes within the AST already
   */
-  std::weak_ptr<Type> type;
+  Type_Ptr type;
 
   // If this expression can appear on the left of an assignment
   enum ValueType {
     LVALUE,
     RVALUE
   } value_type = RVALUE;
-
-  /*
-    Type the expression does own.
-    For example an array literal owns it's type.
-    (this does lead to some duplicate types)
-
-    This is just a quick workaround as something has to own the pointer.
-    A better solution would probably be to have some from of "context"
-    (like llvm does that can create or return types)
-  */
-  Type_Ptr owned_type = nullptr;
 
   PrimativeValue const_value;
 
@@ -106,9 +93,7 @@ public:
   }
 };
 
-#define Expression_Node Ast_Node, Ast_Expression_Node
-
-struct Ast_Identifier: Expression_Node {
+DEF_EXPR(Ast_Identifier) {
   std::string name;
 
   Ast_Identifier() = default;

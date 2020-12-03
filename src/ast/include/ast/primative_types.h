@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "ast/type_var.h"
+#include "ast/self_helper.h"
 
 using PrimativeValue = std::variant<
   std::monostate,
@@ -14,7 +15,7 @@ using PrimativeValue = std::variant<
   uint8_t,
   bool>;
 
-struct PrimativeType {
+DEF_TYPE(PrimativeType) {
   enum Tag {
     FLOAT32,
     FLOAT64,

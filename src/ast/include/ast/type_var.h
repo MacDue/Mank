@@ -1,8 +1,8 @@
 #pragma once
 
-#include "defs.h"
+#include "ast/self_helper.h"
 
-struct TypeVar {
+DEF_TYPE(TypeVar) {
   int32_t id;
   bool is_return_type = false;
   // OR
@@ -16,7 +16,7 @@ struct TypeVar {
     Knowing it's own containing type pointer makes it
     easy to apply the solved types back onto the AST without walking it.
   */
-  std::weak_ptr<Type> substitute;
+  Type_Ptr substitute;
 
   explicit TypeVar(int32_t id): id{id} {}
 
@@ -42,10 +42,10 @@ struct TypeVar {
 
 struct Ast_Field_Access;
 
-struct TypeFieldConstraint {
+DEF_TYPE(TypeFieldConstraint) {
   Type_Ptr type;
   // Not null just can't be a ref
-  Ast_Field_Access* field_access;
+  SpAstPtr<Ast_Expression, Ast_Field_Access> field_access;
 
   static Type_Ptr get(Ast_Field_Access& access);
 };

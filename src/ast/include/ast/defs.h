@@ -27,7 +27,3 @@ struct Type;
 struct UncheckedType;
 struct PrimativeType;
 
-using Type_Ptr = std::shared_ptr<Type>;
-using Statement_Ptr = std::shared_ptr<Ast_Statement>;
-using Expression_Ptr = std::shared_ptr<Ast_Expression>;
-using Function_Ptr = Type_Ptr;

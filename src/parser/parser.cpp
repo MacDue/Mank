@@ -44,8 +44,9 @@ Ast_File Parser::parse_file() {
     white_space = ? any whitespace ? ;
     file = { function } ;
   */
-  Ast_File parsed_file;
-  parsed_file.filename = this->lexer.input_source_name();
+  Ast_File parsed_file(this->lexer.input_source_name());
+  this->ctx = &parsed_file.get_ctx();
+
   Token next_token;
   while (!this->peek(TokenType::LEX_EOF, next_token)) {
     if (next_token.type == TokenType::FUNCTION
@@ -74,10 +75,10 @@ Type_Ptr Parser::parse_pod() {
   parsed_pod.identifier = *pod_name;
   parsed_pod.fields = this->parse_arguments(
     TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
-  return to_type_ptr(parsed_pod);
+  return ctx->new_type(parsed_pod);
 }
 
-Function_Ptr Parser::parse_function() {
+Type_Ptr Parser::parse_function() {
   /*
     type_annotation = ":", identifier ;
     function_header = "fun", white_space, identifier, type_annotation, [parameter_list]
@@ -113,7 +114,7 @@ Function_Ptr Parser::parse_function() {
       throw_error_here("expected function body");
     }
     parsed_function.body = *body;
-    return to_type_ptr(parsed_function);
+    return ctx->new_type(parsed_function);
   } else {
     // Should be unreachable
     throw_error_here("unexpected \"{}\"m expecting function or procedure");
@@ -139,7 +140,7 @@ std::vector<Ast_Argument> Parser::parse_arguments(
         throw_error_here("type name expected");
       }
     } else {
-      arg_type = to_type_ptr(TypeVar());
+      arg_type = ctx->new_type(TypeVar());
     }
 
     arguments.emplace_back(Ast_Argument {
@@ -182,7 +183,7 @@ std::optional<Ast_Block> Parser::parse_block() {
 
 /* Statements */
 
-Statement_Ptr Parser::parse_statement() {
+Stmt_Ptr Parser::parse_statement() {
   /*
     statement = expr_stmt
               | return
@@ -197,7 +198,7 @@ Statement_Ptr Parser::parse_statement() {
     terminating_symbol = ";" | ? "}" ? (* the "}" is the previous token rather than the next *)
   */
   auto stmt_start = this->current_location();
-  Statement_Ptr stmt;
+  Stmt_Ptr stmt;
   consume(TokenType::SEMICOLON);
   if (consume(TokenType::RETURN)) {
     Ast_Return_Statement return_stmt;
@@ -206,7 +207,7 @@ Statement_Ptr Parser::parse_statement() {
       return_stmt.expression = expr;
     }
     expect(TokenType::SEMICOLON);
-    stmt = to_stmt_ptr(return_stmt);
+    stmt = ctx->new_stmt(return_stmt);
   } else if (peek(TokenType::FOR)) {
     stmt = this->parse_for_loop();
   } else if (peek(TokenType::BIND)) {
@@ -229,12 +230,12 @@ Statement_Ptr Parser::parse_statement() {
       if (consume(TokenType::ASSIGN)) {
         var_decl.initializer = this->parse_expression();
       }
-      stmt = to_stmt_ptr(var_decl);
+      stmt = ctx->new_stmt(var_decl);
     } else {
       simple_expression = true;
       Ast_Expression_Statement expr_stmt;
       expr_stmt.expression = expr;
-      stmt = to_stmt_ptr(expr_stmt);
+      stmt = ctx->new_stmt(expr_stmt);
     }
     // Hack for final expressions of blocks
     bool seen_terminator = was_previously_terminating_symbol();
@@ -262,7 +263,7 @@ assign_equals_to_operator(TokenType token) {
   }
 }
 
-Statement_Ptr Parser::parse_assign(Expression_Ptr lhs) {
+Stmt_Ptr Parser::parse_assign(Expr_Ptr lhs) {
   auto assign_start = extract_location(*lhs);
   Ast_Assign assign;
   assign.target = lhs;
@@ -282,14 +283,14 @@ Statement_Ptr Parser::parse_assign(Expression_Ptr lhs) {
     assign_binop.operation = *assign_op;
     assign_binop.left = lhs;
     assign_binop.right = expression;
-    expression = to_expr_ptr(assign_binop);
+    expression = ctx->new_expr(assign_binop);
     expression = mark_ast_location(assign_start, expression);
   }
   assign.expression = expression;
-  return to_stmt_ptr(assign);
+  return ctx->new_stmt(assign);
 }
 
-Statement_Ptr Parser::parse_for_loop() {
+Stmt_Ptr Parser::parse_for_loop() {
   /*
     for_loop = "for", white_space, identifier, [type_annotation], white_space,
                "in", expr, "..", expr, block ;
@@ -321,7 +322,7 @@ Statement_Ptr Parser::parse_for_loop() {
     }
     for_loop.body = *body;
 
-    return to_stmt_ptr(for_loop);
+    return ctx->new_stmt(for_loop);
   } else {
     return nullptr; // impossible
   }
@@ -344,7 +345,7 @@ TupleBinding Parser::parse_tuple_binding() {
       if(consume(TokenType::COLON)) {
         type = this->parse_type(true);
       } else {
-        type = to_type_ptr(TypeVar());
+        type = ctx->new_type(TypeVar());
       }
       binding.binds.push_back(Ast_Argument{
         .type = type,
@@ -360,7 +361,7 @@ TupleBinding Parser::parse_tuple_binding() {
   return binding;
 }
 
-Statement_Ptr Parser::parse_tuple_structural_binding() {
+Stmt_Ptr Parser::parse_tuple_structural_binding() {
   /*
     sad_binding = "bind", "(" [binding_list] ")"
     binding_list = binding, {",", binding}
@@ -375,12 +376,12 @@ Statement_Ptr Parser::parse_tuple_structural_binding() {
   expect(TokenType::ASSIGN);
   parsed_sad_binding.initializer = this->parse_expression();
   expect(TokenType::SEMICOLON);
-  return to_stmt_ptr(parsed_sad_binding);
+  return ctx->new_stmt(parsed_sad_binding);
 }
 
 /* Expressions */
 
-Expression_Ptr Parser::parse_expression() {
+Expr_Ptr Parser::parse_expression() {
   /*
     (* this ebnf is abridged to avoid describing precedence which is easier done with a table *)
     expression = literal
@@ -397,7 +398,7 @@ Expression_Ptr Parser::parse_expression() {
   return mark_ast_location(expr_start, expr);
 }
 
-Expression_Ptr Parser::parse_postfix_expression() {
+Expr_Ptr Parser::parse_postfix_expression() {
   auto postfix_start = this->current_location();
   auto expr = this->parse_primary_expression();
   while (true) {
@@ -416,10 +417,10 @@ Expression_Ptr Parser::parse_postfix_expression() {
   return mark_ast_location(postfix_start, expr);
 }
 
-std::vector<Expression_Ptr> Parser::parse_expression_list(
+std::vector<Expr_Ptr> Parser::parse_expression_list(
   TokenType left_delim, TokenType right_delim
 ) {
-  std::vector<Expression_Ptr> expressions;
+  std::vector<Expr_Ptr> expressions;
   expect(left_delim);
   while (!peek(right_delim)) {
     expressions.emplace_back(this->parse_expression());

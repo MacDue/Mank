@@ -10,18 +10,18 @@
 #include "ast/construct.h"
 #include "ast/primative_types.h"
 
-struct Ast_If_Expr: Expression_Node {
+DEF_EXPR(Ast_If_Expr) {
   bool has_else = false;
-  Expression_Ptr cond;
-  Expression_Ptr then_block, else_block;
+  Expr_Ptr cond;
+  Expr_Ptr then_block, else_block;
 };
 
-struct Ast_Call: Expression_Node {
-  Expression_Ptr callee;
-  std::vector<Expression_Ptr> arguments;
+DEF_EXPR(Ast_Call) {
+  Expr_Ptr callee;
+  std::vector<Expr_Ptr> arguments;
 };
 
-struct Ast_Literal: Expression_Node {
+DEF_EXPR(Ast_Literal) {
   PrimativeType::Tag literal_type;
   std::string value;
 
@@ -33,34 +33,34 @@ struct Ast_Literal: Expression_Node {
   int size_bytes();
 };
 
-struct Ast_Unary_Operation: Expression_Node {
-  Expression_Ptr operand;
+DEF_EXPR(Ast_Unary_Operation) {
+  Expr_Ptr operand;
   Ast_Operator operation;
 };
 
-struct Ast_Binary_Operation: Expression_Node {
-  Expression_Ptr left, right;
+DEF_EXPR(Ast_Binary_Operation) {
+  Expr_Ptr left, right;
   Ast_Operator operation;
   bool parenthesised = false;
 };
 
-struct Ast_Field_Access: Expression_Node {
-  Expression_Ptr object;
+DEF_EXPR(Ast_Field_Access) {
+  Expr_Ptr object;
   Ast_Identifier field;
   int field_index = -1;
 };
 
-struct Ast_Expression_List: Expression_Node {
-  std::vector<Expression_Ptr> elements;
+DEF_EXPR(Ast_Expression_List) {
+  std::vector<Ast_Expression*> elements;
 };
 
 struct Ast_Array_Literal: Ast_Expression_List {};
 
-struct Ast_Index_Access: Expression_Node {
-  Expression_Ptr object, index;
-};
-
 struct Ast_Tuple_Literal: Ast_Expression_List {};
+
+DEF_EXPR(Ast_Index_Access) {
+  Expr_Ptr object, index;
+};
 
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
@@ -80,10 +80,7 @@ using Ast_Expression_Type = std::variant<
   Ast_Macro_Identifier,
   Ast_Tuple_Literal>;
 
-struct Ast_Expression {
-  Ast_Expression_Type v;
-  Expression_Meta meta;
-
+class Ast_Expression {
   template<typename Expr>
   Ast_Expression(Expr expr) {
     expr.meta = &meta;
@@ -93,6 +90,10 @@ struct Ast_Expression {
       meta.value_type = Expression_Meta::LVALUE;
     }
   }
+  friend class AstContext;
+public:
+  Ast_Expression_Type v;
+  Expression_Meta meta;
 
   inline bool is_lvalue() const {
     return meta.value_type == Expression_Meta::LVALUE;

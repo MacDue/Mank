@@ -3,10 +3,10 @@
 #include "ast/node.h"
 #include "ast/scope.h"
 
-struct Ast_Block: Expression_Node {
+DEF_EXPR(Ast_Block) {
   Scope scope;
-  std::vector<Statement_Ptr> statements;
+  std::vector<Stmt_Ptr> statements;
   bool has_final_expr = false;
 
-  Expression_Ptr get_final_expr() const;
+  Expr_Ptr get_final_expr() const;
 };

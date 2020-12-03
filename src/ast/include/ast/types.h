@@ -9,11 +9,11 @@
 #include "ast/tuple_type.h"
 #include "ast/primative_types.h"
 
-struct UncheckedType {
+DEF_TYPE(UncheckedType) {
   Ast_Identifier identifier;
 };
 
-struct ReferenceType {
+DEF_TYPE(ReferenceType) {
   Type_Ptr references;
 };
 
@@ -30,15 +30,13 @@ using Type_Type = std::variant<
   LambdaType,
   TypeFieldConstraint>;
 
-struct Type {
-  Type_Type v;
-
+class Type {
   Type(Type_Type v)
     : v{std::move(v)} {};
+  friend class AstContext;
+public:
+  Type_Type v;
 };
 
 std::string type_to_string(Type const & type);
 std::string type_to_string(Type const * type);
-
-Type_Ptr extract_type_nullable(std::weak_ptr<Type> weak_type_ptr);
-Type_Ptr extract_type(std::weak_ptr<Type> weak_type_ptr);

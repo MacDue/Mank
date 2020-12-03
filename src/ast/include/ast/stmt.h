@@ -5,23 +5,23 @@
 #include "ast/node.h"
 #include "ast/block.h"
 
-struct Ast_Expression_Statement: Ast_Node {
-  Expression_Ptr expression;
+DEF_STMT(Ast_Expression_Statement) {
+  Expr_Ptr expression;
   bool final_expr = false;
 };
 
-struct Ast_Return_Statement: Ast_Node {
-  Expression_Ptr expression;
+DEF_STMT(Ast_Return_Statement) {
+  Expr_Ptr expression;
 };
 
-struct Ast_Assign: Ast_Node {
-  Expression_Ptr target, expression;
+DEF_STMT(Ast_Assign) {
+  Expr_Ptr target, expression;
 };
 
-struct Ast_Variable_Declaration: Ast_Node {
+DEF_STMT(Ast_Variable_Declaration) {
   Type_Ptr type;
   Ast_Identifier variable;
-  Expression_Ptr initializer = nullptr;
+  Expr_Ptr initializer;
 };
 
 struct TupleBinding {
@@ -29,17 +29,15 @@ struct TupleBinding {
   std::vector<std::variant<Ast_Argument, TupleBinding>> binds;
 };
 
-struct Ast_Tuple_Structural_Binding: Ast_Node {
+DEF_STMT(Ast_Tuple_Structural_Binding) {
   TupleBinding bindings;
-  Expression_Ptr initializer;
+  Expr_Ptr initializer;
 };
-using Ast_Sad_Binding = Ast_Tuple_Structural_Binding;
 
-struct Ast_For_Loop: Ast_Node {
+DEF_STMT(Ast_For_Loop) {
   Type_Ptr type; // of loop variable
   Ast_Identifier loop_variable;
-  Expression_Ptr start_range;
-  Expression_Ptr end_range;
+  Expr_Ptr start_range, end_range;
   Ast_Block body;
 };
 
@@ -51,8 +49,10 @@ using Ast_Statement_Type = std::variant<
   Ast_For_Loop,
   Ast_Tuple_Structural_Binding>;
 
-struct Ast_Statement {
-  Ast_Statement_Type v;
+class Ast_Statement {
   Ast_Statement(Ast_Statement_Type v)
     : v{std::move(v)} {}
+  friend class AstContext;
+public:
+  Ast_Statement_Type v;
 };

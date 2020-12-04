@@ -26,6 +26,8 @@ struct Semantics {
   }
   inline Infer::ConstraintSet get_constraint_test_for_testing() { return type_constraints; }
 private:
+  AstContext* ctx;
+
   // Only used for testing allows to seperate sema + infer
   bool disable_type_infer = false;
 

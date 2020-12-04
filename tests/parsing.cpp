@@ -25,6 +25,10 @@
   are implicitly tested in all tests anyway
 */
 
+#define NEW_FILE(name)                  \
+  auto name = AstBuilder::new_file();   \
+  auto f = AstBuilder(name);
+
 TEST_CASE("Hello world!", "[Parser]") {
   auto parsed_result = Parser::parse_from_string(R"(
     proc main {
@@ -32,10 +36,11 @@ TEST_CASE("Hello world!", "[Parser]") {
     }
   )");
 
-  auto expected_result = make_file(
-    make_procedure("main", make_stmt_body(
-      make_expr_stmt(
-        make_call("print", make_string("Hello World"))))));
+  NEW_FILE(expected_result);
+  f.add_functions(
+    f.make_procedure("main", f.make_stmt_body(
+      f.make_expr_stmt(
+        f.make_call("print", f.make_string("Hello World"))))));
 
   MATCH_AST(expected_result, parsed_result);
 }
@@ -51,8 +56,12 @@ TEST_CASE("If statements", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_if = wrap_final_expr(
-      make_if(make_boolean(true), make_stmt_block(), make_stmt_block()));
+    NEW_FILE(file);
+    auto& expected_if = f.wrap_final_expr(
+      f.make_if(
+        f.make_boolean(true),
+          f.make_stmt_block(),
+          f.make_stmt_block()));
 
     MATCH_AST(parsed_if, expected_if);
   }
@@ -64,8 +73,11 @@ TEST_CASE("If statements", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_if = wrap_final_expr(
-      make_if(make_boolean(true), make_stmt_block()));
+    NEW_FILE(file);
+    auto& expected_if = f.wrap_final_expr(
+      f.make_if(
+        f.make_boolean(true),
+        f.make_stmt_block()));
 
     MATCH_AST(parsed_if, expected_if);
   }

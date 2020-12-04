@@ -52,6 +52,7 @@ static bool is_return_tvar(Type const * type) {
 }
 
 void Semantics::analyse_file(Ast_File& file) {
+  this->ctx = &file.ctx;
   Scope& global_scope = file.scope;
 
   static std::array primative_types {
@@ -162,7 +163,7 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   }
   Type_Ptr block_type;
   if (auto final_expr = block.get_final_expr()) {
-    block_type = extract_type_nullable(final_expr->meta.type);
+    block_type = final_expr->meta.type;
   }
   block.scope.destroy_locals();
   return block_type;
@@ -464,7 +465,7 @@ static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_fu
   lambda_wrapper.return_type = top_level_func.return_type;
   lambda_wrapper.arguments = top_level_func.arguments;
 
-  std::vector<Expression_Ptr> passthrough_args;
+  std::vector<Expr_Ptr> passthrough_args;
   std::transform(top_level_func.arguments.begin(), top_level_func.arguments.end(),
     std::back_inserter(passthrough_args),
     [](Ast_Argument& arg) {

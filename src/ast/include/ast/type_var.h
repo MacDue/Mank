@@ -12,11 +12,6 @@ DEF_TYPE(TypeVar) {
   };
 
   static int32_t constexpr ANY = -42; // magic id for any tvar
-  /*
-    Knowing it's own containing type pointer makes it
-    easy to apply the solved types back onto the AST without walking it.
-  */
-  Type_Ptr substitute;
 
   explicit TypeVar(int32_t id): id{id} {}
 

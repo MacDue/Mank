@@ -2,11 +2,22 @@
 #include "ast/ast.h"
 #include "ast/context.h"
 
+constexpr auto DEFAULT_ARENA_SIZE = 2'000; // will use ~2mb of memory
+
 struct ContextData {
   // vectors that own the types/exprs/stmts should not be messed with
+  // You could probably do something much better than vectors but it'll do for now.
   std::vector<Type> types;
   std::vector<Ast_Statement> stmts;
   std::vector<Ast_Expression> exprs;
+
+  ContextData() {
+    // Note: That we don't care if the vector reallocs.
+    // Our special pointers will still work. The default size is just to speed things up.
+    types.reserve(DEFAULT_ARENA_SIZE);
+    stmts.reserve(DEFAULT_ARENA_SIZE);
+    exprs.reserve(DEFAULT_ARENA_SIZE);
+  }
 
   template <typename T>
   AstPtr<T> add(T node, std::vector<T>& nodes) {

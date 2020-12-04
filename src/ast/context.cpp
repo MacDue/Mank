@@ -1,31 +1,22 @@
-
+#include <deque>
 #include "ast/ast.h"
 #include "ast/context.h"
-
-constexpr auto DEFAULT_ARENA_SIZE = 2'000; // will use ~2mb of memory
 
 struct ContextData {
   // vectors that own the types/exprs/stmts should not be messed with
   // You could probably do something much better than vectors but it'll do for now.
-  std::vector<Type> types;
-  std::vector<Ast_Statement> stmts;
-  std::vector<Ast_Expression> exprs;
-
-  ContextData() {
-    // Note: That we don't care if the vector reallocs.
-    // Our special pointers will still work. The default size is just to speed things up.
-    types.reserve(DEFAULT_ARENA_SIZE);
-    stmts.reserve(DEFAULT_ARENA_SIZE);
-    exprs.reserve(DEFAULT_ARENA_SIZE);
-  }
+  std::deque<Type> types;
+  std::deque<Ast_Statement> stmts;
+  std::deque<Ast_Expression> exprs;
 
   template <typename T>
-  AstPtr<T> add(T node, std::vector<T>& nodes) {
-    AstPtr<T> node_ptr(&nodes, nodes.size());
+  AstPtr<T> add(T node, std::deque<T>& nodes) {
+    nodes.push_back(node);
+    auto& new_node = nodes.back();
+    AstPtr<T> node_ptr(&new_node);
     std::visit([&](auto& node){
       node.self = node_ptr;
-    }, node.v);
-    nodes.push_back(node);
+    }, new_node.v);
     return node_ptr;
   }
 };

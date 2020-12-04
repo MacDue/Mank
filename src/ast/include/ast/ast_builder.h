@@ -34,11 +34,11 @@ Type_Ptr to_type_ptr(T && type) {
 }
 
 template<typename... TFunction>
-AstBuilder& add_functions(TFunction && ... function) {
+Ast_File& add_functions(TFunction && ... function) {
   if constexpr (sizeof...(function) > 0) {
     file.functions.push_back(to_type_ptr(function)...);
   }
-  return *this;
+  return file;
 }
 
 /* Args */

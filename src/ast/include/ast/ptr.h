@@ -6,34 +6,35 @@
 
 class ContextData;
 
+/*
+  This should be inlined to a raw pointer.
+  Having it as my own class just allows me to experiment with implementations.
+
+  It also gives _slightly_ more safey as only the AstContect can create non-null ptrs.
+*/
 template<typename T>
 class AstPtr {
-  std::vector<T>* objs = nullptr;
-  size_t idx;
+  // originally this was a vector index but I think deque will allow
+  // direct pointers. I may try to opt this to a small < 8 bytes index maybe?
+  T* ptr = nullptr;
 
-  AstPtr(std::vector<T>* objs, size_t idx)
-    : objs{objs}, idx{idx} {};
-
+  AstPtr(T* ptr): ptr{ptr} {};
   friend class ContextData;
 public:
   AstPtr() = default;
   AstPtr(std::nullptr_t): AstPtr() {};
 
   T& operator*() const {
-    // This reference is only a temp & should not be stored, only the AstPtr
-    assert(objs != nullptr);
-    return (*objs)[idx];
+    assert(ptr != nullptr);
+    return *ptr;
   }
 
   operator bool() const {
-    return objs != nullptr;
+    return ptr != nullptr;
   }
 
   T* get() const {
-    if (*this) {
-      return &(**this);
-    }
-    return nullptr;
+    return ptr;
   }
 
   T* operator -> () const {

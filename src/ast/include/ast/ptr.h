@@ -42,6 +42,12 @@ public:
   }
 };
 
+/*
+  Self/Specialised pointer.
+  Every node will have one of these.
+  It provides an easy way to get a pointer to the TClass (wrapper)
+  & the "self" type.
+*/
 template <typename TClass, typename TPtr>
 class SpAstPtr {
   AstPtr<TClass> ptr;

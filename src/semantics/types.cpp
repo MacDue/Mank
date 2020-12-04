@@ -151,30 +151,30 @@ static std::pair<Ast_Argument*, int> resolve_pod_field_index(
 }
 
 Type_Ptr get_field_type(Type* type, Ast_Field_Access& access) {
-    using namespace mpark::patterns;
-    if (type) {
-      auto access_type = match(remove_reference(type)->v)(
-        pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
-          auto [accessed, field_index] = resolve_pod_field_index(pod_type, access.field.name);
-          if (field_index < 0) {
-            throw_sema_error_at(access.field, "{} has no field named \"{}\"",
-                pod_type.identifier.name, access.field.name);
-          }
-          access.field_index = field_index;
-          access.get_meta().value_type = access.object->meta.value_type;
-          // expr.inherit_value_type(*access.object);
-          return accessed->type;
-        },
-        // FIXME: Hardcoded .length
-        pattern(as<FixedSizeArrayType>(_)) = [&]{
-          WHEN(access.field.name == "length") {
-            return Primative::INTEGER;
-          };
-        },
-        pattern(_) = []() -> Type_Ptr { return nullptr; });
-      if (access_type) {
-        return access_type;
-      }
+  using namespace mpark::patterns;
+  if (type) {
+    auto access_type = match(remove_reference(type)->v)(
+      pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
+        auto [accessed, field_index] = resolve_pod_field_index(pod_type, access.field.name);
+        if (field_index < 0) {
+          throw_sema_error_at(access.field, "{} has no field named \"{}\"",
+              pod_type.identifier.name, access.field.name);
+        }
+        access.field_index = field_index;
+        access.get_meta().value_type = access.object->meta.value_type;
+        // expr.inherit_value_type(*access.object);
+        return accessed->type;
+      },
+      // FIXME: Hardcoded .length
+      pattern(as<FixedSizeArrayType>(_)) = [&]{
+        WHEN(access.field.name == "length") {
+          return Primative::INTEGER;
+        };
+      },
+      pattern(_) = []() -> Type_Ptr { return nullptr; });
+    if (access_type) {
+      return access_type;
     }
-    throw_sema_error_at(access.object, "not a pod type");
+  }
+  throw_sema_error_at(access.object, "not a pod type");
 }

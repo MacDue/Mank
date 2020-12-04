@@ -91,10 +91,11 @@ TEST_CASE("If statements", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_if = wrap_final_expr(
-      make_if(make_boolean(true),
-        make_stmt_block(),
-        make_if(make_boolean(false), make_stmt_block())));
+    NEW_FILE(file);
+    auto& expected_if = f.wrap_final_expr(
+      f.make_if(f.make_boolean(true),
+        f.make_stmt_block(),
+        f.make_if(f.make_boolean(false), f.make_stmt_block())));
 
     MATCH_AST(parsed_if, expected_if);
   }
@@ -109,8 +110,9 @@ TEST_CASE("Procedures", "[Parser]") {
       }
     )");
 
-    auto expected_proc = make_file(
-      make_procedure("test", make_stmt_body()));
+    NEW_FILE(file);
+    auto& expected_proc = f.add_functions(
+      f.make_procedure("test", f.make_stmt_body()));
 
     MATCH_AST(parsed_proc, expected_proc);
   }
@@ -122,10 +124,11 @@ TEST_CASE("Procedures", "[Parser]") {
       }
     )");
 
-    auto expected_proc = make_file(
-      make_procedure("test", make_args(
-      make_argument(make_unchecked_type("i32"), "foo")),
-        make_stmt_body()));
+    NEW_FILE(file);
+    auto& expected_proc = f.add_functions(
+      f.make_procedure("test", f.make_args(
+      f.make_argument(f.make_unchecked_type("i32"), "foo")),
+        f.make_stmt_body()));
 
     MATCH_AST(parsed_proc, expected_proc);
   }
@@ -137,12 +140,13 @@ TEST_CASE("Procedures", "[Parser]") {
       }
     )");
 
-    auto expected_proc = make_file(
-      make_procedure("test", make_args(
-      make_argument(make_unchecked_type("i32"), "foo"),
-      make_argument(make_unchecked_type("bool"), "bar"),
-      make_argument(make_unchecked_type("float"), "baz")),
-        make_stmt_body()));
+    NEW_FILE(file);
+    auto& expected_proc = f.add_functions(
+      f.make_procedure("test", f.make_args(
+      f.make_argument(f.make_unchecked_type("i32"), "foo"),
+      f.make_argument(f.make_unchecked_type("bool"), "bar"),
+      f.make_argument(f.make_unchecked_type("float"), "baz")),
+        f.make_stmt_body()));
 
     MATCH_AST(parsed_proc, expected_proc);
   }
@@ -163,9 +167,10 @@ TEST_CASE("Functions", "[Parser]") {
       }
     )");
 
-    auto expected_fun = make_file(
-      make_function(make_unchecked_type("i32"), "meaning_of_life",
-      make_stmt_body(make_return(make_integer(42)))));
+    NEW_FILE(file);
+    auto& expected_fun = f.add_functions(
+      f.make_function(f.make_unchecked_type("i32"), "meaning_of_life",
+      f.make_stmt_body(f.make_return(f.make_integer(42)))));
 
     MATCH_AST(parsed_fun_with_extra_parens, parsed_fun_without_extra_parens);
     MATCH_AST(parsed_fun_without_extra_parens, expected_fun);
@@ -179,11 +184,12 @@ TEST_CASE("Functions", "[Parser]") {
       }
     )");
 
-    auto expected_fun = make_file(
-      make_function(make_unchecked_type("bool"), "launch_nukes", make_args(
-      make_argument(make_unchecked_type("float"), "lat"),
-      make_argument(make_unchecked_type("float"), "long")),
-        make_stmt_body(make_return(make_boolean(true)))));
+    NEW_FILE(file);
+    auto& expected_fun = f.add_functions(
+      f.make_function(f.make_unchecked_type("bool"), "launch_nukes", f.make_args(
+      f.make_argument(f.make_unchecked_type("float"), "lat"),
+      f.make_argument(f.make_unchecked_type("float"), "long")),
+        f.make_stmt_body(f.make_return(f.make_boolean(true)))));
 
     MATCH_AST(expected_fun, parsed_fun);
   }
@@ -196,9 +202,10 @@ TEST_CASE("Expressions", "[Parser]") {
       launch_nukes(53.480800, 2.242600);
     )" WPE);
 
-    auto expected_call = wrap_expr(
-      make_call("launch_nukes",
-        make_float64(53.480800), make_float64(2.242600)));
+    NEW_FILE(file);
+    auto& expected_call = f.wrap_expr(
+      f.make_call("launch_nukes",
+        f.make_float64(53.480800), f.make_float64(2.242600)));
 
     MATCH_AST(expected_call, parsed_call);
   }
@@ -212,12 +219,13 @@ TEST_CASE("Expressions", "[Parser]") {
       true;
     )" WPE);
 
-    auto expected_literals = make_file(make_procedure("test", make_stmt_body(
-      make_expr_stmt(make_string("What is a computer?")),
-      make_expr_stmt(make_integer(1337)),
-      make_expr_stmt(make_float64(1.323000)),
-      make_expr_stmt(make_boolean(false)),
-      make_expr_stmt(make_boolean(true)))));
+    NEW_FILE(file);
+    auto& expected_literals = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+      f.make_expr_stmt(f.make_string("What is a computer?")),
+      f.make_expr_stmt(f.make_integer(1337)),
+      f.make_expr_stmt(f.make_float64(1.323000)),
+      f.make_expr_stmt(f.make_boolean(false)),
+      f.make_expr_stmt(f.make_boolean(true)))));
 
     MATCH_AST(expected_literals, parsed_literals);
   }
@@ -230,11 +238,12 @@ TEST_CASE("Expressions", "[Parser]") {
       _foo;
     )" WPE);
 
-    auto expected_idents = make_file(make_procedure("test", make_stmt_body(
-      make_expr_stmt(make_ident("fooBar")),
-      make_expr_stmt(make_ident("foo_bar")),
-      make_expr_stmt(make_ident("i_1")),
-      make_expr_stmt(make_ident("_foo")))));
+    NEW_FILE(file);
+    auto& expected_idents = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+      f.make_expr_stmt(f.make_ident("fooBar")),
+      f.make_expr_stmt(f.make_ident("foo_bar")),
+      f.make_expr_stmt(f.make_ident("i_1")),
+      f.make_expr_stmt(f.make_ident("_foo")))));
 
     MATCH_AST(expected_idents, parsed_idents);
   }
@@ -246,10 +255,11 @@ TEST_CASE("Expressions", "[Parser]") {
       ¬true;
     )" WPE);
 
-    auto expected_unaries = make_file(make_procedure("test", make_stmt_body(
-      make_expr_stmt(make_unary(Ast_Operator::PLUS, make_integer(1))),
-      make_expr_stmt(make_unary(Ast_Operator::MINUS, make_integer(1))),
-      make_expr_stmt(make_unary(Ast_Operator::LOGICAL_NOT, make_boolean(true))))));
+    NEW_FILE(file);
+    auto& expected_unaries = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+      f.make_expr_stmt(f.make_unary(Ast_Operator::PLUS, f.make_integer(1))),
+      f.make_expr_stmt(f.make_unary(Ast_Operator::MINUS, f.make_integer(1))),
+      f.make_expr_stmt(f.make_unary(Ast_Operator::LOGICAL_NOT, f.make_boolean(true))))));
 
     MATCH_AST(expected_unaries, parsed_unaries);
   }
@@ -263,13 +273,14 @@ TEST_CASE("Expressions", "[Parser]") {
         1 % 3;
       )" WPE);
 
-      auto expected_binaries = make_file(make_procedure("test", make_stmt_body(
-        make_expr_stmt(make_binary(Ast_Operator::PLUS,
-          make_integer(1), make_integer(2))),
-        make_expr_stmt(make_binary(Ast_Operator::MINUS,
-          make_integer(1), make_integer(2))),
-        make_expr_stmt(make_binary(Ast_Operator::MODULO,
-          make_integer(1), make_integer(3))))));
+      NEW_FILE(file);
+      auto& expected_binaries = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+        f.make_expr_stmt(f.make_binary(Ast_Operator::PLUS,
+          f.make_integer(1), f.make_integer(2))),
+        f.make_expr_stmt(f.make_binary(Ast_Operator::MINUS,
+          f.make_integer(1), f.make_integer(2))),
+        f.make_expr_stmt(f.make_binary(Ast_Operator::MODULO,
+          f.make_integer(1), f.make_integer(3))))));
 
       MATCH_AST(expected_binaries, parsed_binaries);
     }
@@ -279,13 +290,14 @@ TEST_CASE("Expressions", "[Parser]") {
       auto parsed_binary = Parser::parse_from_string(
         WPS "1 + 2 + 3 + 4;" WPE);
 
-      auto expected_binary = wrap_expr(
-        make_binary(Ast_Operator::PLUS,
-          make_binary(Ast_Operator::PLUS,
-            make_binary(Ast_Operator::PLUS,
-              make_integer(1), make_integer(2)),
-            make_integer(3)),
-          make_integer(4)));
+      NEW_FILE(file);
+      auto& expected_binary = f.wrap_expr(
+        f.make_binary(Ast_Operator::PLUS,
+          f.make_binary(Ast_Operator::PLUS,
+            f.make_binary(Ast_Operator::PLUS,
+              f.make_integer(1), f.make_integer(2)),
+            f.make_integer(3)),
+          f.make_integer(4)));
 
       MATCH_AST(expected_binary, parsed_binary);
     }
@@ -295,16 +307,17 @@ TEST_CASE("Expressions", "[Parser]") {
         WPS "1 * 2 + 3 - 4 + 5 * 6;" WPE);
 
       // I've implemented LISP....
-      auto expected_binary = wrap_expr(
-        make_binary(Ast_Operator::PLUS,
-          make_binary(Ast_Operator::MINUS,
-            make_binary(Ast_Operator::PLUS,
-              make_binary(Ast_Operator::TIMES,
-                make_integer(1), make_integer(2)),
-              make_integer(3)),
-            make_integer(4)),
-          make_binary(Ast_Operator::TIMES,
-            make_integer(5), make_integer(6))));
+      NEW_FILE(file);
+      auto& expected_binary = f.wrap_expr(
+        f.make_binary(Ast_Operator::PLUS,
+          f.make_binary(Ast_Operator::MINUS,
+            f.make_binary(Ast_Operator::PLUS,
+              f.make_binary(Ast_Operator::TIMES,
+                f.make_integer(1), f.make_integer(2)),
+              f.make_integer(3)),
+            f.make_integer(4)),
+          f.make_binary(Ast_Operator::TIMES,
+            f.make_integer(5), f.make_integer(6))));
 
       MATCH_AST(expected_binary, parsed_binary);
     }
@@ -313,16 +326,17 @@ TEST_CASE("Expressions", "[Parser]") {
       auto parsed_binary = Parser::parse_from_string(
         WPS "1 * (2 + 3) - (4 + 5) * 6;" WPE);
 
-      auto expected_binary = wrap_expr(
-        make_binary(Ast_Operator::MINUS,
-          make_binary(Ast_Operator::TIMES,
-            make_integer(1),
-            make_binary(Ast_Operator::PLUS,
-              make_integer(2), make_integer(3))),
-          make_binary(Ast_Operator::TIMES,
-            make_binary(Ast_Operator::PLUS,
-              make_integer(4), make_integer(5)),
-            make_integer(6))));
+      NEW_FILE(file);
+      auto& expected_binary = f.wrap_expr(
+        f.make_binary(Ast_Operator::MINUS,
+          f.make_binary(Ast_Operator::TIMES,
+            f.make_integer(1),
+            f.make_binary(Ast_Operator::PLUS,
+              f.make_integer(2), f.make_integer(3))),
+          f.make_binary(Ast_Operator::TIMES,
+            f.make_binary(Ast_Operator::PLUS,
+              f.make_integer(4), f.make_integer(5)),
+            f.make_integer(6))));
 
       MATCH_AST(expected_binary, parsed_binary);
     }
@@ -335,9 +349,10 @@ TEST_CASE("Block expressions", "[Parser]") {
     auto parsed_block = Parser::parse_from_string(
       WPS "{ 1337 }" WPE);
 
-    auto expected_block = wrap_final_expr(
-      make_block(true,
-        make_expr_stmt(make_integer(1337))));
+    NEW_FILE(file);
+    auto& expected_block = f.wrap_final_expr(
+      f.make_block(true,
+        f.make_expr_stmt(f.make_integer(1337))));
 
     MATCH_AST(parsed_block, expected_block);
   }
@@ -349,11 +364,12 @@ TEST_CASE("Block expressions", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_block = wrap_final_expr(
-      make_block(true,
-        make_if_stmt(make_boolean(true),
-          make_block(true, make_expr_stmt(make_integer(10))),
-          make_block(true, make_expr_stmt(make_integer(20))))));
+    NEW_FILE(file);
+    auto& expected_block = f.wrap_final_expr(
+      f.make_block(true,
+        f.make_if_stmt(f.make_boolean(true),
+          f.make_block(true, f.make_expr_stmt(f.make_integer(10))),
+          f.make_block(true, f.make_expr_stmt(f.make_integer(20))))));
 
     MATCH_AST(parsed_block, expected_block);
   }
@@ -366,12 +382,13 @@ TEST_CASE("Block expressions", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_block = wrap_final_expr(
-      make_stmt_block(
-        make_if_stmt(make_boolean(true),
-          make_block(true, make_expr_stmt(make_integer(1))),
-          make_block(true, make_expr_stmt(make_integer(0)))),
-        make_return(make_integer(20))));
+    NEW_FILE(file);
+    auto& expected_block = f.wrap_final_expr(
+      f.make_stmt_block(
+        f.make_if_stmt(f.make_boolean(true),
+          f.make_block(true, f.make_expr_stmt(f.make_integer(1))),
+          f.make_block(true, f.make_expr_stmt(f.make_integer(0)))),
+        f.make_return(f.make_integer(20))));
 
     MATCH_AST(parsed_block, expected_block);
   }
@@ -384,10 +401,11 @@ TEST_CASE("Block expressions", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_block = wrap_final_expr(
-      make_block(true,
-        make_expr_stmt(make_stmt_block()),
-        make_expr_stmt(make_float64(42.000000))));
+    NEW_FILE(file);
+    auto& expected_block = f.wrap_final_expr(
+      f.make_block(true,
+        f.make_expr_stmt(f.make_stmt_block()),
+        f.make_expr_stmt(f.make_float64(42.000000))));
 
     MATCH_AST(parsed_block, expected_block);
   }
@@ -399,8 +417,9 @@ TEST_CASE("Variable declarations", "[Parser]") {
     auto parsed_decl = Parser::parse_from_string(
       WPS "foo: i32;" WPE);
 
-    auto expected_decl = wrap_stmt(
-      make_var_decl("foo", make_type("i32")));
+    NEW_FILE(file);
+    auto& expected_decl = f.wrap_stmt(
+      f.make_var_decl("foo", f.make_type("i32")));
 
     MATCH_AST(parsed_decl, expected_decl);
   }
@@ -409,8 +428,9 @@ TEST_CASE("Variable declarations", "[Parser]") {
     auto parsed_decl = Parser::parse_from_string(
       WPS "foo: i32 = 100;" WPE);
 
-    auto expected_decl = wrap_stmt(
-      make_var_decl("foo", make_type("i32"), make_integer(100)));
+    NEW_FILE(file);
+    auto& expected_decl = f.wrap_stmt(
+      f.make_var_decl("foo", f.make_type("i32"), f.make_integer(100)));
 
     MATCH_AST(parsed_decl, expected_decl);
   }
@@ -419,8 +439,9 @@ TEST_CASE("Variable declarations", "[Parser]") {
     auto parsed_decl = Parser::parse_from_string(
       WPS "foo := 100;" WPE);
 
-    auto expected_decl = wrap_stmt(
-      make_var_decl("foo", make_integer(100)));
+    NEW_FILE(file);
+    auto& expected_decl = f.wrap_stmt(
+      f.make_var_decl("foo", f.make_integer(100)));
 
     MATCH_AST(parsed_decl, expected_decl);
   }
@@ -431,8 +452,9 @@ TEST_CASE("Variable declarations", "[Parser]") {
     auto parsed_decl = Parser::parse_from_string(
       WPS "foo:;" WPE);
 
-    auto expected_decl = wrap_stmt(
-      make_var_decl("foo"));
+    NEW_FILE(file);
+    auto& expected_decl = f.wrap_stmt(
+      f.make_var_decl("foo"));
 
     MATCH_AST(parsed_decl, expected_decl);
   }
@@ -445,8 +467,9 @@ TEST_CASE("Assignment statements", "[Parser]") {
     auto parsed_assign = Parser::parse_from_string(
       WPS "foo = 100;" WPE);
 
-    auto expected_assign = wrap_stmt(
-      make_assignment(make_ident("foo"), make_integer(100)));
+    NEW_FILE(file);
+    auto& expected_assign = f.wrap_stmt(
+      f.make_assignment(f.make_ident("foo"), f.make_integer(100)));
 
     MATCH_AST(parsed_assign, expected_assign);
   }
@@ -456,11 +479,12 @@ TEST_CASE("Assignment statements", "[Parser]") {
     auto parsed_assign = Parser::parse_from_string(
       WPS "1 + 2 = 100;" WPE);
 
-    auto expected_assign = wrap_stmt(
-      make_assignment(
-          make_binary(Ast_Operator::PLUS,
-            make_integer(1), make_integer(2)),
-          make_integer(100)));
+    NEW_FILE(file);
+    auto& expected_assign = f.wrap_stmt(
+      f.make_assignment(
+          f.make_binary(Ast_Operator::PLUS,
+            f.make_integer(1), f.make_integer(2)),
+          f.make_integer(100)));
 
     MATCH_AST(parsed_assign, expected_assign);
   }
@@ -475,9 +499,10 @@ TEST_CASE("For loops", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_for = wrap_stmt(
-      make_for("x", make_type("i32"), make_integer(0), make_integer(10),
-        make_stmt_body()));
+    NEW_FILE(file);
+    auto& expected_for = f.wrap_stmt(
+      f.make_for("x", f.make_type("i32"), f.make_integer(0), f.make_integer(10),
+        f.make_stmt_body()));
 
     MATCH_AST(parsed_for, expected_for);
   }
@@ -489,9 +514,10 @@ TEST_CASE("For loops", "[Parser]") {
       }
     )" WPE);
 
-    auto expected_for = wrap_stmt(
-      make_for("x", make_integer(0), make_integer(10),
-       make_stmt_body()));
+    NEW_FILE(file);
+    auto& expected_for = f.wrap_stmt(
+      f.make_for("x", f.make_integer(0), f.make_integer(10),
+       f.make_stmt_body()));
 
     MATCH_AST(parsed_for, expected_for);
   }
@@ -510,20 +536,20 @@ TEST_CASE("Pods", "[Parser]") {
     pod One { a: bool }
   )");
 
-  auto expected_pods = make_file();
+  NEW_FILE(expected_pods);
   expected_pods.pods.emplace_back(
-    make_pod("Apple",
-      make_argument(
-        make_unchecked_type("i32"), "a"),
-      make_argument(
-        make_unchecked_type("f64"), "b"),
-      make_argument(
-        make_unchecked_type("bool"), "c")));
+    f.make_pod("Apple",
+      f.make_argument(
+        f.make_unchecked_type("i32"), "a"),
+      f.make_argument(
+        f.make_unchecked_type("f64"), "b"),
+      f.make_argument(
+        f.make_unchecked_type("bool"), "c")));
   expected_pods.pods.emplace_back(
-     make_pod("Empty"));
+    f.make_pod("Empty"));
   expected_pods.pods.emplace_back(
-    make_pod("One",
-      make_argument(make_unchecked_type("bool"), "a")));
+    f.make_pod("One",
+      f.make_argument(f.make_unchecked_type("bool"), "a")));
 
   MATCH_AST(parsed_pods, expected_pods);
 }
@@ -533,8 +559,9 @@ TEST_CASE("Field access", "[Parser]") {
     auto parsed_access = Parser::parse_from_string(
       WPS "foo.bar;" WPE);
 
-    auto expected_access = wrap_expr(
-      make_access(make_ident("foo"), "bar"));
+    NEW_FILE(file);
+    auto& expected_access = f.wrap_expr(
+      f.make_access(f.make_ident("foo"), "bar"));
 
     MATCH_AST(parsed_access, expected_access);
   }
@@ -543,11 +570,12 @@ TEST_CASE("Field access", "[Parser]") {
     auto parsed_access = Parser::parse_from_string(
       WPS "cs.manchester.ac.uk;" WPE);
 
-    auto expected_access = wrap_expr(
-      make_access(
-        make_access(
-          make_access(
-            make_ident("cs"), "manchester"), "ac"), "uk"));
+    NEW_FILE(file);
+    auto& expected_access = f.wrap_expr(
+      f.make_access(
+        f.make_access(
+          f.make_access(
+            f.make_ident("cs"), "manchester"), "ac"), "uk"));
 
     MATCH_AST(parsed_access, expected_access);
   }

@@ -457,18 +457,21 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
   llvm::Value* initializer = nullptr;
 
   Ast_Expression_List* agg_initializer = nullptr;
-  match(var_decl.initializer->v)(
-    pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) =
-    [&](auto& agg) { agg_initializer = agg.get_raw_self(); },
-    pattern(_) = []{}
-  );
 
-  /*
-    (Non-const) array inits are not simple expressions.
-    Best I know is they have to be compiled to a bunch of geps + stores.
-  */
-  if (var_decl.initializer && !agg_initializer) {
-    initializer = codegen_bind(*var_decl.initializer, var_decl.type, scope);
+  if (var_decl.initializer) {
+    match(var_decl.initializer->v)(
+      pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) =
+      [&](auto& agg) { agg_initializer = agg.get_raw_self(); },
+      pattern(_) = []{}
+    );
+
+    /*
+      (Non-const) array inits are not simple expressions.
+      Best I know is they have to be compiled to a bunch of geps + stores.
+    */
+    if (!agg_initializer) {
+      initializer = codegen_bind(*var_decl.initializer, var_decl.type, scope);
+    }
   }
 
   /*

@@ -51,6 +51,7 @@ Ast_Expression_Type builtin_curry(
   curried.body = AstBuilder::make_body(returns_value,
     builder.make_expr_stmt(builder.to_expr_ptr(final_call), returns_value));
 
+  // FIXME: arg locations
   for (auto arg_info: boost::adaptors::reverse(
     boost::combine(arg_names, lambda_type->argument_types))
   ) {

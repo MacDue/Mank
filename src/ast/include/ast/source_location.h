@@ -7,4 +7,8 @@ struct SourceLocation {
   uint end_column = 0;
   uint start_char_idx = 0;
   uint end_char_idx = 0;
+
+  inline bool is_empty() {
+    return end_char_idx - start_char_idx <= 0;
+  }
 };

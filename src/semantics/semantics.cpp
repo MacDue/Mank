@@ -34,6 +34,7 @@ Symbol* Semantics::emit_warning_if_shadows(
 }
 
 static bool is_return_tvar(Type const * type) {
+  if (!type) return false;
   if (auto tvar = std::get_if<TypeVar>(&type->v)) {
     return tvar->is_return_type;
   }
@@ -795,17 +796,24 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
         } else {
           // Lambda args are not named (will need a better error reporting method...)
           auto& expected = function_type.argument_types.at(arg_idx);
-          // assert_valid_binding(*called_function_ident, expected, &argument);
           bool tvar_param = std::holds_alternative<TypeVar>(expected->v);
 
           Infer::ConstraintOrigin infer_note;
           if (tvar_param && function_type.lambda) {
-            infer_note = function_type.lambda->arguments.at(arg_idx).name.location;
+            auto arg_loc = function_type.lambda->arguments.at(arg_idx).name.location;
+            // FIXME: is_empty() check as I've yet to fix this for macros
+            if (!arg_loc.is_empty()) {
+              infer_note = arg_loc;
+            }
           }
 
+          // FIXME: This lvalue is wrong (it points at the rvalue -- but it's something)
+          Ast_Identifier lvalue;
+          lvalue.location = AstHelper::extract_location(argument);
+
           assert_valid_binding(
-            *called_function_ident,
-            AstHelper::extract_location(argument),
+            called_function_ident ? *called_function_ident : lvalue,
+            lvalue.location,
             expected, argument.meta.type,
             &argument, infer_note);
         }

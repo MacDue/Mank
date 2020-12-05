@@ -20,22 +20,23 @@ struct Semantics {
 
   CompilerWarnings const & get_warnings() { return warnings; }
 
-  inline void disable_type_inference_for_testing() {
-    // Sema must only be run on one function or this will create bugs
-    this->disable_type_infer = true;
-  }
-  inline Infer::ConstraintSet get_constraint_test_for_testing() { return type_constraints; }
+  // inline void disable_type_inference_for_testing() {
+  //   // Sema must only be run on one function or this will create bugs
+  //   this->disable_type_infer = true;
+  // }
+  // inline Infer::ConstraintSet get_constraint_test_for_testing() { return type_constraints; }
 private:
+  // FIXME
+  // Thes both should be refs... but I don't the the ctor...
   AstContext* ctx;
+  std::optional<AstBuilder> builder;
+  std::optional<Infer> infer;
 
   // Only used for testing allows to seperate sema + infer
   bool disable_type_infer = false;
 
   // Simply because it's a pain to pass this around (top of stack == current function)
   std::stack<Type_Ptr> expected_returns;
-
-  Infer::ConstraintSet type_constraints;
-  inline void reset_type_constraints() { type_constraints = {}; }
 
   bool match_or_constrain_types_at(
     SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const * error_template);

@@ -10,14 +10,14 @@ namespace AstHelper {
       *unreachable_stmt = &*(stmt);   \
   }
 
-static inline Statement_Ptr first_statement_in_block(Ast_Block& block) {
+static inline Stmt_Ptr first_statement_in_block(Ast_Block& block) {
   if (block.statements.size() > 0) {
     return block.statements.at(0);
   }
   return nullptr;
 }
 
-static inline Statement_Ptr first_statement_in_block(Expression_Ptr& expr) {
+static inline Stmt_Ptr first_statement_in_block(Expr_Ptr& expr) {
   return first_statement_in_block(std::get<Ast_Block>(expr->v));
 }
 

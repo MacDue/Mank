@@ -3,15 +3,14 @@
 static bool match_type_lists(
   std::vector<Type_Ptr> const & a,
   std::vector<Type_Ptr> const & b,
-  Infer::ConstraintSet* constraints,
-  Infer::Constraint blank_constraint,
+  MakeConstraint const & make_constraint,
   bool ignore_refs
 ) {
   if (a.size() != b.size()) {
     return false;
   }
   for (size_t idx = 0; idx < a.size(); idx++) {
-    if (!match_types(a.at(idx), b.at(idx), constraints, blank_constraint, ignore_refs)) {
+    if (!match_types(a.at(idx), b.at(idx), make_constraint, ignore_refs)) {
       return false;
     }
   }
@@ -19,8 +18,7 @@ static bool match_type_lists(
 }
 
 bool match_types(Type_Ptr a, Type_Ptr b,
-  Infer::ConstraintSet* constraints,
-  Infer::Constraint blank_constraint,
+  MakeConstraint const & make_constraint,
   bool ignore_refs
 ) {
   using namespace mpark::patterns;
@@ -34,12 +32,10 @@ bool match_types(Type_Ptr a, Type_Ptr b,
     b = remove_reference(b);
   }
 
-  if (constraints) {
+  if (make_constraint) {
     auto min_t = min_type(a, b);
     if (min_t && std::holds_alternative<TypeVar>(min_t->v)) {
-      auto new_constraint = blank_constraint;
-      new_constraint.types = std::make_pair(a, b);
-      constraints->push_back(new_constraint);
+      (*make_constraint)(a, b);
       return true;
     }
   }
@@ -56,18 +52,18 @@ bool match_types(Type_Ptr a, Type_Ptr b,
         [&](auto const & a, auto const & b) {
            // refs can't appear in arrays
           return a.size == b.size
-            && match_types(a.element_type, b.element_type, constraints, blank_constraint);
+            && match_types(a.element_type, b.element_type, make_constraint);
         },
       pattern(as<LambdaType>(arg), as<LambdaType>(arg)) =
         [&](auto const & a, auto const & b) {
-          return match_type_lists(a.argument_types, b.argument_types, constraints, blank_constraint, false)
-            && match_types(a.return_type, b.return_type, constraints, blank_constraint, false);
+          return match_type_lists(a.argument_types, b.argument_types, make_constraint, false)
+            && match_types(a.return_type, b.return_type, make_constraint, false);
         },
       pattern(as<TupleType>(arg), as<TupleType>(arg)) =
         [&](auto const & a, auto const & b) {
           // Don't match (ref i32, i32) = (i32, i32)
           // (will need special case for patterns)
-          return match_type_lists(a.element_types, b.element_types, constraints, blank_constraint, false);
+          return match_type_lists(a.element_types, b.element_types, make_constraint, false);
         },
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) =
         [](auto const & a, auto const & b) {
@@ -150,7 +146,7 @@ static std::pair<Ast_Argument*, int> resolve_pod_field_index(
   return std::make_pair(&(*accessed), index);
 }
 
-Type_Ptr get_field_type(Type* type, Ast_Field_Access& access) {
+Type_Ptr get_field_type(Type_Ptr type, Ast_Field_Access& access) {
   using namespace mpark::patterns;
   if (type) {
     auto access_type = match(remove_reference(type)->v)(
@@ -168,7 +164,7 @@ Type_Ptr get_field_type(Type* type, Ast_Field_Access& access) {
       // FIXME: Hardcoded .length
       pattern(as<FixedSizeArrayType>(_)) = [&]{
         WHEN(access.field.name == "length") {
-          return Primative::INTEGER;
+          return PrimativeType::int_ty();
         };
       },
       pattern(_) = []() -> Type_Ptr { return nullptr; });

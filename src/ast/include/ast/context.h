@@ -5,6 +5,7 @@
 #include "ast/node.h"
 
 struct ContextData;
+
 class AstContext {
   std::unique_ptr<ContextData> data;
 
@@ -14,6 +15,13 @@ class AstContext {
 public:
   AstContext();
   AstContext(AstContext&& ctx);
+
+  /*
+    Only for types like i32, f64, etc.
+    Not valid for non-static ptrs.
+    (unless they are not freed-but new_type should do that).
+  */
+  static Type_Ptr make_static_type_ptr(Type* static_ptr);
 
   template <typename T>
   Type_Ptr new_type(T type) {

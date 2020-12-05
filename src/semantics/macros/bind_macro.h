@@ -1,5 +1,5 @@
 #include "sema/macros.h"
 
 namespace Macros {
-  Ast_Expression builtin_bind(Ast_Call& bind_call, Infer::ConstraintSet*);
+  Ast_Expression_Type builtin_bind(Ast_Call& bind_call, Infer&);
 }

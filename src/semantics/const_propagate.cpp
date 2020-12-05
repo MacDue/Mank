@@ -151,7 +151,7 @@ void ConstantVisitor::after(Ast_Unary_Operation& unary) {
 
 void ConstantVisitor::after(Ast_Index_Access& index) {
   if (auto index_value = index.index->meta.get_const_value()) {
-    auto object_type = extract_type(index.object->meta.type);
+    auto object_type = index.object->meta.type;
     // FIXME: Will break if more indexable types added
     auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type);
     assert(array_type && "should be an array type");

@@ -1,7 +1,36 @@
 #include <cassert>
 
 #include "ast/expr.h"
+#include "ast/types.h"
 #include "ast/primative_types.h"
+
+Type_Ptr PrimativeType::get(PrimativeType::Tag tag) {
+  switch (tag) {
+    case FLOAT32: {
+      static Type f32{PrimativeType(FLOAT32)};
+      return AstContext::make_static_type_ptr(&f32);
+    }
+    case FLOAT64: {
+      static Type f64{PrimativeType(FLOAT64)};
+      return AstContext::make_static_type_ptr(&f64);
+    }
+    case INTEGER: {
+      static Type i32{PrimativeType(INTEGER)};
+      return AstContext::make_static_type_ptr(&i32);
+    }
+    case UNSIGNED_BYTE: {
+      static Type u8{PrimativeType(UNSIGNED_BYTE)};
+      return AstContext::make_static_type_ptr(&u8);
+    }
+    case STRING: {
+      static Type str{PrimativeType(STRING)};
+      return AstContext::make_static_type_ptr(&str);
+    }
+    default:
+      assert(false && "fix me! missing primative!");
+      return nullptr;
+  }
+}
 
 char const * PrimativeType::type_name(Tag type) {
   switch (type) {

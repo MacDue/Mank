@@ -62,6 +62,13 @@ inline Type_Ptr make_unchecked_type(std::string type_name) {
   return to_type_ptr(unchecked);
 }
 
+inline Type_Ptr make_reference(Type_Ptr type) {
+  assert(!is_reference_type(type));
+  ReferenceType ref_type;
+  ref_type.references = type;
+  return to_type_ptr(ref_type);
+}
+
 template <typename... TFields>
 Type_Ptr make_pod(std::string name, TFields && ... fields) {
   Ast_Pod_Declaration pod;

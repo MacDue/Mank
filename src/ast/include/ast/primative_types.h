@@ -26,11 +26,13 @@ DEF_TYPE(PrimativeType) {
     /* TODO: more integer types */
   } tag;
 
-  PrimativeType() = default;
-  PrimativeType(Tag tag)
-    : tag{tag} {}
+  static Type_Ptr get(Tag tag);
+
+  inline static Type_Ptr bool_ty() { return get(BOOL); }
+  inline static Type_Ptr int_ty() { return get(INTEGER); }
 
   static char const * type_name(Tag type_tag);
+
   inline char const * name() const { return type_name(tag); }
 
   static uint type_size(Tag type_tag);
@@ -43,4 +45,8 @@ DEF_TYPE(PrimativeType) {
   bool is_boolean_type() const;
 
   bool satisfies(TypeVar::Constraint constraint) const;
+private:
+  PrimativeType() = default;
+  PrimativeType(Tag tag)
+    : tag{tag} {}
 };

@@ -2,6 +2,8 @@
 
 #include <mpark/patterns.hpp>
 
+#include "ast/expr_helpers.h"
+
 #include "sema/types.h"
 #include "sema/semantics.h"
 #include "sema/sema_errors.h"
@@ -24,10 +26,7 @@ Semantics::Semantics() {
 bool Semantics::match_or_constrain_types_at(
   SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const* error_template
 ) {
-  Infer::Constraint constraint_template;
-  constraint_template.origin = loc;
-  constraint_template.error_template = error_template;
-  if (!match_types(t1, t2, &type_constraints, constraint_template)) {
+  if (!match_types(t1, t2, infer->or_constrain(loc, error_template))) {
     throw_compile_error(loc, error_template,
       type_to_string(t1.get()), type_to_string(t2.get()));
   }
@@ -52,20 +51,23 @@ static bool is_return_tvar(Type const * type) {
 }
 
 void Semantics::analyse_file(Ast_File& file) {
+  // Setup the context
   this->ctx = &file.ctx;
+  this->builder.emplace(AstBuilder(file));
+
   Scope& global_scope = file.scope;
 
   static std::array primative_types {
-    std::make_pair("f32", &Primative::FLOAT32),
-    std::make_pair("f64", &Primative::FLOAT64),
-    std::make_pair("i32", &Primative::INTEGER),
-    std::make_pair("string", &Primative::STRING),
-    std::make_pair("bool", &Primative::BOOL),
+    std::make_pair("f32", PrimativeType::get(PrimativeType::FLOAT32)),
+    std::make_pair("f64", PrimativeType::get(PrimativeType::FLOAT64)),
+    std::make_pair("i32", PrimativeType::get(PrimativeType::INTEGER)),
+    std::make_pair("str", PrimativeType::get(PrimativeType::STRING)),
+    std::make_pair("bool",PrimativeType::get(PrimativeType::BOOL)),
   };
 
   for (auto [type_name, type] : primative_types) {
     global_scope.add(
-      Symbol(SymbolName(type_name), *type, Symbol::TYPE));
+      Symbol(SymbolName(type_name), type, Symbol::TYPE));
   }
 
   /* Add symbols for (yet to be checked) pods */
@@ -190,8 +192,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
             func.body.statements.back()->v).location;
       implicit_return.expression = final_expr;
       func.body.statements.pop_back();
-      func.body.statements.emplace_back(
-        std::make_shared<Ast_Statement>(implicit_return));
+      func.body.statements.emplace_back(ctx->new_stmt(implicit_return));
     }
   }
 
@@ -218,13 +219,10 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   this->expected_returns.pop();
   if (!func.lambda && !this->disable_type_infer) {
     try {
-      Infer::hack_backtrack_infer = &warnings;
-      Infer::unify_and_apply(std::move(type_constraints));
+      infer->unify_and_apply();
     } catch (Infer::UnifyError const & e) {
       throw_sema_error_at(func.identifier, "type inference failed ({})", e.what());
     }
-    // clear constraints for the next function -- only local inference
-    reset_type_constraints();
   }
   return func.return_type;
 }
@@ -368,7 +366,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   auto start_range_type = analyse_expression(*for_loop.start_range, scope);
   if (for_loop.type) {
     resolve_type_or_fail(scope, for_loop.type, "undeclared loop type {}");
-    if (is_reference_type(for_loop.type.get())) {
+    if (is_reference_type(for_loop.type)) {
       throw_sema_error_at(for_loop.loop_variable, "reference loop variables are not yet supported");
     }
     match_or_constrain_types_at(for_loop.start_range, for_loop.type, start_range_type,
@@ -402,7 +400,7 @@ void Semantics::check_tuple_bindings(
   bool to_infer
 ) {
   using namespace mpark::patterns;
-  auto constraint = Infer::generate_tuple_destructure_constraints(
+  auto constraint = infer->generate_tuple_destructure_constraints(
     bindings, init_type, bindings.location);
   // to_infer = to_infer | gen_constraints;
   if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {
@@ -434,8 +432,8 @@ void Semantics::check_tuple_bindings(
     throw_sema_error_at(init, "tuple bind initializer must be a tuple");
   }
   if (constraint) {
-    std::cout << "add\n";
-    type_constraints.push_back(*constraint);
+    // std::cout << "add\n";
+    infer->type_constraints.emplace_back(*constraint);
   }
 }
 
@@ -443,17 +441,20 @@ void Semantics::analyse_tuple_binding_decl(
   Ast_Tuple_Structural_Binding& binding, Scope& scope
 ) {
   auto init_type = analyse_expression(*binding.initializer, scope);
-  auto pior_type = init_type.get();
+  // auto pior_type = init_type.get();
   check_tuple_bindings(binding.bindings, *binding.initializer, init_type, scope);
-  if (pior_type != init_type.get()) {
-    // Tuple type must have been replaced (to infered type)
-    binding.initializer->meta.owned_type = init_type;
-  }
+  // if (pior_type != init_type.get()) {
+  //   // Tuple type must have been replaced (to infered type)
+  //   binding.initializer->meta.owned_type = init_type;
+  // }
 }
 
 #define AUTO_LAMBDA "!auto_lambda"
 
-static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_func) {
+static Ast_Lambda wrap_function_in_lambda(
+  Ast_Function_Declaration& top_level_func,
+  AstBuilder& builder
+) {
   assert(!top_level_func.lambda);
   Ast_Lambda lambda_wrapper;
   // There only needs to be one auto lambda per top level function.
@@ -468,16 +469,16 @@ static Ast_Lambda wrap_function_in_lambda(Ast_Function_Declaration& top_level_fu
   std::vector<Expr_Ptr> passthrough_args;
   std::transform(top_level_func.arguments.begin(), top_level_func.arguments.end(),
     std::back_inserter(passthrough_args),
-    [](Ast_Argument& arg) {
-      return make_ident(arg.name.name);
+    [&](Ast_Argument& arg) {
+      return builder.make_ident(arg.name.name);
     });
 
   Ast_Call call;
-  call.callee = make_ident(top_level_func.identifier.name);
+  call.callee = builder.make_ident(top_level_func.identifier.name);
   call.arguments = passthrough_args;
   bool returns_value = !top_level_func.procedure;
-  lambda_wrapper.body = make_body(returns_value,
-    make_expr_stmt(to_expr_ptr(call), returns_value));
+  lambda_wrapper.body = builder.make_body(returns_value,
+    builder.make_expr_stmt(builder.to_expr_ptr(call), returns_value));
 
   return lambda_wrapper;
 }
@@ -493,54 +494,33 @@ void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_
     (void) analyse_expression(*arg, scope);
   }
 
-  Ast_Expression expansion = (*expander)(macro_call, &type_constraints);
-
-  // Some book keeping or the metas go funky
-  std::visit([&](auto& expansion){
-    auto meta = expansion.get_meta();
-    expansion.unsafe_move_meta(&target.meta);
-    target.v = expansion;
-    expansion.get_meta() = meta;
-  }, expansion.v);
+  Ast_Expression_Type expansion = (*expander)(macro_call, *infer);
+  AstHelper::rewrite_expr(target, expansion);
 }
 
 Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
   auto expr_type = match(expr.v)(
     pattern(as<Ast_Literal>(arg)) = [&](auto& lit) {
-      switch (lit.literal_type) {
-        // Only want one type object per primative type
-        case PrimativeType::INTEGER:
-          return Primative::INTEGER;
-        case PrimativeType::FLOAT32:
-          return Primative::FLOAT32;
-        case PrimativeType::FLOAT64:
-          return Primative::FLOAT64;
-        case PrimativeType::STRING:
-          return Primative::STRING;
-        case PrimativeType::BOOL:
-          return Primative::BOOL;
-        default:
-          throw_sema_error_at(lit, "fix me! unknown literal type!");
-      }
+      return PrimativeType::get(lit.literal_type);
     },
     pattern(as<Ast_Block>(arg)) = [&](auto& block) {
       auto block_type = analyse_block(block, scope);
-      if (is_reference_type(block_type.get())) {
+      if (is_reference_type(block_type)) {
         expr.set_value_type(Expression_Meta::LVALUE);
       }
       return block_type;
     },
     pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_expr){
       auto cond_type = analyse_expression(*if_expr.cond, scope);
-      match_or_constrain_types_at(if_expr.cond, cond_type, Primative::BOOL,
+      match_or_constrain_types_at(if_expr.cond, cond_type, PrimativeType::bool_ty(),
         "if condition must be a {1}");
       auto then_type = analyse_expression(*if_expr.then_block, scope);
       if (if_expr.has_else) {
         auto else_type = analyse_expression(*if_expr.else_block, scope);
         match_or_constrain_types_at(if_expr, then_type, else_type,
           "type of then block {} does not match else block {}");
-        if (is_reference_type(then_type.get()) && is_reference_type(else_type.get()) ) {
+        if (is_reference_type(then_type) && is_reference_type(else_type)) {
           expr.set_value_type(Expression_Meta::LVALUE);
         }
       } else if (then_type) {
@@ -560,10 +540,9 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       if (symbol->kind == Symbol::FUNCTION) {
         // Auto box functions to rvalue lambdas
         auto wrapped_lambda = wrap_function_in_lambda(
-          std::get<Ast_Function_Declaration>(symbol->type->v));
+          std::get<Ast_Function_Declaration>(symbol->type->v), *builder);
         wrapped_lambda.location = ident.location;
-        wrapped_lambda.unsafe_move_meta(&expr.meta);
-        expr.v = wrapped_lambda;
+        AstHelper::rewrite_expr(expr, wrapped_lambda);
         expr.set_value_type(Expression_Meta::RVALUE);
         return analyse_expression(expr, scope); // should resolve lambda info
       } else if (symbol->is_local()) {
@@ -592,16 +571,16 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       if (object_type) {
         if (std::holds_alternative<TypeVar>(object_type->v)) {
           auto field_constraint = TypeFieldConstraint::get(access);
-          auto field_type = to_type_ptr(TypeVar());
-          type_constraints.push_back(Infer::Constraint(
-            AstHelper::extract_location(access),
-            field_type,
-            field_constraint
-          ));
-          access.get_meta().owned_type = field_type;
+          auto field_type = ctx->new_type(TypeVar());
+          //FIXME!
+          // type_constraints.push_back(Infer::Constraint(
+          //   AstHelper::extract_location(access),
+          //   field_type,
+          //   field_constraint
+          // ));
           return field_type;
         } else {
-          return get_field_type(object_type.get(), access);
+          return get_field_type(object_type, access);
         }
       } else {
         throw_sema_error_at(access.object, "is void?");
@@ -625,13 +604,13 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             return false;
           });
       }
-      return array.get_meta().owned_type = to_type_ptr(array_type);
+      return ctx->new_type(array_type);
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) {
       auto object_type = analyse_expression(*index.object, scope);
       auto index_type = analyse_expression(*index.index, scope);
       if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type)) {
-        match_or_constrain_types_at(index.index, index_type, Primative::INTEGER,
+        match_or_constrain_types_at(index.index, index_type, PrimativeType::int_ty(),
           "invalid index type {}");
         expr.inherit_value_type(*index.object);
         return array_type->element_type;
@@ -648,7 +627,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       std::transform(lambda.arguments.begin(), lambda.arguments.end(),
         std::back_inserter(lambda_type.argument_types),
         [&](auto & arg){ return arg.type; });
-      return expr.meta.owned_type = to_type_ptr(lambda_type);
+      return ctx->new_type(lambda_type);
     },
     pattern(as<Ast_Tuple_Literal>(arg)) = [&](auto& tuple) {
       TupleType tuple_type;
@@ -661,7 +640,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
           expr.inherit_value_type(*element);
           return element_type;
         });
-      return expr.meta.owned_type = to_type_ptr(tuple_type);
+      return ctx->new_type(tuple_type);
     },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
@@ -676,7 +655,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   ({  if (!constraints.empty()) constraints.push_back(constraint); true;  })
 
 static bool match_special_constraint_at(SourceLocation loc,
-  Type_Ptr type, TypeVar::Constraint constraint, Infer::ConstraintSet& constraints
+  Type_Ptr type, TypeVar::Constraint constraint, Infer& infer
 ) {
   using namespace mpark::patterns;
   return match(type->v)(
@@ -684,8 +663,9 @@ static bool match_special_constraint_at(SourceLocation loc,
       return primative.satisfies(constraint);
     },
     pattern(as<TypeVar>(_)) = [&] {
-      return ADD_SPECIAL_CONSTRAINT(constraints,
-        Infer::Constraint(loc, type, TypeVar::get(constraint)));
+      // return ADD_SPECIAL_CONSTRAINT(constraints,
+      //   Infer::Constraint(loc, type, TypeVar::get(constraint)));
+      return false;
     },
     pattern(_) = []{ return false; }
   );
@@ -699,27 +679,26 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
       throw_sema_error_at(unary.operand, "cannot take reference to non-lvalue expression");
     }
     unary.get_meta().value_type = Expression_Meta::LVALUE;
-    unary.operand->meta.owned_type = make_refernce(operand_type);
-    return unary.operand->meta.owned_type;
+    return builder->make_reference(operand_type);
   }
 
   auto loc = AstHelper::extract_location(unary);
   switch (unary.operation) {
     case Ast_Operator::MINUS:
     case Ast_Operator::PLUS: {
-      if (match_special_constraint_at(loc, operand_type, TypeVar::NUMERIC, type_constraints)) {
+      if (match_special_constraint_at(loc, operand_type, TypeVar::NUMERIC, *infer)) {
         return operand_type;
       }
       break;
     }
     case Ast_Operator::BITWISE_NOT: {
-      if (match_special_constraint_at(loc, operand_type, TypeVar::INTEGER, type_constraints)) {
+      if (match_special_constraint_at(loc, operand_type, TypeVar::INTEGER, *infer)) {
         return operand_type;
       }
       break;
     }
     case Ast_Operator::LOGICAL_NOT: {
-      if (match_or_constrain_types_at(unary, operand_type, Primative::BOOL,
+      if (match_or_constrain_types_at(unary, operand_type, PrimativeType::bool_ty(),
           "cannot perform logical not on {}")) {
         return operand_type;
       }
@@ -747,7 +726,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,
       Ast_Operator::DIVIDE
     )) = [&]{
-      WHEN(match_special_constraint_at(loc, left_type, TypeVar::NUMERIC, type_constraints)) {
+      WHEN(match_special_constraint_at(loc, left_type, TypeVar::NUMERIC, *infer)) {
         return left_type;
       };
     },
@@ -755,7 +734,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::LEFT_SHIFT, Ast_Operator::RIGHT_SHIFT, Ast_Operator::BITWISE_AND,
       Ast_Operator::BITWISE_OR, Ast_Operator::BITWISE_XOR, Ast_Operator::MODULO
     )) = [&]{
-      WHEN(match_special_constraint_at(loc, left_type, TypeVar::INTEGER, type_constraints)) {
+      WHEN(match_special_constraint_at(loc, left_type, TypeVar::INTEGER, *infer)) {
         return left_type;
       };
     },
@@ -763,8 +742,8 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::LESS_THAN, Ast_Operator::LESS_EQUAL, Ast_Operator::GREATER_THAN,
       Ast_Operator::GREATER_EQUAL, Ast_Operator::EQUAL_TO, Ast_Operator::NOT_EQUAL_TO
     )) = [&]{
-      WHEN(match_special_constraint_at(loc, left_type, TypeVar::NUMERIC, type_constraints)) {
-        return Primative::BOOL;
+      WHEN(match_special_constraint_at(loc, left_type, TypeVar::NUMERIC, *infer)) {
+        return PrimativeType::bool_ty();
       };
     },
     pattern(_) = [&]{
@@ -795,7 +774,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   }
 
   auto deref_callee_type = remove_reference(callee_type);
-  Infer::generate_call_constraints(deref_callee_type, call, type_constraints);
+  infer->generate_call_constraints(deref_callee_type, call);
 
   // Fairly hackly updated to support lambdas (will need a rework)
   return match(deref_callee_type->v)(
@@ -835,7 +814,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
 
       call.callee->meta.type = callee_type;
 
-      if (is_reference_type(function_type.return_type.get())) {
+      if (is_reference_type(function_type.return_type)) {
         call.get_meta().value_type = Expression_Meta::LVALUE;
       }
 

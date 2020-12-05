@@ -29,7 +29,7 @@ bool Semantics::assert_valid_binding(
     // }
   }
 
-  if (is_reference_type(type.get())) {
+  if (is_reference_type(type)) {
     if (!to_bind) {
       throw_sema_error_at(lvalue, "reference must be initialized");
     } else if (!expression->is_lvalue()) {
@@ -51,7 +51,7 @@ bool Semantics::assert_valid_binding(
       ? AstHelper::extract_location(*expression)
       : SourceLocation{}, type,
     expression
-      ? extract_type_nullable(expression->meta.type)
+      ? expression->meta.type
       : Type_Ptr(nullptr),
     expression);
 }

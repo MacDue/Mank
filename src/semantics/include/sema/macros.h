@@ -8,7 +8,7 @@
 
 namespace Macros {
 
-using ExprMacroExpander = std::function<Ast_Expression(Ast_Call&, Infer::ConstraintSet*)>;
+using ExprMacroExpander = std::function<Ast_Expression_Type(Ast_Call&, Infer&)>;
 
 ExprMacroExpander const * get_expr_macro_expander(Ast_Macro_Identifier const & macro);
 

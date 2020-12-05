@@ -661,7 +661,7 @@ static bool match_special_constraint_at(SourceLocation loc,
         // No point adding these constraints if there's no type vars
         infer.add_constraint(loc, type, TypeVar::get(constraint));
       }
-      return false;
+      return true;
     },
     pattern(_) = []{ return false; }
   );

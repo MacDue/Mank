@@ -29,6 +29,14 @@ public:
     return *ptr;
   }
 
+  T* get() const {
+    return ptr;
+  }
+
+  T* operator -> () const {
+    return get();
+  }
+
   operator bool() const {
     return ptr != nullptr;
   }
@@ -39,14 +47,6 @@ public:
 
   bool operator!=(AstPtr<T> const & other) {
     return !operator==(other);
-  }
-
-  T* get() const {
-    return ptr;
-  }
-
-  T* operator -> () const {
-    return get();
   }
 };
 
@@ -93,6 +93,14 @@ public:
 
   operator bool() const {
     return get() != nullptr;
+  }
+
+  bool operator==(SpAstPtr<TClass, TPtr> const & other) {
+    return this->get() == other.get();
+  }
+
+  bool operator!=(SpAstPtr<TClass, TPtr> const & other) {
+    return !operator==(other);
   }
 };
 

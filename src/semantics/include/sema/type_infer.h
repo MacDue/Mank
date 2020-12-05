@@ -101,7 +101,7 @@ public:
   std::optional<Constraint> generate_tuple_destructure_constraints(
     TupleBinding const & bindings, Type_Ptr& init_type, SourceLocation loc);
 private:
-  Constraint const * top_failed_constraint = nullptr;
+  Constraint top_failed_constraint;
   [[ noreturn ]] void throw_unify_error(Constraint const & constraint);
 
   /* Sub */

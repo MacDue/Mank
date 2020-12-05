@@ -141,7 +141,7 @@ Infer::Substitution Infer::unify_var(TypeVar tvar, Type_Ptr type, ConstraintOrig
 [[ noreturn ]]
 void Infer::throw_unify_error(Constraint const & constraint) {
   std::cout << "bang?\n";
-  this->top_failed_constraint = &constraint;
+  this->top_failed_constraint = std::move(constraint);
   throw_compile_error(
     constraint.origin.value_or(SourceLocation{}),
     constraint.error_template,
@@ -329,7 +329,7 @@ Infer::Substitution Infer::unify_and_apply() {
     // for (auto c: failed_constraint) {
     // std::cout << type_to_string(failed_constraint.types.first.get()) << " = " <<  type_to_string(failed_constraint.types.second.get()) << '\n';
 
-    for (auto& tvar: top_failed_constraint->tvars_closure) {
+    for (auto& tvar: top_failed_constraint.tvars_closure) {
       if (tvar.id < 0) continue;
       // auto infer_info = print_subs_reasons(tvar.id, subs);
       // error_infer_info.insert(error_infer_info.end(),

@@ -368,6 +368,16 @@ void Infer::add_constraint(
   type_constraints.emplace_back(Constraint(origin, t1, t2, error_template));
 }
 
+bool Infer::match_or_constrain_types_at(
+  SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const* error_template
+) {
+  if (!match_types(t1, t2, or_constrain(loc, error_template))) {
+    throw_compile_error(loc, error_template,
+      type_to_string(t1.get()), type_to_string(t2.get()));
+  }
+  return true;
+}
+
 void Infer::generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call) {
   if (std::holds_alternative<TypeVar>(callee_type->v)) {
     LambdaType call_type;

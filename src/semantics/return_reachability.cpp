@@ -5,9 +5,9 @@
 
 namespace AstHelper {
 
-#define LAST_UNREACHABLE_STMT(stmt)   \
-  if (unreachable_stmt != nullptr) {  \
-      *unreachable_stmt = &*(stmt);   \
+#define LAST_UNREACHABLE_STMT(stmt)           \
+  if (unreachable_stmt != nullptr && stmt) {  \
+      *unreachable_stmt = &*(stmt);           \
   }
 
 static inline Stmt_Ptr first_statement_in_block(Ast_Block& block) {

@@ -1,12 +1,13 @@
 #pragma once
 
-#include <set>
-#include <map>
-#include <utility>
-#include <optional>
-#include <stdexcept>
-#include <functional>
+#include <set>        // std::set
+#include <map>        // std::map
+#include <utility>    // std::pair
+#include <optional>   // std::optional
+#include <stdexcept>  // std::exception
+#include <functional> // std::function
 
+#include "ast/util.h"
 #include "ast/types.h"
 #include "errors/compiler_errors.h"
 #include "errors/compiler_message.h"
@@ -77,9 +78,21 @@ public:
   };
 
   inline MakeConstraint or_constrain(
-    SourceLocation origin, char const * error_template = DEFAULT_ERROR
+    SourceLocation origin, char const * error_template
   ) {
     return MakeConstraint(*this, origin, error_template);
+  }
+
+  bool match_or_constrain_types_at(
+    SourceLocation loc, Type_Ptr t1, Type_Ptr t2,
+    char const * error_template = DEFAULT_ERROR);
+
+  template<typename TAst>
+  inline bool match_or_constrain_types_at(
+    TAst& ast, Type_Ptr t1, Type_Ptr t2, char const * error_template
+  ) {
+    return match_or_constrain_types_at(
+      AstHelper::extract_location(ast), t1, t2, error_template);
   }
 
   using ConstraintSet = std::vector<Constraint>;

@@ -11,7 +11,9 @@ CodeGen compile(std::string source) {
   // Setup libgc for unit tests (I don't think this is even needed)
   if (!GC_is_init_called()) GC_INIT();
   Ast_File code = Parser::parse_from_string(source);
-  Semantics().analyse_file(code);
+  Semantics sema;
+  sema.analyse_file(code);
+  // Note: some ast related pointers in codegen will dangle after sema dtors.
   CodeGen codegen(code);
   return codegen;
 }
@@ -563,14 +565,14 @@ TEST_CASE("Closures", "[Codegen]") {
     auto codegen = compile(R"(
       fun normal_add: i32 (a: i32, b: i32) { a + b }
 
-      fun bind: \i32 -> i32 (func: \i32,i32 -> i32, a: i32) {
+      fun pbind: \i32 -> i32 (func: \i32,i32 -> i32, a: i32) {
         \b: i32 -> i32 {
           func(a, b)
         }
       }
 
       fun make_adder: \i32 -> i32 (x: i32) {
-        bind(normal_add, x)
+        pbind(normal_add, x)
       }
 
       fun add: i32 (a: i32, b: i32) {
@@ -624,7 +626,7 @@ TEST_CASE("Bind macro", "[Codegen]") {
       }
 
       fun fun_add: i32 (a: i32, b: i32) {
-        adder := bind!(add4, a, 10);
+        adder := pbind!(add4, a, 10);
         adder(b, 20)
       }
     )");

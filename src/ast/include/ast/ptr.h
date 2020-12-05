@@ -41,11 +41,11 @@ public:
     return ptr != nullptr;
   }
 
-  bool operator==(AstPtr<T> const & other) {
+  bool operator==(AstPtr<T> const & other) const {
     return this->ptr == other.ptr;
   }
 
-  bool operator!=(AstPtr<T> const & other) {
+  bool operator!=(AstPtr<T> const & other) const {
     return !operator==(other);
   }
 };
@@ -95,11 +95,11 @@ public:
     return get() != nullptr;
   }
 
-  bool operator==(SpAstPtr<TClass, TPtr> const & other) {
+  bool operator==(SpAstPtr<TClass, TPtr> const & other) const {
     return this->get() == other.get();
   }
 
-  bool operator!=(SpAstPtr<TClass, TPtr> const & other) {
+  bool operator!=(SpAstPtr<TClass, TPtr> const & other) const {
     return !operator==(other);
   }
 };

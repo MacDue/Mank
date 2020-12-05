@@ -162,11 +162,11 @@ TEST_CASE("Binary expressions", "[Sema]") {
     auto binary_expr = EXTRACT_FIRST_BINARY_EXPR("caculate_scarey_maths");
 
     // Start with no type
-    REQUIRE(binary_expr->meta.type.expired());
+    REQUIRE(!binary_expr->meta.type);
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
 
-    auto binop_type = extract_type(binary_expr->meta.type);
+    auto binop_type = binary_expr->meta.type;
     REQUIRE(std::holds_alternative<PrimativeType>(binop_type->v));
 
     // Should be resolved to integer
@@ -376,10 +376,10 @@ TEST_CASE("Unary expressions", "[Sema]") {
       )", logical_op));
 
       REQUIRE_THROWS_WITH(sema.analyse_file(float_code),
-        Contains("invalid unary operation"));
+        Contains("invalid unary operation") || Contains("cannot perform"));
 
       REQUIRE_THROWS_WITH(sema.analyse_file(int_code),
-        Contains("invalid unary operation"));
+        Contains("invalid unary operation") || Contains("cannot perform"));
     }
   }
 }

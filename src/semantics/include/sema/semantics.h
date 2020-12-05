@@ -8,7 +8,6 @@
 #include "sema/type_infer.h"
 
 #include "ast/ast.h"
-#include "ast/util.h"
 #include "errors/compiler_message.h"
 
 struct Semantics {
@@ -20,11 +19,12 @@ struct Semantics {
 
   CompilerWarnings const & get_warnings() { return warnings; }
 
-  // inline void disable_type_inference_for_testing() {
-  //   // Sema must only be run on one function or this will create bugs
-  //   this->disable_type_infer = true;
-  // }
-  // inline Infer::ConstraintSet get_constraint_test_for_testing() { return type_constraints; }
+  inline void disable_type_inference_for_testing() {
+    // Sema must only be run on one function or this will create bugs
+    this->disable_type_infer = true;
+  }
+
+  inline Infer& get_infer_for_testing() { return *infer; }
 private:
   // FIXME
   // Thes both should be refs... but I don't the the ctor...
@@ -37,17 +37,6 @@ private:
 
   // Simply because it's a pain to pass this around (top of stack == current function)
   std::stack<Type_Ptr> expected_returns;
-
-  bool match_or_constrain_types_at(
-    SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const * error_template);
-
-  template<typename TAst>
-  inline bool match_or_constrain_types_at(
-    TAst& ast, Type_Ptr t1, Type_Ptr t2, char const * error_template
-  ) {
-    return match_or_constrain_types_at(
-      AstHelper::extract_location(ast), t1, t2, error_template);
-  }
 
   bool assert_valid_binding(
     Ast_Identifier const& lvalue,

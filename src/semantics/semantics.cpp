@@ -23,16 +23,6 @@ Semantics::Semantics() {
   }
 }
 
-bool Semantics::match_or_constrain_types_at(
-  SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const* error_template
-) {
-  if (!match_types(t1, t2, infer->or_constrain(loc, error_template))) {
-    throw_compile_error(loc, error_template,
-      type_to_string(t1.get()), type_to_string(t2.get()));
-  }
-  return true;
-}
-
 Symbol* Semantics::emit_warning_if_shadows(
   Ast_Identifier& ident, Scope& scope, std::string warning
 ) {
@@ -293,7 +283,7 @@ void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
 
   auto expr_type = analyse_expression(*assign.expression, scope);
 
-  match_or_constrain_types_at(assign, target_type, expr_type,
+  infer->match_or_constrain_types_at(assign, target_type, expr_type,
     "cannot assign variable of type {} to {}");
 }
 
@@ -372,7 +362,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
     if (is_reference_type(for_loop.type)) {
       throw_sema_error_at(for_loop.loop_variable, "reference loop variables are not yet supported");
     }
-    match_or_constrain_types_at(for_loop.start_range, for_loop.type, start_range_type,
+    infer->match_or_constrain_types_at(for_loop.start_range, for_loop.type, start_range_type,
       "start range type type {1} does not match loop variable type {0}");
   } else {
     if (!start_range_type) {
@@ -385,7 +375,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   auto end_range_type = analyse_expression(*for_loop.end_range, scope);
   for_loop.end_range->meta.type = end_range_type;
 
-  match_or_constrain_types_at(for_loop.end_range, start_range_type, end_range_type,
+  infer->match_or_constrain_types_at(for_loop.end_range, start_range_type, end_range_type,
     "end range type {1} does not match start range type {0}");
 
   emit_warning_if_shadows(for_loop.loop_variable, scope, "loop variable shadows existing symbol");
@@ -497,7 +487,7 @@ void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_
     (void) analyse_expression(*arg, scope);
   }
 
-  Ast_Expression_Type expansion = (*expander)(macro_call, *infer);
+  Ast_Expression_Type expansion = (*expander)(macro_call, *builder, *infer);
   AstHelper::rewrite_expr(target, expansion);
 }
 
@@ -516,12 +506,12 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_expr){
       auto cond_type = analyse_expression(*if_expr.cond, scope);
-      match_or_constrain_types_at(if_expr.cond, cond_type, PrimativeType::bool_ty(),
+      infer->match_or_constrain_types_at(if_expr.cond, cond_type, PrimativeType::bool_ty(),
         "if condition must be a {1}");
       auto then_type = analyse_expression(*if_expr.then_block, scope);
       if (if_expr.has_else) {
         auto else_type = analyse_expression(*if_expr.else_block, scope);
-        match_or_constrain_types_at(if_expr, then_type, else_type,
+        infer->match_or_constrain_types_at(if_expr, then_type, else_type,
           "type of then block {} does not match else block {}");
         if (is_reference_type(then_type) && is_reference_type(else_type)) {
           expr.set_value_type(Expression_Meta::LVALUE);
@@ -598,7 +588,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             array_type.element_type = remove_reference(analyse_expression(*prev, scope));
             auto next_type = analyse_expression(*next, scope);
 
-            match_or_constrain_types_at(next, next_type, array_type.element_type,
+            infer->match_or_constrain_types_at(next, next_type, array_type.element_type,
               "element type {} does not match array type of {}");
             return false;
           });
@@ -609,7 +599,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       auto object_type = analyse_expression(*index.object, scope);
       auto index_type = analyse_expression(*index.index, scope);
       if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type)) {
-        match_or_constrain_types_at(index.index, index_type, PrimativeType::int_ty(),
+        infer->match_or_constrain_types_at(index.index, index_type, PrimativeType::int_ty(),
           "invalid index type {}");
         expr.inherit_value_type(*index.object);
         return array_type->element_type;
@@ -696,7 +686,7 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
       break;
     }
     case Ast_Operator::LOGICAL_NOT: {
-      if (match_or_constrain_types_at(unary, operand_type, PrimativeType::bool_ty(),
+      if (infer->match_or_constrain_types_at(unary, operand_type, PrimativeType::bool_ty(),
           "cannot perform logical not on {}")) {
         return operand_type;
       }
@@ -714,7 +704,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
   auto left_type = remove_reference(analyse_expression(*binop.left, scope));
   auto right_type = analyse_expression(*binop.right, scope);
 
-  match_or_constrain_types_at(binop, left_type, right_type,
+  infer->match_or_constrain_types_at(binop, left_type, right_type,
     "incompatible types {} and {}");
 
   left_type = min_type(left_type, right_type);

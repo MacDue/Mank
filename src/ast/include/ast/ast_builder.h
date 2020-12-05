@@ -130,7 +130,7 @@ inline Ast_Function_Declaration make_procedure(
 /* Blocks */
 
 template <typename... TStmt>
-Ast_Block make_body(bool has_final_expr, TStmt && ... stmts) {
+static Ast_Block make_body(bool has_final_expr, TStmt && ... stmts) {
   Ast_Block block;
   block.statements = std::vector<Stmt_Ptr>{ stmts... };
   block.has_final_expr = has_final_expr;
@@ -354,7 +354,7 @@ inline Ast_File& wrap_final_expr(Expr_Ptr expr) {
 /* Misc */
 
 template<typename T>
-inline Ast_Identifier to_internal_name(T stringifyable) {
+static Ast_Identifier to_internal_name(T stringifyable) {
   return Ast_Identifier(formatxx::format_string("!{}", stringifyable));
 }
 

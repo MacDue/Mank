@@ -24,7 +24,7 @@ bool Semantics::assert_valid_binding(
     //   should_match = !min_ty || !std::holds_alternative<TypeVar>(min_ty->v);
     // }
     // if (should_match) {
-      match_or_constrain_types_at(bind_location, type, to_bind,
+      infer->match_or_constrain_types_at(bind_location, type, to_bind,
         "cannot bind expression with type {1} to {0}");
     // }
   }

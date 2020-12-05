@@ -831,7 +831,7 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
     }
   };
   FixedSizeArrayType top_array_type;
-  auto current_array = &top_array_type;
+  auto current_array = top_array_type.get_raw_self();
   expect(TokenType::LEFT_SQUARE_BRACKET);
   while (true) {
     auto& token = lexer.peek_next_token();
@@ -844,7 +844,8 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
       break;
     }
     current_array->element_type = ctx->new_type(FixedSizeArrayType());
-    current_array = &std::get<FixedSizeArrayType>(current_array->element_type->v);
+    current_array = std::get<FixedSizeArrayType>(
+      current_array->element_type->v).get_raw_self();
   }
   current_array->element_type = base_type;
   expect(TokenType::RIGHT_SQUARE_BRACKET);

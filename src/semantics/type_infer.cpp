@@ -211,10 +211,10 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
       return try_unify_sub_constraints(c, { fc });
     },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
-      return unify_var(tvar, c.t2, c.origin);
+      return unify_var(tvar, c.t2, c.get_note_spot());
     },
     pattern(_, as<TypeVar>(arg)) = [&](auto& tvar){
-      return unify_var(tvar, c.t1, c.origin);
+      return unify_var(tvar, c.t1, c.get_note_spot());
     },
     pattern(_, _) = [&]() -> Substitution { throw_unify_error(c); }
   );
@@ -275,10 +275,8 @@ Infer::UnifyResult Infer::unify(Infer::ConstraintSet&& constraints) {
 void Infer::get_infer_reason_notes(
   int32_t tvar, std::vector<CompilerMessage>& msgs, Infer::Substitution const & subs
 ) {
-  std::cout << tvar <<'\n';
   std::vector<CompilerMessage> infer_info;
   if (tvar >= 0 && unify_reasoning.contains(tvar)) {
-    // std::cout << "T" << tvar << " reasons:\n";
     for (auto const & [loc, type]: unify_reasoning.at(tvar)) {
       std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
       if (!type) continue;
@@ -288,7 +286,6 @@ void Infer::get_infer_reason_notes(
       }
       msgs.push_back(CompilerMessage{loc, "found to be " + type_to_string(error_type.get()), CompilerMessage::NOTE});
     }
-    // std::cout << '\n';
   }
 }
 
@@ -363,15 +360,17 @@ Infer::Substitution Infer::unify_and_apply() {
 }
 
 void Infer::add_constraint(
-  SourceLocation origin, Type_Ptr t1, Type_Ptr t2, char const * error_template
+  SourceLocation origin, Type_Ptr t1, Type_Ptr t2, char const * error_template,
+  Infer::ConstraintOrigin note_spot
 ) {
-  type_constraints.emplace_back(Constraint(origin, t1, t2, error_template));
+  type_constraints.emplace_back(Constraint(origin, t1, t2, error_template, note_spot));
 }
 
 bool Infer::match_or_constrain_types_at(
-  SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const* error_template
+  SourceLocation loc, Type_Ptr t1, Type_Ptr t2, char const* error_template,
+  Infer::ConstraintOrigin note_spot
 ) {
-  if (!match_types(t1, t2, or_constrain(loc, error_template))) {
+  if (!match_types(t1, t2, or_constrain(loc, error_template, note_spot))) {
     throw_compile_error(loc, error_template,
       type_to_string(t1.get()), type_to_string(t2.get()));
   }

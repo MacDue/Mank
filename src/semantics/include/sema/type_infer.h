@@ -40,15 +40,18 @@ public:
   using ConstraintOrigin = std::optional<SourceLocation>;
   static inline char const * DEFAULT_ERROR = "FIXME: add a error message!";
   class Constraint {
-    ConstraintOrigin origin;
+    ConstraintOrigin origin,
+      /* Allows for the "note:" information to point to somewhere better than the origin  */
+      note_spot;
     Type_Ptr t1, t2;
     char const * error_template;
 
     std::set<TypeVar> tvars_closure;
 
     Constraint(SourceLocation origin, Type_Ptr t1, Type_Ptr t2,
-      char const * error_template = DEFAULT_ERROR
-    ): origin{origin}, t1{t1}, t2{t2}, error_template{error_template} {}
+      char const * error_template = DEFAULT_ERROR,
+      ConstraintOrigin note_spot = std::nullopt
+    ): origin{origin}, note_spot{note_spot}, t1{t1}, t2{t2}, error_template{error_template} {}
 
     // Only use for child constraints (easier to tie to t1/t2 than ctor them)
     Constraint(Type_Ptr t1, Type_Ptr t2)
@@ -56,6 +59,11 @@ public:
         error_template{"child constraint! You should not see this!"} {}
 
     Constraint(): Constraint(nullptr, nullptr) {}
+
+    inline ConstraintOrigin get_note_spot() const {
+      if (note_spot) return note_spot;
+      return origin;
+    }
 
     void init();
 
@@ -65,34 +73,40 @@ public:
   class MakeConstraint {
     Infer& infer;
     SourceLocation origin;
+    ConstraintOrigin note_spot;
     char const * error_template;
 
-    MakeConstraint(Infer& infer, SourceLocation origin, char const * error_template)
-      : infer{infer}, origin{origin}, error_template{error_template} {}
+    MakeConstraint(
+      Infer& infer, SourceLocation origin, char const * error_template, ConstraintOrigin note_spot)
+      : infer{infer}, origin{origin}, note_spot{note_spot}, error_template{error_template} {}
     friend class Infer;
 
     public:
       inline void operator()(Type_Ptr t1, Type_Ptr t2) const {
-        infer.add_constraint(origin, t1, t2, error_template);
+        infer.add_constraint(origin, t1, t2, error_template, note_spot);
       }
   };
 
   inline MakeConstraint or_constrain(
-    SourceLocation origin, char const * error_template
+    SourceLocation origin, char const * error_template,
+    ConstraintOrigin note_spot
   ) {
-    return MakeConstraint(*this, origin, error_template);
+    return MakeConstraint(*this, origin, error_template, note_spot);
   }
 
   bool match_or_constrain_types_at(
     SourceLocation loc, Type_Ptr t1, Type_Ptr t2,
-    char const * error_template = DEFAULT_ERROR);
+    char const * error_template,
+    ConstraintOrigin note_spot = std::nullopt);
 
   template<typename TAst>
   inline bool match_or_constrain_types_at(
-    TAst& ast, Type_Ptr t1, Type_Ptr t2, char const * error_template
+    TAst& ast, Type_Ptr t1, Type_Ptr t2,
+    char const * error_template,
+    ConstraintOrigin note_spot = std::nullopt
   ) {
     return match_or_constrain_types_at(
-      AstHelper::extract_location(ast), t1, t2, error_template);
+      AstHelper::extract_location(ast), t1, t2, error_template, note_spot);
   }
 
   using ConstraintSet = std::vector<Constraint>;
@@ -110,7 +124,8 @@ public:
   /* Helpers */
 
   void add_constraint(SourceLocation, Type_Ptr t1, Type_Ptr t2,
-    char const * error_template = "DEBUG: infer failed a = {}, b = {}");
+    char const * error_template = "DEBUG: infer failed a = {}, b = {}",
+    Infer::ConstraintOrigin note_spot = std::nullopt);
 
   void generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call);
 

@@ -389,8 +389,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
 }
 
 void Semantics::check_tuple_bindings(
-  TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope,
-  bool to_infer
+  TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope
 ) {
   using namespace mpark::patterns;
   auto constraint = infer->generate_tuple_destructure_constraints(
@@ -410,7 +409,7 @@ void Semantics::check_tuple_bindings(
             assert_valid_binding(
               bind.name,
               bind.name.location,
-              bind.type, el_type, &init, !to_infer);
+              bind.type, el_type, &init);
               emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
               scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
           },
@@ -425,7 +424,6 @@ void Semantics::check_tuple_bindings(
     throw_sema_error_at(init, "tuple bind initializer must be a tuple");
   }
   if (constraint) {
-    // std::cout << "add\n";
     infer->type_constraints.emplace_back(*constraint);
   }
 }
@@ -613,6 +611,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       analyse_function_header(lambda);
       LambdaType lambda_type;
       lambda_type.return_type = analyse_function_body(lambda);
+      lambda_type.lambda = &lambda;
       std::transform(lambda.arguments.begin(), lambda.arguments.end(),
         std::back_inserter(lambda_type.argument_types),
         [&](auto & arg){ return arg.type; });
@@ -796,7 +795,19 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
         } else {
           // Lambda args are not named (will need a better error reporting method...)
           auto& expected = function_type.argument_types.at(arg_idx);
-          assert_valid_binding(*called_function_ident, expected, &argument);
+          // assert_valid_binding(*called_function_ident, expected, &argument);
+          bool tvar_param = std::holds_alternative<TypeVar>(expected->v);
+
+          Infer::ConstraintOrigin infer_note;
+          if (tvar_param && function_type.lambda) {
+            infer_note = function_type.lambda->arguments.at(arg_idx).name.location;
+          }
+
+          assert_valid_binding(
+            *called_function_ident,
+            AstHelper::extract_location(argument),
+            expected, argument.meta.type,
+            &argument, infer_note);
         }
       }
 

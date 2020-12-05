@@ -15,7 +15,7 @@ CodeGen::CodeGen(Ast_File& file_ast)
   : impl{std::make_unique<LLVMCodeGen>(file_ast)} {}
 
 LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
-  : file_ast{file_ast}
+  : file_ast{file_ast}, mank_ctx{file_ast.ctx}, ast_builder{file_ast}
 {
   this->create_module();
 
@@ -264,7 +264,7 @@ llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& f
 
   if (func.lambda) {
     // Add the lambda environment parameter
-    auto env_type = make_refernce(Primative::UNSIGNED_BYTE);
+    auto env_type = ast_builder.make_reference(PrimativeType::get(PrimativeType::UNSIGNED_BYTE));
     SymbolName env_name(LAMBDA_ENV);
     func.arguments.push_back(Ast_Argument{.type = env_type, .name = env_name});
     func.body.scope.add(Symbol(env_name, env_type, Symbol::INPUT));
@@ -400,7 +400,7 @@ void LLVMCodeGen::codegen_statement(Ast_Return_Statement& return_stmt, Scope& sc
 
   if (return_stmt.expression) {
     llvm::Value* return_value = codegen_bind(
-      *return_stmt.expression, return_local->type.get(), scope);
+      *return_stmt.expression, return_local->type, scope);
     ir_builder.CreateStore(return_value, return_meta->alloca);
   }
   ir_builder.CreateBr(return_meta->return_block);
@@ -459,7 +459,7 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
   Ast_Expression_List* agg_initializer = nullptr;
   match(var_decl.initializer->v)(
     pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) =
-    [&](auto& agg) { agg_initializer = &agg; },
+    [&](auto& agg) { agg_initializer = agg.get_raw_self(); },
     pattern(_) = []{}
   );
 
@@ -468,7 +468,7 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
     Best I know is they have to be compiled to a bunch of geps + stores.
   */
   if (var_decl.initializer && !agg_initializer) {
-    initializer = codegen_bind(*var_decl.initializer, var_decl.type.get(), scope);
+    initializer = codegen_bind(*var_decl.initializer, var_decl.type, scope);
   }
 
   /*
@@ -520,7 +520,7 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   llvm::AllocaInst* loop_variable = create_entry_alloca(current_function, &loop_variable_symbol);
   ir_builder.CreateStore(start_value, loop_variable);
 
-  auto loop_range_type = remove_reference(extract_type(for_loop.end_range->meta.type));
+  auto loop_range_type = remove_reference(for_loop.end_range->meta.type);
   auto& loop_end_range_symbol = body.scope.add(Symbol(
     SymbolName(LOOP_RANGE_END), loop_range_type, Symbol::LOCAL));
   llvm::AllocaInst* range_end = create_entry_alloca(current_function, &loop_end_range_symbol);
@@ -542,8 +542,8 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   /* For loop check -- should stop or keep looping */
   Ast_Binary_Operation loop_cond;
   loop_cond.operation = Ast_Operator::LESS_THAN;
-  loop_cond.left = to_expr_ptr(for_loop.loop_variable);
-  loop_cond.right = make_ident(LOOP_RANGE_END);
+  loop_cond.left = mank_ctx.new_expr(for_loop.loop_variable);
+  loop_cond.right = ast_builder.make_ident(LOOP_RANGE_END);
   loop_cond.left->meta.type = loop_cond.right->meta.type = loop_range_type;
 
   llvm::Value* loop_check = codegen_expression(loop_cond, body.scope);
@@ -566,18 +566,18 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   /* For loop increment */
   // FIXME: Temp hack till I figure out proper ranges!
   auto& primative_loop_type = std::get<PrimativeType>(loop_range_type->v);
-  auto loop_inc_literal = make_literal(primative_loop_type.tag, "");
+  auto loop_inc_literal = ast_builder.make_literal(primative_loop_type.tag, "");
   loop_inc_literal->meta.const_value = 1;
 
   Ast_Binary_Operation next_loop_value;
   next_loop_value.operation = Ast_Operator::PLUS;
-  next_loop_value.left = to_expr_ptr(for_loop.loop_variable);
+  next_loop_value.left = mank_ctx.new_expr(for_loop.loop_variable);
   next_loop_value.right = loop_inc_literal;
   next_loop_value.left->meta.type = next_loop_value.right->meta.type = loop_range_type;
 
   Ast_Assign inc_loop;
-  inc_loop.target = to_expr_ptr(for_loop.loop_variable);
-  inc_loop.expression = to_expr_ptr(next_loop_value);
+  inc_loop.target = mank_ctx.new_expr(for_loop.loop_variable);
+  inc_loop.expression = mank_ctx.new_expr(next_loop_value);
 
   codegen_statement(inc_loop, body.scope);
   // End FIXME
@@ -603,7 +603,7 @@ void LLVMCodeGen::codegen_tuple_bindings(
       },
       pattern(as<Ast_Argument>(arg)) = [&](auto& bind){
         llvm::Value* value;
-        if (is_reference_type(bind.type.get())) {
+        if (is_reference_type(bind.type)) {
           // the tuple expression must be an lvalue
           value = tuple.get_bind(idxs, "bound_tuple_ref");
         } else {
@@ -638,9 +638,9 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
 
   return match(expr.v)(
     pattern(as<Ast_Identifier>(arg)) = [&](auto& variable) -> llvm::Value* {
-      auto type = extract_type_nullable(variable.get_meta().type);
+      auto type = variable.get_meta().type;
       llvm::Value* variable_alloca = get_local(variable, scope);
-      if (type && is_reference_type(type.get())) {
+      if (type && is_reference_type(type)) {
         // We want to dereference it
         return ir_builder.CreateLoad(variable_alloca, "dereference");
       } else {
@@ -681,7 +681,7 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
 }
 
 llvm::Value* LLVMCodeGen::codegen_bind(
-  Ast_Expression& expr, Type* bound_to, Scope& scope
+  Ast_Expression& expr, Type_Ptr bound_to, Scope& scope
 ) {
   if (is_reference_type(bound_to)) {
     return address_of(expr, scope);
@@ -786,7 +786,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope,
   ir_builder.SetInsertPoint(end_block);
 
   if (then_value && else_value) {
-    auto if_type = extract_type(if_expr.then_block->meta.type);
+    auto if_type = if_expr.then_block->meta.type;
     if (!as_lvalue) {
       if_type = remove_reference(if_type);
     }
@@ -800,14 +800,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope,
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
-  auto callee_type = remove_reference(extract_type(call.callee->meta.type));
+  auto callee_type = remove_reference(call.callee->meta.type);
   LambdaType* lambda_type = std::get_if<LambdaType>(&callee_type->v);
   Ast_Function_Declaration* function_type = nullptr;
 
   llvm::Value* callee;
   llvm::Value* env_ptr = nullptr;
   if (!lambda_type) {
-    function_type = &std::get<Ast_Function_Declaration>(callee_type->v);
+    function_type = std::get<Ast_Function_Declaration>(callee_type->v).get_raw_self();
     callee = this->get_function(*function_type);
   } else {
     auto expr_result = get_value_extractor(*call.callee, scope);
@@ -820,11 +820,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
 
   uint arg_idx = 0;
   for (auto& arg: call.arguments) {
-    Type* arg_type;
+    Type_Ptr arg_type;
     if (function_type) {
-      arg_type = function_type->arguments.at(arg_idx).type.get();
+      arg_type = function_type->arguments.at(arg_idx).type;
     } else {
-      arg_type = lambda_type->argument_types.at(arg_idx).get();
+      arg_type = lambda_type->argument_types.at(arg_idx);
     }
     call_args.push_back(codegen_bind(*arg, arg_type, scope));
     ++arg_idx;
@@ -874,12 +874,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope
   Symbol* symbol = scope.lookup_first_name(ident);
   assert(symbol->is_local() && "only locals implemented");
 
-  // FIXME: Hack to use address_of
-  auto& ident_meta = ident.get_meta();
-  Ast_Expression ident_expr(ident);
-  ident_expr.meta = ident_meta;
-
-  llvm::Value* variable_address = address_of(ident_expr, scope);
+  llvm::Value* variable_address = address_of(*ident.get_self().class_ptr(), scope);
   return ir_builder.CreateLoad(variable_address,
     formatxx::format_string("load_{}", ident.name));
 }
@@ -893,7 +888,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
     return operand;
   }
 
-  auto unary_type = remove_reference(extract_type(unary.operand->meta.type));
+  auto unary_type = remove_reference(unary.operand->meta.type);
   auto& unary_primative = std::get<PrimativeType>(unary_type->v);
 
   return match(unary_primative.tag, unary.operation)(
@@ -936,7 +931,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
-  auto binop_type = remove_reference(extract_type(binop.left->meta.type));
+  auto binop_type = remove_reference(binop.left->meta.type);
   auto& binop_primative = std::get<PrimativeType>(binop_type->v);
 
   llvm::Value* left = codegen_expression(*binop.left, scope);
@@ -1064,7 +1059,7 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
-  auto pod_type = extract_type(access.object->meta.type);
+  auto pod_type = access.object->meta.type;
 
   // FIXME: Special case, array length.
   if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(pod_type)) {
@@ -1078,7 +1073,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
 
 void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope) {
   using namespace mpark::patterns;
-  auto agg_type = extract_type(values.get_type());
+  auto agg_type = values.get_type();
   llvm::Type* llvm_agg_type = map_type_to_llvm(agg_type.get(), scope);
   uint gep_idx = 0;
   for (auto& el: values.elements) {
@@ -1106,7 +1101,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression_List& array_like, Sc
     This is the same for tuple expressions and array expressions.
     The LLVM types differ but gepping and setting elements is identical.
   */
-  auto agg_type = extract_type(array_like.get_type());
+  auto agg_type = array_like.get_type();
   llvm::AllocaInst* agg_alloca = create_entry_alloca(
     get_current_function(), scope, agg_type.get(), "agg_temp");
   initialize_aggregate(agg_alloca, array_like, scope);
@@ -1151,7 +1146,7 @@ llvm::Value* LLVMCodeGen::create_lambda(
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
-  auto lambda_type = extract_type(lambda.get_type());
+  auto lambda_type = lambda.get_type();
   llvm::Type* llvm_lambda_type = map_type_to_llvm(lambda_type.get(), scope);
   llvm::Function* lambda_func = nullptr;
   llvm::Value* env_ptr = llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(llvm_context));

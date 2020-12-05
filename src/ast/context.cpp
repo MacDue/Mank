@@ -4,8 +4,8 @@
 #include "ast/expr_helpers.h"
 
 struct ContextData {
-  // vectors that own the types/exprs/stmts should not be messed with
-  // You could probably do something much better than vectors but it'll do for now.
+  // lists that own the types/exprs/stmts should not be messed with
+  // As long as elements are only pushed to the deques then references/pointers will stay valid.
   std::deque<Type> types;
   std::deque<Ast_Statement> stmts;
   std::deque<Ast_Expression> exprs;

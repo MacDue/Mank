@@ -28,6 +28,8 @@
 
 #include "ast/ast.h"
 #include "ast/scope.h"
+#include "ast/ast_builder.h"
+
 #include "codegen/code_generator.h"
 
 class LLVMCodeGen: public CodeGenerator {
@@ -53,6 +55,18 @@ class LLVMCodeGen: public CodeGenerator {
       : type{type} {}
   };
 
+  Ast_File& file_ast;
+
+  /*
+    Owns mank datastructures.
+  */
+  AstContext& mank_ctx;
+
+  /*
+    Helps generate new mank _things_.
+  */
+  AstBuilder ast_builder;
+
   /*
     Owns core llvm datastructures (such as type & constants tables)
   */
@@ -72,8 +86,6 @@ class LLVMCodeGen: public CodeGenerator {
 
   std::optional<llvm::orc::VModuleKey> jit_module_handle;
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit_engine;
-
-  Ast_File& file_ast;
 
   struct ClosureInfo {
     Scope* parent;
@@ -168,7 +180,7 @@ public:
   void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
 
   llvm::Value* address_of(Ast_Expression& expr, Scope& scope);
-  llvm::Value* codegen_bind(Ast_Expression& expr, Type* bound_to, Scope& scope);
+  llvm::Value* codegen_bind(Ast_Expression& expr, Type_Ptr bound_to, Scope& scope);
 
   llvm::Value* create_lambda(llvm::Type* lambda_type, llvm::Function* body, llvm::Value* env_ptr);
 

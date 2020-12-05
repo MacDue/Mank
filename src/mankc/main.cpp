@@ -6,7 +6,7 @@
 
 #include "parser/parser.h"
 #include "sema/semantics.h"
-// #include "codegen/codegen.h"
+#include "codegen/codegen.h"
 #include "ast/ast_printer.h"
 
 #include "compiler_message_printer.h"
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (selected_options.code_gen) {
-      // CodeGen codegen(*parsed_file);
+      CodeGen codegen(*parsed_file);
     }
   }
   return 0;

@@ -25,7 +25,7 @@ struct Symbol {
     TYPE,
   } kind;
 
-  /* transitively -- as the AST shared (which holds scope nodes) -- this really _should_ be unique */
+  /* only shared as otherwise the Ast_Expression would be a pita to deal with */
   std::shared_ptr<SymbolMeta> meta;
 
   struct Scope* scope = nullptr; // set when added to a scope

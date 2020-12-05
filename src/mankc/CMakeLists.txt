@@ -12,10 +12,9 @@ add_executable(mankc
   compiler_message_printer.cpp)
 
 target_link_libraries(mankc
-  MankAST
   MankParser
   MankSemantics
-  # MankCodegen
+  MankCodegen
   ${Boost_LIBRARIES})
 
 set_target_properties(mankc

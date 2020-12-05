@@ -54,7 +54,9 @@ void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
   this->builder.emplace(AstBuilder(file));
-  this->infer.emplace(Infer(*this->ctx));
+  this->infer.emplace(Infer(*this->ctx, [&](CompilerMessage msg){
+    warnings.emplace_back(msg);
+  }));
 
   Scope& global_scope = file.scope;
 

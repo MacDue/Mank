@@ -272,24 +272,25 @@ Infer::UnifyResult Infer::unify(Infer::ConstraintSet&& constraints) {
   }
 }
 
-// static std::vector<CompilerMessage> print_subs_reasons(int32_t tvar, Substitution const & subs) {
-//   std::cout << tvar <<'\n';
-//   std::vector<CompilerMessage> infer_info;
-//   if (tvar >= 0 && subs_reasoning.contains(tvar)) {
-//     // std::cout << "T" << tvar << " reasons:\n";
-//     for (auto const & [loc, type]: subs_reasoning.at(tvar)) {
-//       std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
-//       if (!type) continue;
-//       auto error_type = apply_type(type, subs, loc);
-//       if (std::holds_alternative<TypeVar>(error_type->v)) {
-//         continue; // not informative
-//       }
-//       infer_info.push_back(CompilerMessage{loc, "found to be " + type_to_string(error_type.get()), CompilerMessage::NOTE});
-//     }
-//     // std::cout << '\n';
-//   }
-//   return infer_info;
-// }
+void Infer::get_infer_reason_notes(
+  int32_t tvar, std::vector<CompilerMessage>& msgs, Infer::Substitution const & subs
+) {
+  std::cout << tvar <<'\n';
+  std::vector<CompilerMessage> infer_info;
+  if (tvar >= 0 && unify_reasoning.contains(tvar)) {
+    // std::cout << "T" << tvar << " reasons:\n";
+    for (auto const & [loc, type]: unify_reasoning.at(tvar)) {
+      std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
+      if (!type) continue;
+      auto error_type = apply_type(type, subs);
+      if (std::holds_alternative<TypeVar>(error_type->v)) {
+        continue; // not informative
+      }
+      msgs.push_back(CompilerMessage{loc, "found to be " + type_to_string(error_type.get()), CompilerMessage::NOTE});
+    }
+    // std::cout << '\n';
+  }
+}
 
 Infer::Substitution Infer::unify_and_apply() {
   SpecialConstraints special_constraints;
@@ -324,35 +325,24 @@ Infer::Substitution Infer::unify_and_apply() {
 
   auto [subs, error] = unify(std::move(type_constraints));
   if (error) {
-      std::vector<CompilerMessage> error_infer_info;
-
-    // for (auto c: failed_constraint) {
-    // std::cout << type_to_string(failed_constraint.types.first.get()) << " = " <<  type_to_string(failed_constraint.types.second.get()) << '\n';
+    std::vector<CompilerMessage> infer_reason_notes;
 
     for (auto& tvar: top_failed_constraint.tvars_closure) {
       if (tvar.id < 0) continue;
-      // auto infer_info = print_subs_reasons(tvar.id, subs);
-      // error_infer_info.insert(error_infer_info.end(),
-      //   std::make_move_iterator(infer_info.begin()),
-      //   std::make_move_iterator(infer_info.end()));
-      // print_subs_reasons(failed_constraint.tvar2, subs);
+      get_infer_reason_notes(tvar.id, infer_reason_notes, subs);
     }
 
-    std::sort(error_infer_info.begin(), error_infer_info.end(),
+    // Sort by pos in file (so it looks like there's some flow to it)
+    std::sort(infer_reason_notes.begin(), infer_reason_notes.end(),
       [](CompilerMessage const & m1, CompilerMessage const & m2){
         return std::make_pair(m1.location.start_line, m1.location.start_column)
           < std::make_pair(m2.location.start_line, m2.location.start_column);
       });
 
+    for (auto note: infer_reason_notes) {
+      add_message(note);
+    }
 
-    // hack_backtrack_infer->insert(hack_backtrack_infer->end(),
-    //   std::make_move_iterator(error_infer_info.begin()),
-    //   std::make_move_iterator(error_infer_info.end()));
-
-    // }
-    // failed_constraint.types.first=  apply_type(failed_constraint.types.first, subs, failed_constraint.origin);
-    // failed_constraint.types.second=  apply_type(failed_constraint.types.second, subs, failed_constraint.origin);
-    // throw_unify_error(failed_constraint);
     throw *error;
   }
 

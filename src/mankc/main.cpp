@@ -82,15 +82,15 @@ int main(int argc, char* argv[]) {
     Semantics sema;
     std::optional<Ast_File> parsed_file;
     std::optional<CompilerError> sema_error;
-    // try {
+    try {
       parsed_file.emplace(parser.parse_file());
       if (selected_options.check_sema || selected_options.code_gen) {
         sema.analyse_file(*parsed_file);
       }
-    // } catch (CompilerError& e) {
-    //   sema_error = e;
-    //   sema_error->set_lexing_context(lexer);
-    // }
+    } catch (CompilerError& e) {
+      sema_error = e;
+      sema_error->set_lexing_context(lexer);
+    }
 
     if (parsed_file && selected_options.print_ast) {
       print_ast(*parsed_file);

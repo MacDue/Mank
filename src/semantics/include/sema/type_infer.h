@@ -5,20 +5,25 @@
 #include <utility>
 #include <optional>
 #include <stdexcept>
+#include <functional>
 
 #include "ast/types.h"
 #include "errors/compiler_errors.h"
 #include "errors/compiler_message.h"
 
-// make it take a std::function add_message
+using AddMessage = std::function<void(CompilerMessage)>;
+
 class Infer {
   AstContext& ctx;
+  AddMessage add_message;
+
   // inline std::vector<CompilerMessage>* hack_backtrack_infer = nullptr;
   // subs reasoning = map tvar id -> source location, tvar id
   // then when unify fails apply current subs to reasoning & track to where it first go it's concrete type
   std::map<int32_t, std::vector<std::pair<SourceLocation, Type_Ptr>>> unify_reasoning;
 public:
-  Infer(AstContext& ctx): ctx{ctx} {}
+
+  Infer(AstContext& ctx, AddMessage add_message): ctx{ctx}, add_message{add_message} {}
 
   class UnifyError: public std::exception {
     std::string error_message;
@@ -103,6 +108,9 @@ public:
 private:
   Constraint top_failed_constraint;
   [[ noreturn ]] void throw_unify_error(Constraint const & constraint);
+
+ void get_infer_reason_notes(
+  int32_t tvar, std::vector<CompilerMessage>& msgs, Infer::Substitution const & subs);
 
   /* Sub */
   Type_Ptr substitute(

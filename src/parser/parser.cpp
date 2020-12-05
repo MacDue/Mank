@@ -214,7 +214,7 @@ Stmt_Ptr Parser::parse_statement() {
     stmt = this->parse_tuple_structural_binding();
   } else if (auto expr = this->parse_expression()) {
     bool simple_expression = false;
-    if (stmt = this->parse_assign(expr)) {
+    if ((stmt = this->parse_assign(expr))) {
       // ^ stmt set there (null if not an assign)
     } else if (consume(TokenType::COLON)) {
       Ast_Variable_Declaration var_decl;

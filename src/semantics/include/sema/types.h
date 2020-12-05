@@ -22,6 +22,9 @@ bool match_types(Type_Ptr a, Type_Ptr b,
 template <typename T>
 T min_type(T a, T b) {
   using namespace mpark::patterns;
+  // Reutrn the opposite as there's a chance it's non-null & a tvar.
+  if (!a) return b;
+  if (!b) return a;
   return match(a->v, b->v)(
     pattern(as<TypeVar>(_), _) = [&]{ return a; },
     pattern(_, as<TypeVar>(_)) = [&]{ return b; },

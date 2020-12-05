@@ -33,6 +33,14 @@ public:
     return ptr != nullptr;
   }
 
+  bool operator==(AstPtr<T> const & other) {
+    return this->ptr == other.ptr;
+  }
+
+  bool operator!=(AstPtr<T> const & other) {
+    return !operator==(other);
+  }
+
   T* get() const {
     return ptr;
   }
@@ -45,7 +53,7 @@ public:
 /*
   Self/Specialised pointer.
   Every node will have one of these.
-  It provides an easy way to get a pointer to the TClass (wrapper)
+  It provides an easy way to get a pointer to the TClass (wrapper) too.
   & the "self" type.
 */
 template <typename TClass, typename TPtr>

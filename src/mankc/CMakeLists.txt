@@ -14,7 +14,7 @@ add_executable(mankc
 target_link_libraries(mankc
   MankAST
   MankParser
-  # MankSemantics
+  MankSemantics
   # MankCodegen
   ${Boost_LIBRARIES})
 

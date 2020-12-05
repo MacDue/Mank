@@ -28,19 +28,14 @@ DEF_TYPE(TypeVar) {
     return this->id < other.id;
   }
 
-  // static get_field_constraint(std::string name)
-
-  static Type_Ptr integer();
-  static Type_Ptr numeric();
   static Type_Ptr get(Constraint constraint);
 };
 
+struct AstContext;
 struct Ast_Field_Access;
-
 DEF_TYPE(TypeFieldConstraint) {
   Type_Ptr type;
-  // Not null just can't be a ref
   SpAstPtr<Ast_Expression, Ast_Field_Access> field_access;
 
-  static Type_Ptr get(Ast_Field_Access& access);
+  static Type_Ptr get(AstContext& ctx,  Ast_Field_Access& access);
 };

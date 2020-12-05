@@ -16,7 +16,7 @@ class Infer {
   // inline std::vector<CompilerMessage>* hack_backtrack_infer = nullptr;
   // subs reasoning = map tvar id -> source location, tvar id
   // then when unify fails apply current subs to reasoning & track to where it first go it's concrete type
-  static std::map<int32_t, std::vector<std::pair<SourceLocation, Type_Ptr>>> unify_reasoning;
+  std::map<int32_t, std::vector<std::pair<SourceLocation, Type_Ptr>>> unify_reasoning;
 public:
   Infer(AstContext& ctx): ctx{ctx} {}
 

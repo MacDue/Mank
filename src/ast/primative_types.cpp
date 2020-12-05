@@ -26,6 +26,10 @@ Type_Ptr PrimativeType::get(PrimativeType::Tag tag) {
       static Type str{PrimativeType(STRING)};
       return AstContext::make_static_type_ptr(&str);
     }
+    case BOOL: {
+      static Type Bool{PrimativeType(BOOL)};
+      return AstContext::make_static_type_ptr(&Bool);
+    }
     default:
       assert(false && "fix me! missing primative!");
       return nullptr;

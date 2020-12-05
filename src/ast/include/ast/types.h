@@ -27,7 +27,7 @@ T remove_reference(T type) {
   if (auto ref_type = std::get_if<ReferenceType>(&type->v)) {
     return ref_type->references;
   }
-  return T(nullptr);
+  return type;
 }
 
 inline bool is_reference_type(Type_Ptr const type) {
@@ -52,6 +52,7 @@ class Type {
     : v{std::move(v)} {};
   friend class AstContext;
   friend class PrimativeType; // to allow static primatives
+  friend class TypeVar; // to allow static constraints
 public:
   Type_Type v;
 

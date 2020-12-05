@@ -54,6 +54,7 @@ void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
   this->builder.emplace(AstBuilder(file));
+  this->infer.emplace(Infer(*this->ctx));
 
   Scope& global_scope = file.scope;
 
@@ -570,14 +571,10 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       auto object_type = analyse_expression(*access.object, scope);
       if (object_type) {
         if (std::holds_alternative<TypeVar>(object_type->v)) {
-          auto field_constraint = TypeFieldConstraint::get(access);
+          auto field_constraint = TypeFieldConstraint::get(*ctx, access);
           auto field_type = ctx->new_type(TypeVar());
-          //FIXME!
-          // type_constraints.push_back(Infer::Constraint(
-          //   AstHelper::extract_location(access),
-          //   field_type,
-          //   field_constraint
-          // ));
+          infer->add_constraint(AstHelper::extract_location(access),
+            field_type, field_constraint);
           return field_type;
         } else {
           return get_field_type(object_type, access);
@@ -651,9 +648,6 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
   return expr_type;
 }
 
-#define ADD_SPECIAL_CONSTRAINT(constraints, constraint) \
-  ({  if (!constraints.empty()) constraints.push_back(constraint); true;  })
-
 static bool match_special_constraint_at(SourceLocation loc,
   Type_Ptr type, TypeVar::Constraint constraint, Infer& infer
 ) {
@@ -663,8 +657,10 @@ static bool match_special_constraint_at(SourceLocation loc,
       return primative.satisfies(constraint);
     },
     pattern(as<TypeVar>(_)) = [&] {
-      // return ADD_SPECIAL_CONSTRAINT(constraints,
-      //   Infer::Constraint(loc, type, TypeVar::get(constraint)));
+      if (!infer.type_constraints.empty()) {
+        // No point adding these constraints if there's no type vars
+        infer.add_constraint(loc, type, TypeVar::get(constraint));
+      }
       return false;
     },
     pattern(_) = []{ return false; }

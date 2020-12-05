@@ -5,6 +5,7 @@
 
 #include "ast/ast.h"
 #include "ast/types.h"
+#include "ast/context.h"
 
 /* String helpers */
 
@@ -92,30 +93,24 @@ std::string type_to_string(Type const * type) {
 
 /* Type Var */
 
-Type_Ptr TypeVar::integer() {
-  // static Type_Ptr _integer = to_type_ptr(TypeVar(INTEGER));
-  // return _integer;
-  assert(false && "todo");
-}
-
-Type_Ptr TypeVar::numeric() {
-  // static Type_Ptr _numeric = to_type_ptr(TypeVar(NUMERIC));
-  // return _numeric;
-  assert(false && "todo");
-}
-
 Type_Ptr TypeVar::get(Constraint constraint) {
   switch (constraint) {
-    case NUMERIC: return numeric();
-    case INTEGER: return integer();
+    case NUMERIC: {
+      static Type numeric{TypeVar(NUMERIC)};
+      return AstContext::make_static_type_ptr(&numeric);
+    }
+    case INTEGER: {
+      static Type integer{TypeVar(INTEGER)};
+      return AstContext::make_static_type_ptr(&integer);
+    }
     default:
       assert(false && "fix me! unknown constraint");
   }
 }
 
-Type_Ptr TypeFieldConstraint::get(Ast_Field_Access& access) {
-  assert(false && "todo");
-  // return to_type_ptr(TypeFieldConstraint{
-  //   .type = extract_type(access.object->meta.type),
-  //   .field_access = &access});
+Type_Ptr TypeFieldConstraint::get(AstContext& ctx, Ast_Field_Access& access) {
+  TypeFieldConstraint fc;
+  fc.type = access.object->meta.type;
+  fc.field_access = &access;
+  return ctx.new_type(fc);
 }

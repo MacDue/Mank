@@ -87,8 +87,22 @@ std::string type_to_string(Type const * type) {
   if (type) {
     return type_to_string(*type);
   } else {
-    return "Void";
+    return "[MISSING TYPE]";
   }
+}
+
+/* Type */
+
+Type_Ptr Type::void_ty() {
+  static Type void_type{TupleType()};
+  return AstContext::make_static_type_ptr(&void_type);
+}
+
+bool Type::is_void() const {
+  if (auto tuple_type = std::get_if<TupleType>(&v)) {
+    return tuple_type->element_types.size() == 0;
+  }
+  return false;
 }
 
 /* Type Var */

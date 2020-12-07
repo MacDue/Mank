@@ -56,7 +56,8 @@ class Type {
 public:
   Type_Type v;
 
-  static Type_Ptr get_primative(PrimativeType::Tag);
+  static Type_Ptr void_ty();
+  bool is_void() const;
 };
 
 std::string type_to_string(Type const & type);

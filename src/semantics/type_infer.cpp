@@ -33,7 +33,7 @@ static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
     pattern(_) = []{});
 }
 
-static bool occurs(TypeVar tvar, Type_Ptr type) {
+static bool occurs(TypeVar tvar, Type_Ptr type, TypeVar * found_tvar = nullptr) {
   using namespace mpark::patterns;
   return match(type->v)(
     pattern(as<LambdaType>(arg)) =
@@ -49,6 +49,10 @@ static bool occurs(TypeVar tvar, Type_Ptr type) {
       },
     pattern(as<TypeVar>(arg)) =
       [&](auto const & current_tvar) {
+        if (found_tvar) {
+          *found_tvar = current_tvar;
+        }
+
         return tvar.id == TypeVar::ANY || current_tvar.id == tvar.id;
       },
     pattern(_) = []{ return false; });
@@ -281,7 +285,7 @@ void Infer::get_infer_reason_notes(
       std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
       if (!type) continue;
       auto error_type = apply_type(type, subs);
-      if (std::holds_alternative<TypeVar>(error_type->v)) {
+      if (is_tvar(error_type)) {
         continue; // not informative
       }
       msgs.push_back(CompilerMessage{loc, "found to be " + type_to_string(error_type.get()), CompilerMessage::NOTE});
@@ -348,7 +352,8 @@ Infer::Substitution Infer::unify_and_apply() {
   }
 
   for (auto& [tvar, sub]: subs) {
-    if (occurs(TypeVar(TypeVar::ANY), sub)) {
+    TypeVar found_tvar;
+    if (occurs(TypeVar(TypeVar::ANY), sub, found_tvar.get_raw_self())) {
       throw UnifyError("incomplete substitution");
     }
     assert(bool(sub) && "fix me! void not supported in infer");
@@ -378,7 +383,7 @@ bool Infer::match_or_constrain_types_at(
 }
 
 void Infer::generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call) {
-  if (std::holds_alternative<TypeVar>(callee_type->v)) {
+  if (is_tvar(callee_type)) {
     LambdaType call_type;
     call_type.return_type = ctx.new_type(TypeVar());
     std::generate_n(std::back_inserter(call_type.argument_types),
@@ -400,7 +405,7 @@ void generate_array_index_constraints(
 
 void Infer::generate_tuple_assign_constraints(Ast_Assign& tuple_assign) {
   auto tuple_type = tuple_assign.expression->meta.type;
-  if (std::holds_alternative<TypeVar>(tuple_type->v)) {
+  if (is_tvar(tuple_type)) {
     TupleType assign_type;
     std::generate_n(std::back_inserter(assign_type.element_types),
       std::get<Ast_Tuple_Literal>(tuple_assign.target->v).elements.size(),
@@ -417,7 +422,7 @@ std::optional<Infer::Constraint> Infer::generate_tuple_destructure_constraints(
   TupleBinding const & bindings, Type_Ptr& init_type, SourceLocation origin
 ) {
   // Almost the same as assign
-  if (std::holds_alternative<TypeVar>(init_type->v)) {
+  if (is_tvar(init_type)) {
     TupleType binding_type;
     std::generate_n(std::back_inserter(binding_type.element_types), bindings.binds.size(),
       [&]{ return ctx.new_type(TypeVar()); });

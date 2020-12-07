@@ -157,12 +157,24 @@ Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   for (auto& stmt: block.statements) {
     analyse_statement(*stmt, block.scope);
   }
-  Type_Ptr block_type;
+  Type_Ptr block_type = Type::void_ty();
   if (auto final_expr = block.get_final_expr()) {
     block_type = final_expr->meta.type;
   }
   block.scope.destroy_locals();
   return block_type;
+}
+
+static Expr_Ptr make_void_expr(AstContext& ctx, SourceLocation loc) {
+  Ast_Tuple_Literal void_tuple{};
+  void_tuple.location = loc;
+  // Make it point at just the last char '}' or ';'
+  void_tuple.location.start_char_idx = loc.end_char_idx - 1;
+  void_tuple.location.start_line = loc.end_line;
+  void_tuple.location.start_column = loc.end_column - 1;
+  auto ptr = ctx.new_expr(void_tuple);
+  ptr->meta.type = Type::void_ty();
+  return ptr;
 }
 
 Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
@@ -175,31 +187,37 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   auto expected_return = expected_returns.top();
 
   auto final_expr = func.body.get_final_expr();
-  if (final_expr) {
-    if (body_type) {
-      assert_valid_binding({}, expected_return, final_expr.get());
-      /* Desugar implict return for codegen + return checking ease */
-      func.body.has_final_expr = false;
-      Ast_Return_Statement implicit_return;
-      implicit_return.location
-        = std::get<Ast_Expression_Statement>(
-            func.body.statements.back()->v).location;
-      implicit_return.expression = final_expr;
-      func.body.statements.pop_back();
-      func.body.statements.emplace_back(ctx->new_stmt(implicit_return));
-    }
+  if (final_expr && !body_type->is_void()) {
+    assert_valid_binding({}, expected_return, final_expr.get());
+    /* Desugar implict return for codegen + return checking ease */
+    func.body.has_final_expr = false;
+    Ast_Return_Statement implicit_return;
+    implicit_return.location
+      = std::get<Ast_Expression_Statement>(
+          func.body.statements.back()->v).location;
+    implicit_return.expression = final_expr;
+    func.body.statements.pop_back();
+    func.body.statements.emplace_back(ctx->new_stmt(implicit_return));
   }
 
   // Propagate constants before checking reachability so dead code can be marked
   AstHelper::constant_propagate(func.body);
   Ast_Statement* first_unreachable_stmt = nullptr;
   bool all_paths_return = AstHelper::all_paths_return(func.body, &first_unreachable_stmt);
-  if (!func.procedure && !all_paths_return) {
-    // It could be a void returning lambda (with return to be infered)
-    if (func.lambda && is_return_tvar(expected_return.get())) {
-      expected_return = nullptr;
-    } else {
-      throw_sema_error_at(func.identifier, "function possibly fails to return a value");
+
+  if (!all_paths_return) {
+    if (is_return_tvar(func.return_type.get())) { // allows void type to be infered
+      Ast_Return_Statement void_return;
+      void_return.expression = make_void_expr(*ctx, func.location);
+      void_return.location = AstHelper::extract_location(void_return.expression);
+      assert_valid_binding({}, expected_return, void_return.expression.get());
+      func.body.statements.emplace_back(ctx->new_stmt(void_return));
+    } else if (!func.return_type->is_void()) {
+      // It could be a void returning lambda (with return to be infered)
+      // FIXME: Fix error for lambda
+      if (!is_return_tvar(func.return_type.get())) { // lambda return types checked in type infer
+        throw_sema_error_at(func.identifier, "function possibly fails to return a value");
+      }
     }
   }
 
@@ -207,10 +225,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
     emit_warning_at(*first_unreachable_stmt, "unreachable code");
   }
 
-  // FIXME: Hack lambda return type might be resolved
-  func.return_type = expected_return;
-
-  this->expected_returns.pop();
+  // Infer local types
   if (!func.lambda && !this->disable_type_infer) {
     try {
       infer->unify_and_apply();
@@ -218,6 +233,8 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       throw_sema_error_at(func.identifier, "type inference failed ({})", e.what());
     }
   }
+
+  this->expected_returns.pop();
   return func.return_type;
 }
 
@@ -260,13 +277,14 @@ static bool expression_may_have_side_effects(Ast_Expression& expr) {
 
 void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt, Scope& scope) {
   auto expression_type = analyse_expression(*expr_stmt.expression, scope);
+  bool void_expr = expression_type->is_void();
   if (!expr_stmt.final_expr) {
     bool is_call = std::get_if<Ast_Call>(&expr_stmt.expression->v) != nullptr;
     if (!expression_may_have_side_effects(*expr_stmt.expression)) {
       emit_warning_at(expr_stmt.expression, "statement has no effect");
-    } else if (!is_call && expression_type) {
+    } else if (!is_call && !void_expr) {
       emit_warning_at(expr_stmt.expression, "result of expression discarded");
-    } else if (expression_type) {
+    } else if (!void_expr) {
       throw_sema_error_at(expr_stmt.expression, "return value discarded");
     }
   }
@@ -308,15 +326,13 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
     },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
       auto& expected_return = expected_returns.top();
-      Type_Ptr expr_type;
+      Type_Ptr expr_type = Type::void_ty();
       if (return_stmt.expression) {
         expr_type = analyse_expression(*return_stmt.expression, scope);
+      } else {
+        return_stmt.expression = make_void_expr(*ctx, return_stmt.location);
       }
-      if (is_return_tvar(expected_return.get())) {
-        // FIXME hack: inside a lambda with a infered return that must be void
-        expected_return = expr_type;
-      }
-      if (!expr_type && expected_return) {
+      if (expr_type->is_void() && (!expected_return->is_void() && !is_return_tvar(expected_return.get()))) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
       assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get());
@@ -336,10 +352,10 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         }
 
         if (!var_decl.type) {
-          if (!initializer_type) {
-            throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
-              type_to_string(initializer_type.get()));
-          }
+          // if (!initializer_type) {
+          //   throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
+          //     type_to_string(initializer_type.get()));
+          // }
           var_decl.type = initializer_type;
         }
       } else {
@@ -366,7 +382,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
     infer->match_or_constrain_types_at(for_loop.start_range, for_loop.type, start_range_type,
       "start range type type {1} does not match loop variable type {0}");
   } else {
-    if (!start_range_type) {
+    if (start_range_type->is_void()) {
       throw_sema_error_at(for_loop.start_range, "loop variable cannot be type {}",
         type_to_string(start_range_type.get()));
     }
@@ -384,7 +400,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   body.scope.add(Symbol(for_loop.loop_variable, for_loop.type, Symbol::LOCAL));
 
   auto body_type = analyse_block(body, scope);
-  if (body_type) {
+  if (!body_type->is_void()) {
     throw_sema_error_at(body.get_final_expr(), "loop body should not evaluate to a value");
   }
 }
@@ -515,7 +531,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         if (is_reference_type(then_type) && is_reference_type(else_type)) {
           expr.set_value_type(Expression_Meta::LVALUE);
         }
-      } else if (then_type) {
+      } else if (!then_type->is_void()) {
         auto final_expr = std::get<Ast_Block>(if_expr.then_block->v).get_final_expr();
         throw_sema_error_at(final_expr,
           "if expression cannot evaluate to {} without a matching else",

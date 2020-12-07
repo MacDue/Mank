@@ -86,6 +86,7 @@ Type_Ptr Parser::parse_function() {
     parameter_list = "(", {identifier, type_annotation}, ")" ;
     function = function_header, block ;
   */
+  auto fun_start = this->current_location();
   Ast_Function_Declaration parsed_function;
   if (consume(TokenType::FUNCTION) || (parsed_function.procedure = consume(TokenType::PROCEDURE))) {
 
@@ -103,6 +104,8 @@ Type_Ptr Parser::parse_function() {
       } else {
         parsed_function.return_type = return_type;
       }
+    } else {
+      parsed_function.return_type = Type::void_ty();
     }
 
     if (peek(TokenType::LEFT_PAREN)) {
@@ -114,6 +117,7 @@ Type_Ptr Parser::parse_function() {
       throw_error_here("expected function body");
     }
     parsed_function.body = *body;
+    mark_ast_location(fun_start, parsed_function);
     return ctx->new_type(parsed_function);
   } else {
     // Should be unreachable
@@ -857,7 +861,7 @@ std::vector<Type_Ptr> Parser::parse_type_list(TokenType left_delim, TokenType ri
   expect(left_delim);
   while (!peek(right_delim)) {
     type_list.emplace_back(
-      this->parse_type());
+      this->parse_type()); // FIXME: Null here?
     if (!consume(TokenType::COMMA)) {
       break;
     }

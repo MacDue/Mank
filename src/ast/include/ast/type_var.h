@@ -4,7 +4,6 @@
 
 DEF_TYPE(TypeVar) {
   int32_t id;
-  bool is_return_type = false;
   // OR
   enum Constraint {
     NUMERIC = -1, // any int or float

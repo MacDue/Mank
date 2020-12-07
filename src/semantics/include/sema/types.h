@@ -19,6 +19,11 @@ bool match_types(Type_Ptr a, Type_Ptr b,
   MakeConstraint const & make_constraint = std::nullopt,
   bool ignore_refs = true);
 
+inline bool is_tvar(Type_Ptr type) {
+  if (!type) return false;
+  return std::holds_alternative<TypeVar>(type->v);
+}
+
 template <typename T>
 T min_type(T a, T b) {
   using namespace mpark::patterns;

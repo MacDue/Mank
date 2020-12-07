@@ -33,14 +33,6 @@ Symbol* Semantics::emit_warning_if_shadows(
   return pior_symbol;
 }
 
-static bool is_return_tvar(Type const * type) {
-  if (!type) return false;
-  if (auto tvar = std::get_if<TypeVar>(&type->v)) {
-    return tvar->is_return_type;
-  }
-  return false;
-}
-
 void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
@@ -206,18 +198,14 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
   bool all_paths_return = AstHelper::all_paths_return(func.body, &first_unreachable_stmt);
 
   if (!all_paths_return) {
-    if (is_return_tvar(func.return_type.get())) { // allows void type to be infered
+    if (is_tvar(func.return_type)) { // allows void type to be infered
       Ast_Return_Statement void_return;
       void_return.expression = make_void_expr(*ctx, func.location);
       void_return.location = AstHelper::extract_location(void_return.expression);
       assert_valid_binding({}, expected_return, void_return.expression.get());
       func.body.statements.emplace_back(ctx->new_stmt(void_return));
     } else if (!func.return_type->is_void()) {
-      // It could be a void returning lambda (with return to be infered)
-      // FIXME: Fix error for lambda
-      if (!is_return_tvar(func.return_type.get())) { // lambda return types checked in type infer
-        throw_sema_error_at(func.identifier, "function possibly fails to return a value");
-      }
+      throw_sema_error_at(func.identifier, "function possibly fails to return a value");
     }
   }
 
@@ -332,7 +320,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       } else {
         return_stmt.expression = make_void_expr(*ctx, return_stmt.location);
       }
-      if (expr_type->is_void() && (!expected_return->is_void() && !is_return_tvar(expected_return.get()))) {
+      if (expr_type->is_void() && !expected_return->is_void() && !is_tvar(expected_return)) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
       assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get());
@@ -352,10 +340,6 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         }
 
         if (!var_decl.type) {
-          // if (!initializer_type) {
-          //   throw_sema_error_at(var_decl.initializer, "cannot initialize variable with type {}",
-          //     type_to_string(initializer_type.get()));
-          // }
           var_decl.type = initializer_type;
         }
       } else {
@@ -577,7 +561,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) {
       auto object_type = analyse_expression(*access.object, scope);
       if (object_type) {
-        if (std::holds_alternative<TypeVar>(object_type->v)) {
+        if (is_tvar(object_type)) {
           auto field_constraint = TypeFieldConstraint::get(*ctx, access);
           auto field_type = ctx->new_type(TypeVar());
           infer->add_constraint(AstHelper::extract_location(access),
@@ -812,7 +796,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
         } else {
           // Lambda args are not named (will need a better error reporting method...)
           auto& expected = function_type.argument_types.at(arg_idx);
-          bool tvar_param = std::holds_alternative<TypeVar>(expected->v);
+          bool tvar_param = is_tvar(expected);
 
           Infer::ConstraintOrigin infer_note;
           if (tvar_param && function_type.lambda) {

@@ -34,7 +34,7 @@ bool match_types(Type_Ptr a, Type_Ptr b,
 
   if (make_constraint) {
     auto min_t = min_type(a, b);
-    if (min_t && std::holds_alternative<TypeVar>(min_t->v)) {
+    if (is_tvar(min_t)) {
       (*make_constraint)(a, b);
       return true;
     }

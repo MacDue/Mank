@@ -33,7 +33,7 @@ static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
     pattern(_) = []{});
 }
 
-static bool occurs(TypeVar tvar, Type_Ptr type) {
+static bool occurs(TypeVar tvar, Type_Ptr type, TypeVar * found_tvar = nullptr) {
   using namespace mpark::patterns;
   return match(type->v)(
     pattern(as<LambdaType>(arg)) =
@@ -49,6 +49,10 @@ static bool occurs(TypeVar tvar, Type_Ptr type) {
       },
     pattern(as<TypeVar>(arg)) =
       [&](auto const & current_tvar) {
+        if (found_tvar) {
+          *found_tvar = current_tvar;
+        }
+
         return tvar.id == TypeVar::ANY || current_tvar.id == tvar.id;
       },
     pattern(_) = []{ return false; });
@@ -348,7 +352,8 @@ Infer::Substitution Infer::unify_and_apply() {
   }
 
   for (auto& [tvar, sub]: subs) {
-    if (occurs(TypeVar(TypeVar::ANY), sub)) {
+    TypeVar found_tvar;
+    if (occurs(TypeVar(TypeVar::ANY), sub, found_tvar.get_raw_self())) {
       throw UnifyError("incomplete substitution");
     }
     assert(bool(sub) && "fix me! void not supported in infer");

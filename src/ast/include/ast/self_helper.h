@@ -20,6 +20,10 @@ public:
     return static_cast<TSelf*>(static_cast<AstSelfHelper*>(this));
   }
 
+  TSelf const * get_raw_self() const {
+    return static_cast<TSelf const *>(static_cast<AstSelfHelper const *>(this));
+  }
+
   SelfPtr operator&() const {
     // This is largely so I don't mess up!
     // If I used a raw pointer somewhere that stores the type, things will

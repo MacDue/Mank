@@ -510,7 +510,7 @@ TEST_CASE("Function and procedure semantics", "[Sema]") {
     )");
 
     REQUIRE_THROWS_WITH(sema.analyse_file(code),
-      Contains("cannot bind expression") && Contains("Integer to Void"));
+      Contains("cannot bind expression") && Contains("Integer to ()"));
   }
 }
 
@@ -646,7 +646,7 @@ TEST_CASE("Variable declaration semantics", "[Sema]") {
     REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot bind expression"));
   }
 
-  SECTION("Declarations with void initializers are invalid") {
+  SECTION("Declarations with void initializers are valid") {
     auto code = Parser::parse_from_string(R"(
       proc so_this_is_a_thing {
         void := {
@@ -655,7 +655,7 @@ TEST_CASE("Variable declaration semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), "cannot initialize variable with type Void");
+    REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 }
 

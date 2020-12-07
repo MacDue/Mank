@@ -126,20 +126,20 @@ TEST_CASE("Inferred void lambda returns", "[Infer]") {
     auto proc_test = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
 
     auto func_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(0)->v);
-    REQUIRE(std::get<LambdaType>(func_decl.type->v).return_type == nullptr);
+    REQUIRE(std::get<LambdaType>(func_decl.type->v).return_type->is_void());
 
     auto other_func_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(1)->v);
-    REQUIRE(std::get<LambdaType>(other_func_decl.type->v).return_type == nullptr);
+    REQUIRE(std::get<LambdaType>(other_func_decl.type->v).return_type->is_void());
   }
 
-  SECTION("An infered void return is not allowed if the lambda's return is used") {
+  SECTION("An infered void return is still allowed if the lambda's return is used") {
     auto code = Parser::parse_from_string(R"(
       proc test {
         func := \ -> {};
         a := func();
       }
     )");
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot initialize"));
+    REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 
   SECTION("A return tvar cannot be switched to null if bound to another tvar") {
@@ -159,6 +159,6 @@ TEST_CASE("Inferred void lambda returns", "[Infer]") {
     )");
 
     // After the return is bound to x it the lambda then must return a value (as x can't be void)
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("needs to return a value"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot bind expression with type () to Integer"));
   }
 }

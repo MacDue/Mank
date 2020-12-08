@@ -164,3 +164,114 @@ TEST_CASE("Inferred void lambda returns", "[Infer]") {
     REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cannot bind expression with type () to Integer"));
   }
 }
+
+TEST_CASE("Incomplete substitution", "[Infer]") {
+  using namespace Catch::Matchers;
+  Semantics sema;
+  SECTION("Lambda that takes some unknown params and never uses/binds them") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := \x -> {}
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("type unknown!"));
+  }
+
+  SECTION("Same but within a nested lambda") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := \y -> {
+          \x -> {}
+        }
+        b := a(10);
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("type unknown!"));
+  }
+}
+
+TEST_CASE("Field constraints", "[Infer]") {
+  Semantics sema;
+  SECTION("Inferring with fields -- one level") {
+    auto code = Parser::parse_from_string(R"(
+      pod Foo {
+        bar: i32
+      }
+
+      proc test {
+        a := \ -> {
+          foo:Foo;
+          foo # Binds T0 (return) to Foo
+        }
+        my_foo := a(); # my_foo = T0
+
+        bar := my_foo.bar; # i32 (T0[.bar])
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+
+    auto& proc_test = *code.functions.at(0);
+    auto& my_foo_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(1)->v);
+    auto& bar_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(2)->v);
+
+    // my_foo is a Foo
+    REQUIRE("Foo" ==
+      std::get<Ast_Pod_Declaration>(my_foo_decl.type->v).identifier.name);
+
+    // bar is an int
+    REQUIRE(match_types(bar_decl.type, PrimativeType::get(PrimativeType::INTEGER)));
+  }
+
+  SECTION("Inferring with fields -- nested") {
+    auto code = Parser::parse_from_string(R"(
+      pod Foo {
+        bar: Bar
+      }
+
+      pod Bar {
+        baz: i32
+      }
+
+      proc test {
+        a := \ -> {
+          foo:Foo;
+          foo.bar.baz = 666;
+          foo
+        }
+
+        my_foo := a(); # my_foo = T0
+        baz := my_foo.bar.baz; # T0[.bar] = T1, T1[.baz] = T2
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+
+    auto& proc_test = *code.functions.at(0);
+    auto& my_foo_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(1)->v);
+    auto& baz_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(2)->v);
+
+    REQUIRE("Foo" ==
+      std::get<Ast_Pod_Declaration>(my_foo_decl.type->v).identifier.name);
+
+    REQUIRE(match_types(baz_decl.type, PrimativeType::get(PrimativeType::INTEGER)));
+  }
+
+  SECTION("It's invalid to infer a pod/field earlier than it's use") {
+    auto code = Parser::parse_from_string(R"(
+      pod Foo {
+        bar: i32
+      }
+
+      proc test {
+        a := \x -> { x.bar } # requires infering Foo type earlier in code
+        my_foo:Foo;
+        bar := a(my_foo);
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), "not a pod type");
+  }
+}

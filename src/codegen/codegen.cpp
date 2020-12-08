@@ -19,9 +19,8 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
 {
   this->create_module();
 
-  for (auto& func_type: file_ast.functions) {
-    auto& func = std::get<Ast_Function_Declaration>(func_type->v);
-    this->codegen_function_body(func);
+  for (auto& func: file_ast.functions) {
+    this->codegen_function_body(*func);
   }
 
   llvm_module->print(llvm::errs(), nullptr);

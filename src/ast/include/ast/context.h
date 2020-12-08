@@ -1,8 +1,10 @@
 #pragma once
 
+#include <set>
 #include <memory>
 
 #include "ast/node.h"
+#include "ast/type_var.h"
 
 struct ContextData;
 
@@ -15,6 +17,8 @@ class AstContext {
 public:
   AstContext();
   AstContext(AstContext&& ctx);
+
+  std::set<TypeVar> take_active_tvars();
 
   /*
     Only for types like i32, f64, etc.

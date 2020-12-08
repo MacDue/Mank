@@ -25,7 +25,7 @@ TEST_CASE("Inferring lambda types passed to functions", "[Infer]") {
   )");
 
   REQUIRE_NOTHROW(sema.analyse_file(code));
-  auto proc_test = std::get<Ast_Function_Declaration>(code.functions.at(1)->v);
+  auto proc_test = *code.functions.at(1);
 
   // apply(a, \x -> { x * 2 })
   auto apply_call = std::get<Ast_Call>(
@@ -76,7 +76,7 @@ TEST_CASE("Inferring types of local lambdas from usage", "[Infer]") {
   x_type.return_type = PrimativeType::get(PrimativeType::INTEGER);
   x_type.argument_types = { code.ctx.new_type(y_type) };
 
-  auto proc_test = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+  auto proc_test = *code.functions.at(0);
   auto x_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(0)->v);
 
   REQUIRE(match_types(x_decl.type, code.ctx.new_type(x_type)));
@@ -98,11 +98,14 @@ TEST_CASE("Inference enforces special constraints on operations", "[Infer]") {
       }
     )");
 
+    // code.functions.at(0)
+
     sema.disable_type_inference_for_testing(); // allows running unify later
     REQUIRE_NOTHROW(sema.analyse_file(code)); // no type inference yet
     // Try to infer types
     auto& infer = sema.get_infer_for_testing();
-    REQUIRE_THROWS_WITH(infer.unify_and_apply(), "additional type constraints not met");
+    REQUIRE_THROWS_WITH(infer.unify_and_apply(
+      std::move(code.functions.at(0)->active_tvars)), "additional type constraints not met");
   }
 }
 
@@ -123,7 +126,7 @@ TEST_CASE("Inferred void lambda returns", "[Infer]") {
     )");
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
-    auto proc_test = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+    auto proc_test = *code.functions.at(0);
 
     auto func_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(0)->v);
     REQUIRE(std::get<LambdaType>(func_decl.type->v).return_type->is_void());

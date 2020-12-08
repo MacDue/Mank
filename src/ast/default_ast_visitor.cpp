@@ -9,9 +9,8 @@
 void BaseAstVisitor::operator()(Ast_File& file) {
   before(file);
   visit(file);
-  for (auto& func_type: file.functions) {
-    auto& func = std::get<Ast_Function_Declaration>(func_type->v);
-    recur(func);
+  for (auto& func: file.functions) {
+    recur(*func);
   }
   after(file);
 }

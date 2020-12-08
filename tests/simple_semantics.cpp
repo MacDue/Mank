@@ -127,8 +127,8 @@ TEST_CASE("Calling functions", "[Sema]") {
 }
 
 #define EXTRACT_FIRST_BINARY_EXPR(expected_name) ({                                            \
-    auto& fun_function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);          \
-    REQUIRE(fun_function.identifier.name == expected_name);                                     \
+    auto& fun_function = *code.functions.at(0);                                                \
+    REQUIRE(fun_function.identifier.name == expected_name);                                    \
     auto& return_stmt = std::get<Ast_Return_Statement>(fun_function.body.statements.at(0)->v); \
     return_stmt.expression;                                                                    \
   })
@@ -621,7 +621,7 @@ TEST_CASE("Variable declaration semantics", "[Sema]") {
     REQUIRE_NOTHROW(sema.analyse_file(code));
 
     // The type should be """infered""" (too simple to really be inferance)
-    auto& func = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+    auto& func = *code.functions.at(0);
     auto& decl = std::get<Ast_Variable_Declaration>(func.body.statements.at(0)->v);
     REQUIRE(std::get<PrimativeType>(decl.type->v).tag == PrimativeType::INTEGER);
   }
@@ -752,7 +752,7 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
     )");
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
-    auto& function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+    auto& function = *code.functions.at(0);
 
     auto& assign_1 = std::get<Ast_Assign>(function.body.statements.at(1)->v);
     auto& access_1 = std::get<Ast_Field_Access>(assign_1.target->v);
@@ -875,7 +875,7 @@ TEST_CASE("Reference binding", "[Sema]") {
     )");
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
-    auto& function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+    auto& function = *code.functions.at(0);
 
     // a
     REQUIRE_REF_TYPE_TO(function, 3, Ast_Pod_Declaration, ({}));
@@ -917,7 +917,7 @@ TEST_CASE("Reference binding", "[Sema]") {
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
 
-    auto& function = std::get<Ast_Function_Declaration>(code.functions.at(0)->v);
+    auto& function = *code.functions.at(0);
 
     REQUIRE_REF_TYPE_TO(function, 1, PrimativeType, ({
       REQUIRE(references->tag == PrimativeType::INTEGER);

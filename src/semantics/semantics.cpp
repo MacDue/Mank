@@ -57,44 +57,41 @@ void Semantics::analyse_file(Ast_File& file) {
   }
 
   /* Add symbols for (yet to be checked) pods */
-  for (auto& pod_type: file.pods) {
-    auto& pod = std::get<Ast_Pod_Declaration>(pod_type->v);
-    emit_warning_if_shadows(pod.identifier, global_scope,
+  for (auto& pod: file.pods) {
+    emit_warning_if_shadows(pod->identifier, global_scope,
       "pod declaration shadows existing symbol");
     file.scope.add(
-      Symbol(pod.identifier, pod_type, Symbol::TYPE));
+      Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
   }
 
   /* Check pods */
-  for (auto& pod_type: file.pods) {
-    analyse_pod(std::get<Ast_Pod_Declaration>(pod_type->v), global_scope);
+  for (auto& pod: file.pods) {
+    analyse_pod(*pod, global_scope);
   }
 
   /* Add function headers into scope, resolve function return/param types */
-  for (auto& func_type: file.functions) {
-    auto& func = std::get<Ast_Function_Declaration>(func_type->v);
+  for (auto& func: file.functions) {
     // This is not very efficient, top level symbols could be placed in a hashmap
-    if (auto symbol = global_scope.lookup_first_name(func.identifier)) {
+    if (auto symbol = global_scope.lookup_first_name(func->identifier)) {
       if (symbol->kind == Symbol::FUNCTION) {
         auto& pior_func = std::get<Ast_Function_Declaration>(symbol->type->v);
-        throw_sema_error_at(func.identifier,
+        throw_sema_error_at(func->identifier,
           "redeclaration of function (previously on line {})",
           pior_func.identifier.location.start_line + 1);
       } else {
-        emit_warning_at(func.identifier,
+        emit_warning_at(func->identifier,
           "function declaration shadows existing symbol");
       }
     }
     file.scope.add(
-      Symbol(func.identifier, func_type, Symbol::FUNCTION));
-    func.body.scope.set_parent(global_scope);
-    analyse_function_header(func);
+      Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
+    func->body.scope.set_parent(global_scope);
+    analyse_function_header(*func);
   }
 
   /* Check functions */
-  for (auto& func_type: file.functions) {
-    auto& func = std::get<Ast_Function_Declaration>(func_type->v);
-    analyse_function_body(func);
+  for (auto& func: file.functions) {
+    analyse_function_body(*func);
   }
 }
 
@@ -215,8 +212,10 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
   // Infer local types
   if (!func.lambda && !this->disable_type_infer) {
+    auto tvars_in_func = ctx->take_active_tvars();
+    func.active_tvars.insert(tvars_in_func.begin(), tvars_in_func.end());
     try {
-      infer->unify_and_apply();
+      infer->unify_and_apply(std::move(func.active_tvars));
     } catch (Infer::UnifyError const & e) {
       throw_sema_error_at(func.identifier, "type inference failed ({})", e.what());
     }
@@ -615,7 +614,11 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       lambda_type.lambda = &lambda;
       std::transform(lambda.arguments.begin(), lambda.arguments.end(),
         std::back_inserter(lambda_type.argument_types),
-        [&](auto & arg){ return arg.type; });
+        [&](auto & arg){
+          // Just makes sure there's always a constraint for a param even if unused.
+          infer->match_or_constrain_types_at(arg.name.location, arg.type, arg.type, "unconstrained!");
+          return arg.type;
+        });
       return ctx->new_type(lambda_type);
     },
     pattern(as<Ast_Tuple_Literal>(arg)) = [&](auto& tuple) {

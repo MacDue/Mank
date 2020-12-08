@@ -119,7 +119,7 @@ public:
     unify_reasoning = {};
   }
 
-  Substitution unify_and_apply();
+  Substitution unify_and_apply(std::set<TypeVar>&& needed_solved);
 
   /* Helpers */
 

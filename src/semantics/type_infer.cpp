@@ -130,11 +130,11 @@ Infer::Substitution Infer::unify_var(TypeVar tvar, Type_Ptr type, ConstraintOrig
   };
 
   if (type_var) {
-    if (type_var->id == tvar.id) {
-      return Substitution{};
-    } else {
+    // if (type_var->id == tvar.id) {
+    //   return Substitution{};
+    // } else {
       return make_sub();
-    }
+    // }
   } else if (occurs(tvar, type)) {
     throw UnifyError("circular type usage detected");
   } else {
@@ -293,7 +293,7 @@ void Infer::get_infer_reason_notes(
   }
 }
 
-Infer::Substitution Infer::unify_and_apply() {
+Infer::Substitution Infer::unify_and_apply(std::set<TypeVar>&& needed_solved) {
   SpecialConstraints special_constraints;
 
   // Collect special constraints
@@ -354,11 +354,22 @@ Infer::Substitution Infer::unify_and_apply() {
   for (auto& [tvar, sub]: subs) {
     TypeVar found_tvar;
     if (occurs(TypeVar(TypeVar::ANY), sub, found_tvar.get_raw_self())) {
+      if (unify_reasoning.contains(found_tvar.id)) {
+        auto [loc, _] = unify_reasoning.at(found_tvar.id).at(0);
+        throw_compile_error(loc, "unknown type! maybe add a type annotation");
+      }
       throw UnifyError("incomplete substitution");
+    } else {
+      needed_solved.erase(tvar);
     }
-    assert(bool(sub) && "fix me! void not supported in infer");
+    assert(bool(sub) && "fix me! missing type in infer sub");
     *(tvar.get_self().class_ptr()) = *sub;
   }
+
+  // if (!needed_solved.empty()) {
+  //   throw UnifyError("sad :(");
+  // }
+
   // Ready for the next function.
   reset_inference();
   return subs;

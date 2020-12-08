@@ -18,11 +18,11 @@ void AstPrinter::print_file(Ast_File& file) {
     putf("- Source name: {}", file.filename);
   }
   for (auto& pod: file.pods) {
-    self->print_pod(std::get<Ast_Pod_Declaration>(pod->v));
+    self->print_pod(*pod);
     putf("");
   }
   for (auto& func: file.functions) {
-    self->print_function(std::get<Ast_Function_Declaration>(func->v));
+    self->print_function(*func);
     putf("");
   }
 }

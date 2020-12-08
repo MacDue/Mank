@@ -57,7 +57,7 @@ void Semantics::analyse_file(Ast_File& file) {
   }
 
   /* Add symbols for (yet to be checked) pods */
-  for (auto& pod: file.pods) {
+  for (auto pod: file.pods) {
     emit_warning_if_shadows(pod->identifier, global_scope,
       "pod declaration shadows existing symbol");
     file.scope.add(
@@ -65,12 +65,12 @@ void Semantics::analyse_file(Ast_File& file) {
   }
 
   /* Check pods */
-  for (auto& pod: file.pods) {
+  for (auto pod: file.pods) {
     analyse_pod(*pod, global_scope);
   }
 
   /* Add function headers into scope, resolve function return/param types */
-  for (auto& func: file.functions) {
+  for (auto func: file.functions) {
     // This is not very efficient, top level symbols could be placed in a hashmap
     if (auto symbol = global_scope.lookup_first_name(func->identifier)) {
       if (symbol->kind == Symbol::FUNCTION) {
@@ -90,7 +90,7 @@ void Semantics::analyse_file(Ast_File& file) {
   }
 
   /* Check functions */
-  for (auto& func: file.functions) {
+  for (auto func: file.functions) {
     analyse_function_body(*func);
   }
 }
@@ -143,7 +143,7 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
 
 Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
   block.scope.set_parent(scope);
-  for (auto& stmt: block.statements) {
+  for (auto stmt: block.statements) {
     analyse_statement(*stmt, block.scope);
   }
   Type_Ptr block_type = Type::void_ty();
@@ -398,7 +398,7 @@ void Semantics::check_tuple_bindings(
       throw_sema_error_at(init, "tuple not the right shape for binding");
     }
     uint bind_idx = 0;
-    for (auto& el_type: tuple_type->element_types) {
+    for (auto el_type: tuple_type->element_types) {
       auto& binding = bindings.binds.at(bind_idx);
       match(binding)(
         pattern(as<Ast_Argument>(arg)) =
@@ -479,7 +479,7 @@ void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_
     throw_sema_error_at(macro_call, "expander for macro not found");
   }
 
-  for (auto& arg: macro_call.arguments) {
+  for (auto arg: macro_call.arguments) {
     (void) analyse_expression(*arg, scope);
   }
 

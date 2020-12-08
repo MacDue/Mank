@@ -19,7 +19,7 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
 {
   this->create_module();
 
-  for (auto& func: file_ast.functions) {
+  for (auto func: file_ast.functions) {
     this->codegen_function_body(*func);
   }
 
@@ -410,7 +410,7 @@ void LLVMCodeGen::codegen_tuple_assign(
 ) {
   using namespace mpark::patterns;
   uint gep_idx = 0;
-  for (auto& el: tuple_pattern.elements) {
+  for (auto el: tuple_pattern.elements) {
     idxs.push_back(gep_idx);
     match(el->v) (
       pattern(as<Ast_Tuple_Literal>(arg)) = [&](auto& next_pattern) {
@@ -1078,7 +1078,7 @@ void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& va
   auto agg_type = values.get_type();
   llvm::Type* llvm_agg_type = map_type_to_llvm(agg_type.get(), scope);
   uint gep_idx = 0;
-  for (auto& el: values.elements) {
+  for (auto el: values.elements) {
     llvm::Value* element_ptr = ir_builder.CreateConstGEP2_32(
       llvm_agg_type, ptr, 0, gep_idx, "agg_element");
     match(el->v)(

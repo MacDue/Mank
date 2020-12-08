@@ -17,11 +17,11 @@ void AstPrinter::print_file(Ast_File& file) {
   if (!hide_lex_details) {
     putf("- Source name: {}", file.filename);
   }
-  for (auto& pod: file.pods) {
+  for (auto pod: file.pods) {
     self->print_pod(*pod);
     putf("");
   }
-  for (auto& func: file.functions) {
+  for (auto func: file.functions) {
     self->print_function(*func);
     putf("");
   }
@@ -155,7 +155,7 @@ void AstPrinter::print_expr(Ast_Block& block) {
   if (block.has_final_expr) {
     putf("- Block terminates with expression");
   }
-  for (auto& stmt: block.statements) {
+  for (auto stmt: block.statements) {
     self->print_stmt(*stmt);
   }
 }
@@ -248,7 +248,7 @@ void AstPrinter::print_expr(Ast_Array_Literal& array) {
   putf("* Array literal");
   putf("- {} elements", array.elements.size());
   uint element_idx = 0;
-  for (auto& element: array.elements) {
+  for (auto element: array.elements) {
     indent(); putf("[{}]:", element_idx);
     self->print_expr(*element);
     ++element_idx;
@@ -278,7 +278,7 @@ void AstPrinter::print_expr(Ast_Tuple_Literal& tuple) {
   putf("* Tuple literal");
   putf("- {} elements", tuple.elements.size());
   uint element_idx = 0;
-  for (auto& element: tuple.elements) {
+  for (auto element: tuple.elements) {
     indent(); putf(".{}:", element_idx);
     self->print_expr(*element);
     ++element_idx;

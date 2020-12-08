@@ -9,7 +9,7 @@
 void BaseAstVisitor::operator()(Ast_File& file) {
   before(file);
   visit(file);
-  for (auto& func: file.functions) {
+  for (auto func: file.functions) {
     recur(*func);
   }
   after(file);
@@ -80,7 +80,7 @@ void BaseAstVisitor::operator()(Ast_Tuple_Structural_Binding& binding) {
 void BaseAstVisitor::operator()(Ast_Block& block) {
   before(block);
   visit(block);
-  for (auto& stmt: block.statements) {
+  for (auto stmt: block.statements) {
     std::visit(recur, stmt->v);
   }
   after(block);

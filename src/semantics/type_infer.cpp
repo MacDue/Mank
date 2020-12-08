@@ -33,7 +33,7 @@ static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
     pattern(_) = []{});
 }
 
-static bool occurs(TypeVar tvar, Type_Ptr type, TypeVar * found_tvar = nullptr) {
+static bool occurs(TypeVar tvar, Type_Ptr type) {
   using namespace mpark::patterns;
   return match(type->v)(
     pattern(as<LambdaType>(arg)) =
@@ -49,10 +49,6 @@ static bool occurs(TypeVar tvar, Type_Ptr type, TypeVar * found_tvar = nullptr) 
       },
     pattern(as<TypeVar>(arg)) =
       [&](auto const & current_tvar) {
-        if (found_tvar) {
-          *found_tvar = current_tvar;
-        }
-
         return tvar.id == TypeVar::ANY || current_tvar.id == tvar.id;
       },
     pattern(_) = []{ return false; });
@@ -204,6 +200,11 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
         return ret;
       };
     },
+    pattern(as<Ast_Pod_Declaration>(arg), as<Ast_Pod_Declaration>(arg)) = [&](auto& p1, auto& p2) {
+      WHEN(p1.identifier.name == p2.identifier.name) {
+        return Substitution{};
+      };
+    },
     pattern(as<TypeFieldConstraint>(arg), _) = [&](auto field_constraint) {
       auto field_type = get_field_type(field_constraint.type, *field_constraint.field_access);
       Constraint fc{field_type, c.t2};
@@ -352,11 +353,10 @@ Infer::Substitution Infer::unify_and_apply() {
   }
 
   for (auto& [tvar, sub]: subs) {
-    TypeVar found_tvar;
-    if (occurs(TypeVar(TypeVar::ANY), sub, found_tvar.get_raw_self())) {
-      if (unify_reasoning.contains(found_tvar.id)) {
-        auto [loc, _] = unify_reasoning.at(found_tvar.id).at(0);
-        throw_compile_error(loc, "unknown type! maybe add a type annotation");
+    if (occurs(TypeVar(TypeVar::ANY), sub)) {
+      if (unify_reasoning.contains(tvar.id)) {
+        auto [loc, _] = unify_reasoning.at(tvar.id).at(0);
+        throw_compile_error(loc, "type unknown! maybe add a type annotation?");
       }
       throw UnifyError("incomplete substitution");
     }

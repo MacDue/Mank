@@ -48,6 +48,10 @@ bool match_types(Type_Ptr a, Type_Ptr b,
         [](auto const & a, auto const & b) {
           return a.tag == b.tag;
         },
+      pattern(as<Ast_Pod_Declaration>(arg), as<Ast_Pod_Declaration>(arg)) =
+        [](auto const & a, auto const & b) {
+          return a.identifier.name == b.identifier.name;
+        },
       pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) =
         [&](auto const & a, auto const & b) {
            // refs can't appear in arrays

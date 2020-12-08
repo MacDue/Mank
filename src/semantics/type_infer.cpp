@@ -129,7 +129,7 @@ Infer::Substitution Infer::unify_var(TypeVar tvar, Type_Ptr type, ConstraintOrig
     // if (type_var->id == tvar.id) {
     //   return Substitution{};
     // } else {
-      return make_sub();
+      return make_sub(); // TODO: make not add reason if tvars the same?
     // }
   } else if (occurs(tvar, type)) {
     throw UnifyError("circular type usage detected");
@@ -341,9 +341,14 @@ Infer::Substitution Infer::unify_and_apply() {
           < std::make_pair(m2.location.start_line, m2.location.start_column);
       });
 
-    for (auto note: infer_reason_notes) {
-      add_message(note);
-    }
+    // FIXME: Hack to ensure no duplicate notes added
+    auto last_note = std::unique(
+      infer_reason_notes.begin(), infer_reason_notes.end(),
+      [&](auto& a, auto& b){
+        return a.location == b.location && a.message == b.message;
+      });
+    infer_reason_notes.erase(last_note, infer_reason_notes.end());
+    std::for_each(infer_reason_notes.begin(), infer_reason_notes.end(), add_message);
 
     throw *error;
   }

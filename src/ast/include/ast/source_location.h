@@ -11,4 +11,9 @@ struct SourceLocation {
   inline bool is_empty() {
     return end_char_idx - start_char_idx <= 0;
   }
+
+  inline bool operator==(SourceLocation const & other) {
+    return start_char_idx == other.start_char_idx
+      && end_char_idx == other.end_char_idx;
+  }
 };

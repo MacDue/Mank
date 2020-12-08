@@ -212,10 +212,8 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
   // Infer local types
   if (!func.lambda && !this->disable_type_infer) {
-    auto tvars_in_func = ctx->take_active_tvars();
-    func.active_tvars.insert(tvars_in_func.begin(), tvars_in_func.end());
     try {
-      infer->unify_and_apply(std::move(func.active_tvars));
+      infer->unify_and_apply();
     } catch (Infer::UnifyError const & e) {
       throw_sema_error_at(func.identifier, "type inference failed ({})", e.what());
     }

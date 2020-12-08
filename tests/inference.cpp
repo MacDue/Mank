@@ -104,8 +104,7 @@ TEST_CASE("Inference enforces special constraints on operations", "[Infer]") {
     REQUIRE_NOTHROW(sema.analyse_file(code)); // no type inference yet
     // Try to infer types
     auto& infer = sema.get_infer_for_testing();
-    REQUIRE_THROWS_WITH(infer.unify_and_apply(
-      std::move(code.functions.at(0)->active_tvars)), "additional type constraints not met");
+    REQUIRE_THROWS_WITH(infer.unify_and_apply(), "additional type constraints not met");
   }
 }
 

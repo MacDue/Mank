@@ -117,7 +117,6 @@ Type_Ptr Parser::parse_function() {
       throw_error_here("expected function body");
     }
     parsed_function.body = *body;
-    parsed_function.active_tvars = ctx->take_active_tvars();
     mark_ast_location(fun_start, parsed_function);
     return ctx->new_type(parsed_function);
   } else {

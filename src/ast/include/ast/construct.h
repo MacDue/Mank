@@ -16,9 +16,6 @@ DEF_TYPE(Ast_Function_Declaration), Ast_Node {
   std::vector<Ast_Argument> arguments;
   Type_Ptr return_type;
   Ast_Block body;
-
-  // Tvars in use in this function, used to detect incomplete inference.
-  std::set<TypeVar> active_tvars;
 };
 
 DEF_TYPE(Ast_Pod_Declaration), Ast_Node {

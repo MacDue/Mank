@@ -18,8 +18,6 @@ public:
   AstContext();
   AstContext(AstContext&& ctx);
 
-  std::set<TypeVar> take_active_tvars();
-
   /*
     Only for types like i32, f64, etc.
     Not valid for non-static ptrs.

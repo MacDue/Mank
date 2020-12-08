@@ -293,7 +293,7 @@ void Infer::get_infer_reason_notes(
   }
 }
 
-Infer::Substitution Infer::unify_and_apply(std::set<TypeVar>&& needed_solved) {
+Infer::Substitution Infer::unify_and_apply() {
   SpecialConstraints special_constraints;
 
   // Collect special constraints
@@ -359,16 +359,10 @@ Infer::Substitution Infer::unify_and_apply(std::set<TypeVar>&& needed_solved) {
         throw_compile_error(loc, "unknown type! maybe add a type annotation");
       }
       throw UnifyError("incomplete substitution");
-    } else {
-      needed_solved.erase(tvar);
     }
     assert(bool(sub) && "fix me! missing type in infer sub");
     *(tvar.get_self().class_ptr()) = *sub;
   }
-
-  // if (!needed_solved.empty()) {
-  //   throw UnifyError("sad :(");
-  // }
 
   // Ready for the next function.
   reset_inference();

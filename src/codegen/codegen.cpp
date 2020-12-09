@@ -23,7 +23,7 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
     this->codegen_function_body(*func);
   }
 
-  llvm_module->print(llvm::errs(), nullptr);
+  llvm_module->print(llvm::outs(), nullptr);
 }
 
 void LLVMCodeGen::create_module() {

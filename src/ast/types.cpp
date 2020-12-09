@@ -64,9 +64,9 @@ std::string type_to_string(Type const & type) {
         switch (type_var.id)
         {
           case TypeVar::INTEGER:
-            return "IntegerType"s;
+            return "Integer"s;
           case TypeVar::NUMERIC:
-            return "NumericType"s;
+            return "Numeric"s;
           default:
             return "???"s;
         }

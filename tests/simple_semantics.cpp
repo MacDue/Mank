@@ -112,7 +112,7 @@ TEST_CASE("Calling functions", "[Sema]") {
     )");
 
     REQUIRE_THROWS_WITH(Semantics().analyse_file(code),
-      "cannot bind expression with type Integer to Float64");
+      "cannot bind expression with type Integer32 to Float64");
   }
 
   SECTION("Calling an undefined function should fail") {
@@ -510,7 +510,7 @@ TEST_CASE("Function and procedure semantics", "[Sema]") {
     )");
 
     REQUIRE_THROWS_WITH(sema.analyse_file(code),
-      Contains("cannot bind expression") && Contains("Integer to ()"));
+      Contains("cannot bind expression") && Contains("Integer32 to ()"));
   }
 }
 

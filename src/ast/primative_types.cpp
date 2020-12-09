@@ -43,7 +43,7 @@ char const * PrimativeType::type_name(Tag type) {
     case PrimativeType::FLOAT64:
       return "Float64";
     case PrimativeType::INTEGER:
-      return "Integer";
+      return "Integer32";
     case PrimativeType::UNSIGNED_BYTE:
       return "Unsigned byte";
     case PrimativeType::STRING:

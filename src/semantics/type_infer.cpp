@@ -9,7 +9,12 @@
 
 #include <iostream>
 
-using SpecialConstraints = std::vector<std::pair<TypeVar, TypeVar>>;
+struct SpecialConstraint {
+  TypeVar t, constraint;
+  SourceLocation origin;
+};
+
+using SpecialConstraints = std::vector<SpecialConstraint>;
 
 /* Helpers */
 
@@ -235,7 +240,8 @@ void Infer::merge_left(Substitution& target, Substitution const & other) {
 
 static bool satisfies_special_constraints(
   Infer::Substitution const & subs,
-  SpecialConstraints const & constraints
+  SpecialConstraints const & constraints,
+  SpecialConstraint const ** failed_constraint
 ) {
   auto sat_constraint = [&](TypeVar::Constraint constraint, Type const & type) {
     using namespace mpark::patterns;
@@ -247,10 +253,11 @@ static bool satisfies_special_constraints(
     );
   };
 
-  for (auto [tvar, constraint]: constraints) {
-    if (subs.contains(tvar)) {
-      auto type = subs.at(tvar);
-      if (!sat_constraint(static_cast<TypeVar::Constraint>(constraint.id), *type)) {
+  for (auto& sc: constraints) {
+    if (subs.contains(sc.t)) {
+      auto type = subs.at(sc.t);
+      if (!sat_constraint(static_cast<TypeVar::Constraint>(sc.constraint.id), *type)) {
+        *failed_constraint = &sc;
         return false;
       }
     }
@@ -304,7 +311,8 @@ Infer::Substitution Infer::unify_and_apply() {
     return match(constraint.t1->v, constraint.t2->v)(
       pattern(as<TypeVar>(arg), as<TypeVar>(arg)) = [&](auto t1, auto t2) {
         WHEN(t2.special()) {
-          special_constraints.push_back(std::make_pair(t1, t2));
+          special_constraints.push_back(
+            SpecialConstraint{.t = t1, .constraint = t2, .origin = *constraint.origin});
           return true; // remove
         };
       },
@@ -327,6 +335,7 @@ Infer::Substitution Infer::unify_and_apply() {
 
   auto [subs, error] = unify(std::move(type_constraints));
   if (error) {
+    /// Handle and display unify errors
     std::vector<CompilerMessage> infer_reason_notes;
 
     for (auto& tvar: top_failed_constraint.tvars_closure) {
@@ -353,8 +362,14 @@ Infer::Substitution Infer::unify_and_apply() {
     throw *error;
   }
 
-  if (!satisfies_special_constraints(subs, special_constraints)) {
-    throw UnifyError("additional type constraints not met");
+  SpecialConstraint const * failed_special_constraint = nullptr;
+  if (!satisfies_special_constraints(subs, special_constraints, &failed_special_constraint)) {
+    // Special constraint errors
+    // TODO: Get notes working here too?
+    throw_compile_error(failed_special_constraint->origin,
+      "was expecting a {} type but inferred {}",
+      type_to_string((&failed_special_constraint->constraint).class_ptr().get()),
+      type_to_string(subs.at(failed_special_constraint->t).get()));
   }
 
   for (auto& [tvar, sub]: subs) {

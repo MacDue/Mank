@@ -145,7 +145,7 @@ Infer::Substitution Infer::unify_var(TypeVar tvar, Type_Ptr type, ConstraintOrig
 
 [[ noreturn ]]
 void Infer::throw_unify_error(Constraint const & constraint) {
-  std::cout << "bang?\n";
+  // std::cout << "bang?\n";
   this->top_failed_constraint = std::move(constraint);
   throw_compile_error(
     constraint.origin.value_or(SourceLocation{}),
@@ -171,7 +171,7 @@ Infer::Substitution Infer::try_unify_sub_constraints(
 Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
   using namespace mpark::patterns;
 
-  std::cout << "unify: " << type_to_string(c.t1.get()) << " = " << type_to_string(c.t2.get()) << '\n';
+  // std::cout << "unify: " << type_to_string(c.t1.get()) << " = " << type_to_string(c.t2.get()) << '\n';
   return match(c.t1->v, c.t2->v)(
     pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [](auto& p1, auto& p2){
       WHEN(p1.tag == p2.tag) {
@@ -199,9 +199,9 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
           boost::tie(tup_constraint.t1, tup_constraint.t2) = type_pair;
           tuple_constraints.emplace_back(tup_constraint);
         }
-        std::cout << "start:\n";
+        // std::cout << "start:\n";
         auto ret = try_unify_sub_constraints(c, std::move(tuple_constraints));
-        std::cout << "end\n";
+        // std::cout << "end\n";
         return ret;
       };
     },
@@ -279,7 +279,7 @@ Infer::UnifyResult Infer::unify(Infer::ConstraintSet&& constraints) {
     merge_left(subs, more_subs);
     return std::make_pair(subs, e);
   } catch (CompilerError& e) {
-    std::cout << "error!\n";
+    // std::cout << "error!\n";
     return std::make_pair(subs, e);
   }
 }
@@ -290,7 +290,7 @@ void Infer::get_infer_reason_notes(
   std::vector<CompilerMessage> infer_info;
   if (tvar >= 0 && unify_reasoning.contains(tvar)) {
     for (auto const & [loc, type]: unify_reasoning.at(tvar)) {
-      std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
+      // std::cout << loc.start_line << ':' << loc.start_column << " -> " << loc.end_line << ':' << loc.end_column << '\n';
       if (!type) continue;
       auto error_type = apply_type(type, subs);
       if (is_tvar(error_type)) {
@@ -317,14 +317,15 @@ Infer::Substitution Infer::unify_and_apply() {
         };
       },
       pattern(_,_) = [&]{
-        std::cout << type_to_string(constraint.t1.get()) << " = "
-          <<  type_to_string(constraint.t2.get())
-          << " @" << constraint.origin->start_line
-                  << ":" << constraint.origin->start_column << " -> "
-                  << constraint.origin->end_line
-                  << ":" << constraint.origin->end_column
-                  << '\n';
-        return false; }
+        // std::cout << type_to_string(constraint.t1.get()) << " = "
+        //   <<  type_to_string(constraint.t2.get())
+        //   << " @" << constraint.origin->start_line
+        //           << ":" << constraint.origin->start_column << " -> "
+        //           << constraint.origin->end_line
+        //           << ":" << constraint.origin->end_column
+        //           << '\n';
+        return false;
+      }
     );
   });
 

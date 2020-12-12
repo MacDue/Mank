@@ -503,7 +503,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_If_Expr>(arg)) = [&](auto& if_expr){
       auto cond_type = analyse_expression(*if_expr.cond, scope);
       infer->match_or_constrain_types_at(if_expr.cond, cond_type, PrimativeType::bool_ty(),
-        "if condition must be a {1}");
+        "if condition must be a {1} (is {0})");
       auto then_type = analyse_expression(*if_expr.then_block, scope);
       if (if_expr.has_else) {
         auto else_type = analyse_expression(*if_expr.else_block, scope);

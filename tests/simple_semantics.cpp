@@ -471,6 +471,7 @@ TEST_CASE("Local variables", "[Sema]") {
 
 TEST_CASE("If statements semantics", "[Sema]") {
   Semantics sema;
+  using namespace Catch::Matchers;
 
   SECTION("If statement condtion must be a boolean") {
     auto code = Parser::parse_from_string(R"(
@@ -481,7 +482,7 @@ TEST_CASE("If statements semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), "if condition must be a Boolean");
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("if condition must be a Boolean"));
   }
 }
 

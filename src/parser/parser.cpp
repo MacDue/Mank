@@ -479,6 +479,9 @@ Expr_Ptr Parser::parse_primary_expression() {
       Ast_Macro_Identifier macro_ident;
       *static_cast<Ast_Identifier*>(macro_ident.get_raw_self()) = ident;
       return ctx->new_expr(macro_ident);
+    } else if (peek(TokenType::LEFT_BRACE)) {
+      // Pod literals
+      return this->parse_pod_literal(ident);
     }
     return ctx->new_expr(ident);
   } else if (peek(TokenType::LEFT_PAREN)) {
@@ -494,6 +497,33 @@ Expr_Ptr Parser::parse_primary_expression() {
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }
+}
+
+Expr_Ptr Parser::parse_pod_literal(Ast_Identifier pod_name) {
+  /*
+    pod_literal = identifier "{" pod_field_initializer {"," pod_field_initializer} "}" ;
+    pod_field_initializer = "." identifier "=" expression  ;
+  */
+  Ast_Pod_Literal parsed_pod;
+  parsed_pod.pod = ctx->new_type(UncheckedType(pod_name));
+  expect(TokenType::LEFT_BRACE);
+  while (!peek(TokenType::RIGHT_BRACE)) {
+    expect(TokenType::DOT);
+    auto field_name = this->parse_identifier();
+    if (!field_name) {
+      throw_error_here("expected field name");
+    }
+    expect(TokenType::ASSIGN);
+    parsed_pod.fields.push_back(PodFieldInitializer{
+      .field = *field_name,
+      .initializer = this->parse_expression()
+    });
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(TokenType::RIGHT_BRACE);
+  return ctx->new_expr(parsed_pod);
 }
 
 Expr_Ptr Parser::parse_tuple_literal(Expr_Ptr first_element) {

@@ -93,6 +93,7 @@ class AstPrinter {
     void print_expr(Ast_Lambda& lambda);
     void print_expr(Ast_Macro_Identifier& macro_ident);
     void print_expr(Ast_Tuple_Literal& tuple);
+    void print_expr(Ast_Pod_Literal& pod);
 
     DepthUpdate operator -> () {
       return DepthUpdate(this);

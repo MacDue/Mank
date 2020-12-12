@@ -62,6 +62,17 @@ DEF_EXPR(Ast_Index_Access) {
   Expr_Ptr object, index;
 };
 
+struct PodFieldInitializer {
+  Ast_Identifier field;
+  Expr_Ptr initializer;
+  int field_index = -1;
+};
+
+DEF_EXPR(Ast_Pod_Literal) {
+  Type_Ptr pod;
+  std::vector<PodFieldInitializer> fields;
+};
+
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
 
@@ -78,7 +89,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Index_Access,
   Ast_Lambda,
   Ast_Macro_Identifier,
-  Ast_Tuple_Literal>;
+  Ast_Tuple_Literal,
+  Ast_Pod_Literal>;
 
 class Ast_Expression {
   template<typename Expr>

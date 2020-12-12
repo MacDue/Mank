@@ -178,3 +178,12 @@ void BaseAstVisitor::operator()(Ast_Tuple_Literal& tuple) {
   }
   after(tuple);
 }
+
+void BaseAstVisitor::operator()(Ast_Pod_Literal& pod) {
+  before(pod);
+  visit(pod);
+  for (auto& field: pod.fields) {
+    std::visit(recur, field.initializer->v);
+  }
+  after(pod);
+}

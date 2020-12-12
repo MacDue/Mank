@@ -1212,6 +1212,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
   return create_lambda(llvm_lambda_type, lambda_func, env_ptr);
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Pod_Literal& pod, Scope& scope) {
+  assert(false && "todo! pod literal codegen");
+}
+
+
 // llvm::Value* LLVMCodeGen::codegen_expression(Ast_Tuple_Literal& tuple, Scope& scope) {
 //   assert(false && "fix me! tuple literal codegen");
 // }

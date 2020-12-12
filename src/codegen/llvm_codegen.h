@@ -174,9 +174,6 @@ public:
   Ast_Expression& flatten_nested_array_indexes(
     Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);
 
-  // void initialize_array(llvm::Value* array_ptr, Ast_Array_Literal& values, Scope& scope);
-  // void initialize_tuple(llvm::Value* tuple_ptr, Ast_Tuple_Literal& tuple, Scope& scope);
-
   void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
 
   llvm::Value* address_of(Ast_Expression& expr, Scope& scope);
@@ -197,7 +194,7 @@ public:
   llvm::Value* codegen_expression(Ast_Expression_List& array_like, Scope& scope);
   llvm::Value* codegen_expression(Ast_Index_Access& index, Scope& scope);
   llvm::Value* codegen_expression(Ast_Lambda& lambda, Scope& scope);
-  // llvm::Value* codegen_expression(Ast_Tuple_Literal& tuple, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Pod_Literal& pod, Scope& scope);
 
   inline llvm::Value* codegen_expression(Ast_Macro_Identifier& macro, Scope& scope) {
     (void) macro; (void) scope;

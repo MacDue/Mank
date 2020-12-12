@@ -284,3 +284,13 @@ void AstPrinter::print_expr(Ast_Tuple_Literal& tuple) {
     ++element_idx;
   }
 }
+
+void AstPrinter::print_expr(Ast_Pod_Literal& pod) {
+  putf("* Pod literal");
+  putf("- Pod: {}", type_to_string(pod.pod.get()));
+  for (auto field: pod.fields) {
+    indent();
+    putf(".{}:", field.field.name);
+    self->print_expr(*field.initializer);
+  }
+}

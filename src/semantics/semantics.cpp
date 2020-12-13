@@ -116,10 +116,11 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
 }
 
 void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
-  std::unordered_set<std::string_view> seen_fields;
+  PodInfo this_pod_info;
+  uint field_index = 0;
   for (auto& field: pod.fields) {
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
-    if (seen_fields.contains(field.name.name)) {
+    if (this_pod_info.field_info.contains(field.name.name)) {
       throw_sema_error_at(field.name, "duplicate pod field");
     }
     if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
@@ -132,8 +133,19 @@ void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
         field.type = nullptr; // cycles bad
       }
     }
-    seen_fields.insert(field.name.name);
+    this_pod_info.field_info.insert({
+      field.name.name,
+      PodInfo::FieldInfo {
+        .type = field.type,
+        .index = field_index
+      }
+    });
+    field_index += 1;
   }
+  pod_info.insert({
+    pod.identifier.name,
+    this_pod_info
+  });
 }
 
 void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
@@ -637,6 +649,33 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
           return element_type;
         });
       return ctx->new_type(tuple_type);
+    },
+    pattern(as<Ast_Pod_Literal>(arg)) = [&](auto& pod) {
+      // resolve pod & then check all fields in pod covered
+      // inc count of init fields
+      resolve_type_or_fail(scope, pod.pod, "undeclared pod type {}");
+      std::unordered_set<std::string_view> seen_fields;
+      auto& pod_type = std::get<Ast_Pod_Declaration>(pod.pod->v);
+      auto& pod_meta = this->pod_info.at(pod_type.identifier.name);
+      for (auto& field: pod.fields) {
+        if (seen_fields.contains(field.field.name)) {
+          throw_sema_error_at(field.field, "repeated field in initializer");
+        }
+        if (!pod_meta.field_info.contains(field.field.name)) {
+          throw_sema_error_at(field.field, "unknown field");
+        }
+        auto& field_info = pod_meta.field_info.at(field.field.name);
+        auto expected_type = field_info.type;
+        auto init_type = analyse_expression(*field.initializer, scope);
+        infer->match_or_constrain_types_at(field.initializer, init_type, expected_type,
+          "initializer type {} does not match expected type {}");
+        field.field_index = field_info.index;
+        seen_fields.insert(field.field.name);
+      }
+      if (seen_fields.size() != pod_meta.field_info.size()) {
+        throw_sema_error_at(pod, "incomplete pod initialization");
+      }
+      return pod.pod;
     },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");

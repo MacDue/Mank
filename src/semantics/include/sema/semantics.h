@@ -32,6 +32,15 @@ private:
   std::optional<AstBuilder> builder;
   std::optional<Infer> infer;
 
+  struct PodInfo {
+    struct FieldInfo {
+      Type_Ptr type;
+      uint index;
+    };
+    std::map<std::string_view, FieldInfo> field_info;
+  };
+  std::map<std::string_view, PodInfo> pod_info;
+
   // Only used for testing allows to seperate sema + infer
   bool disable_type_infer = false;
 

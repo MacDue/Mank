@@ -79,16 +79,16 @@ private:
   std::vector<Expr_Ptr> parse_expression_list(
     TokenType left_delim = TokenType::LEFT_PAREN,
     TokenType right_delim = TokenType::RIGHT_PAREN);
-  Expr_Ptr parse_expression();
-  Expr_Ptr parse_postfix_expression();
+  Expr_Ptr parse_expression(bool brace_delimited = false);
+  Expr_Ptr parse_postfix_expression(bool brace_delimited);
   Expr_Ptr parse_call(Expr_Ptr target);
   Expr_Ptr parse_field_access(Expr_Ptr object);
   Expr_Ptr parse_index_access(Expr_Ptr object);
-  Expr_Ptr parse_primary_expression();
+  Expr_Ptr parse_primary_expression(bool brace_delimited);
   Expr_Ptr parse_parenthesised_expression();
   Expr_Ptr parse_if();
-  Expr_Ptr parse_binary_expression();
-  Expr_Ptr parse_unary();
+  Expr_Ptr parse_binary_expression(bool brace_delimited);
+  Expr_Ptr parse_unary(bool brace_delimited);
   Expr_Ptr parse_literal();
   Expr_Ptr parse_array_literal();
   Expr_Ptr parse_lambda();

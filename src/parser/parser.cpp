@@ -315,9 +315,9 @@ Stmt_Ptr Parser::parse_for_loop() {
 
     expect(TokenType::IN);
 
-    for_loop.start_range = this->parse_expression();
+    for_loop.start_range = this->parse_expression(true);
     expect(TokenType::DOUBLE_DOT);
-    for_loop.end_range = this->parse_expression();
+    for_loop.end_range = this->parse_expression(true);
 
     auto body = this->parse_block();
 
@@ -385,7 +385,7 @@ Stmt_Ptr Parser::parse_tuple_structural_binding() {
 
 /* Expressions */
 
-Expr_Ptr Parser::parse_expression() {
+Expr_Ptr Parser::parse_expression(bool brace_delimited) {
   /*
     (* this ebnf is abridged to avoid describing precedence which is easier done with a table *)
     expression = literal
@@ -398,13 +398,13 @@ Expr_Ptr Parser::parse_expression() {
                | parenthesised_expression ;
   */
   auto expr_start = this->current_location();
-  auto expr = this->parse_binary_expression();
+  auto expr = this->parse_binary_expression(brace_delimited);
   return mark_ast_location(expr_start, expr);
 }
 
-Expr_Ptr Parser::parse_postfix_expression() {
+Expr_Ptr Parser::parse_postfix_expression(bool brace_delimited) {
   auto postfix_start = this->current_location();
-  auto expr = this->parse_primary_expression();
+  auto expr = this->parse_primary_expression(brace_delimited);
   while (true) {
     mark_ast_location(postfix_start, expr);
 
@@ -468,7 +468,7 @@ Expr_Ptr Parser::parse_index_access(Expr_Ptr object) {
   return ctx->new_expr(parsed_index);
 }
 
-Expr_Ptr Parser::parse_primary_expression() {
+Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
   if (peek(TokenType::LITERAL) || peek(TokenType::TRUE) || peek(TokenType::FALSE)) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
@@ -479,8 +479,9 @@ Expr_Ptr Parser::parse_primary_expression() {
       Ast_Macro_Identifier macro_ident;
       *static_cast<Ast_Identifier*>(macro_ident.get_raw_self()) = ident;
       return ctx->new_expr(macro_ident);
-    } else if (peek(TokenType::LEFT_BRACE)) {
-      // Pod literals
+    } else if (!brace_delimited && peek(TokenType::LEFT_BRACE)) {
+      // Only valid in non-brace limited places (could be wrapped in parens)
+      // e.g. not valid if cond or for loop ranges
       return this->parse_pod_literal(ident);
     }
     return ctx->new_expr(ident);
@@ -570,7 +571,7 @@ Expr_Ptr Parser::parse_if() {
   */
   Ast_If_Expr parsed_if;
   if (consume(TokenType::IF)) {
-    auto condition = this->parse_expression();
+    auto condition = this->parse_expression(true);
     if (!condition) {
       throw_error_here("unexpected \"{}\", expecting a condition expression");
     }
@@ -708,22 +709,22 @@ static Expr_Ptr fix_precedence_and_association(
     });
 }
 
-Expr_Ptr Parser::parse_binary_expression() {
+Expr_Ptr Parser::parse_binary_expression(bool brace_delimited) {
   /*
     binary_operation = expression, operation, expression ;
     operation = (* use your imagination *) ;
   */
-  auto lhs = this->parse_unary();
+  auto lhs = this->parse_unary(brace_delimited);
   auto bin_op = this->lexer.peek_next_token().type;
   if (is_binary_op(bin_op)) {
     lexer.consume_token();
-    auto rhs = this->parse_expression();
+    auto rhs = this->parse_expression(brace_delimited);
     lhs = fix_precedence_and_association(*ctx, lhs, rhs, static_cast<Ast_Operator>(bin_op));
   }
   return lhs;
 }
 
-Expr_Ptr Parser::parse_unary() {
+Expr_Ptr Parser::parse_unary(bool brace_delimited) {
   /*
     unary_operation = operation, expression ;
   */
@@ -734,13 +735,13 @@ Expr_Ptr Parser::parse_unary() {
     unary_op = TokenType::LOGICAL_NOT;
   }
   if (!is_unary_op(unary_op)) {
-    return this->parse_postfix_expression();
+    return this->parse_postfix_expression(brace_delimited);
   }
   Ast_Unary_Operation parsed_unary;
   parsed_unary.operation = static_cast<Ast_Operator>(unary_op);
   this->lexer.consume_token();
   // For nested unary expressions e.g. -------------10 (if you want that?)
-  parsed_unary.operand = this->parse_unary();
+  parsed_unary.operand = this->parse_unary(brace_delimited);
   auto unary = ctx->new_expr(parsed_unary);
   return mark_ast_location(unary_start, unary);
 }

@@ -732,6 +732,23 @@ TEST_CASE("For loop semantics", "[Sema]") {
   }
 }
 
+TEST_CASE("Pod declarations", "[Sema]") {
+  using namespace Catch::Matchers;
+  Semantics sema;
+
+  SECTION("Multiple fields of the same name is invalid") {
+    auto code = Parser::parse_from_string(R"(
+      pod Test {
+        foo: i32,
+        bar: i32,
+        foo: f64
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("duplicate pod field"));
+  }
+}
+
 TEST_CASE("Pod types and field access semantics", "[Sema]") {
   using namespace Catch::Matchers;
 

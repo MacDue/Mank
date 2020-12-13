@@ -1,4 +1,5 @@
 #include <utility>
+#include <unordered_set>
 
 #include <mpark/patterns.hpp>
 
@@ -115,8 +116,12 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
 }
 
 void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
+  std::unordered_set<std::string_view> seen_fields;
   for (auto& field: pod.fields) {
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
+    if (seen_fields.contains(field.name.name)) {
+      throw_sema_error_at(field.name, "duplicate pod field");
+    }
     if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
       if (auto steps = pod_is_recursive(pod, *pod_field)) {
         if (steps == 1) {
@@ -127,6 +132,7 @@ void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
         field.type = nullptr; // cycles bad
       }
     }
+    seen_fields.insert(field.name.name);
   }
 }
 

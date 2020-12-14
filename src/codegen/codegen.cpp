@@ -455,20 +455,26 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
 
   llvm::Value* initializer = nullptr;
 
+  bool special_init = false;
   Ast_Expression_List* agg_initializer = nullptr;
+  Ast_Pod_Literal* pod_initializer = nullptr;
 
   if (var_decl.initializer) {
     match(var_decl.initializer->v)(
       pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) =
       [&](auto& agg) { agg_initializer = agg.get_raw_self(); },
+      pattern(as<Ast_Pod_Literal>(arg)) =
+      [&](auto& pod) { pod_initializer = pod.get_raw_self(); },
       pattern(_) = []{}
     );
+
+    special_init = agg_initializer || pod_initializer;
 
     /*
       (Non-const) array inits are not simple expressions.
       Best I know is they have to be compiled to a bunch of geps + stores.
     */
-    if (!agg_initializer) {
+    if (!special_init) {
       initializer = codegen_bind(*var_decl.initializer, var_decl.type, scope);
     }
   }
@@ -491,12 +497,18 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
 
   if (initializer) {
     ir_builder.CreateStore(initializer, alloca);
-  } else if (agg_initializer) {
+  } else if (special_init) {
     // "Remove" the symbol temporarily to avoid issues in array init.
     auto name_backup = local_symbol.name.name;
     local_symbol.name.name.clear();
     // needs to be done before sym addd
-    initialize_aggregate(alloca, *agg_initializer, scope);
+    if (agg_initializer) {
+      initialize_aggregate(alloca, *agg_initializer, scope);
+    } else if (pod_initializer) {
+      initialize_pod(alloca, *pod_initializer, scope);
+    } else {
+      assert(false && "fix me! unknown special initializer");
+    }
     local_symbol.name.name = name_backup;
   }
 }
@@ -1095,6 +1107,30 @@ void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& va
   }
 }
 
+void LLVMCodeGen::initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope) {
+  using namespace mpark::patterns;
+  auto pod_type = initializer.pod;
+  llvm::Type* llvm_pod_type = map_type_to_llvm(pod_type.get(), scope);
+  for (auto& init: initializer.fields) {
+    llvm::Value* field_ptr = ir_builder.CreateConstGEP2_32(
+      llvm_pod_type, ptr, 0, init.field_index, "pod_field");
+    match(init.initializer->v)(
+      pattern(as<Ast_Pod_Literal>(arg)) =
+      [&](auto& nested_pod){
+        initialize_pod(field_ptr, nested_pod, scope);
+      },
+      pattern(anyof(as<Ast_Array_Literal>(arg), as<Ast_Tuple_Literal>(arg))) =
+      [&](auto& nested_agg) {
+        initialize_aggregate(field_ptr, nested_agg, scope);
+      },
+      pattern(_) = [&]{
+        llvm::Value* value = codegen_expression(*init.initializer, scope);
+        ir_builder.CreateStore(value, field_ptr);
+      }
+    );
+  }
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression_List& array_like, Scope& scope) {
   /*
     I'm not sure this is much use as feature and may remove it
@@ -1213,7 +1249,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Pod_Literal& pod, Scope& scope) {
-  assert(false && "todo! pod literal codegen");
+  llvm::AllocaInst* pod_alloca = create_entry_alloca(
+    get_current_function(), scope, pod.pod.get(), "pod_temp");
+  initialize_pod(pod_alloca, pod, scope);
+  return ir_builder.CreateLoad(pod_alloca, "pod_expr");
 }
 
 

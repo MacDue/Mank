@@ -69,7 +69,7 @@ struct PodFieldInitializer {
 };
 
 DEF_EXPR(Ast_Pod_Literal) {
-  Type_Ptr pod;
+  Type_Ptr pod; // could just be ident
   std::vector<PodFieldInitializer> fields;
 };
 

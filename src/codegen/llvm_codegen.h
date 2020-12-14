@@ -175,6 +175,7 @@ public:
     Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);
 
   void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
+  void initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope);
 
   llvm::Value* address_of(Ast_Expression& expr, Scope& scope);
   llvm::Value* codegen_bind(Ast_Expression& expr, Type_Ptr bound_to, Scope& scope);

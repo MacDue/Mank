@@ -671,6 +671,7 @@ TEST_CASE("Really like haskell", "[Codegen]") {
   REQUIRE(sum() == 1 + 2 + 3 + 4);
 }
 
+// TODO: More tuple tests
 TEST_CASE("Tuples", "[Codegen]") {
   SECTION("Tuple pattern assignment") {
     auto codegen = compile(R"(
@@ -683,5 +684,140 @@ TEST_CASE("Tuples", "[Codegen]") {
     REQUIRE((x == 10 && y == 20));
     swap(&x, &y);
     REQUIRE((x == 20 && y == 10));
+  }
+}
+
+TEST_CASE("Pod literals", "[Codegen]") {
+  SECTION("Non-nested pod") {
+    auto codegen = compile(R"(
+      pod Test {
+        hello: i32,
+        world: f64,
+        lol: bool
+      }
+
+      fun test_pass: bool (given: ref Test) {
+        # This assumes earlier (simpler) features work :)
+        if given.hello == 1000 {
+          if given.world == 1.0 {
+            if given.lol {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      fun sanity_check: bool {
+        my_test := Test {
+          .hello = 999,
+          .world = 1.0,
+          .lol = false
+        };
+        test_pass(my_test)
+      }
+
+      fun all_fields_read_back_should_match_init: bool {
+        my_test := Test {
+          .hello = 1000,
+          .world = 1.0,
+          .lol = true
+        };
+        test_pass(my_test)
+      }
+
+      fun order_of_init_fields_does_not_change_result: bool {
+        my_test := Test {
+          .lol = true,
+          .hello = 1000,
+          .world = 1.0
+        };
+        test_pass(my_test)
+      }
+    )");
+
+    auto sanity_check = codegen.extract_function_from_jit<bool()>("sanity_check");
+    REQUIRE(!sanity_check());
+
+    auto all_fields_read_back_should_match_init = codegen.extract_function_from_jit<bool()>(
+      "all_fields_read_back_should_match_init");
+
+    REQUIRE(all_fields_read_back_should_match_init());
+
+    auto order_of_init_fields_does_not_change_result = codegen.extract_function_from_jit<bool()>(
+      "order_of_init_fields_does_not_change_result");
+
+    REQUIRE(order_of_init_fields_does_not_change_result());
+  }
+
+  SECTION("Pod nested in pod") {
+    auto codegen = compile(R"(
+      pod Foo {
+        an_int: i32,
+        bar: Bar
+      }
+
+      pod Bar {
+        is_cool: bool,
+        a_float: f64
+      }
+
+      fun test_pass: bool (given: ref Foo) {
+        if given.an_int == 1066 {
+          if ¬given.bar.is_cool {
+            if given.bar.a_float == 3.14 {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      fun test_creating_nested_pod: bool {
+        my_foo := Foo {
+          .an_int = 1066,
+          .bar = Bar { .is_cool = false, .a_float = 3.14 }
+        };
+        test_pass(my_foo)
+      }
+    )");
+    auto test_creating_tested_pod = codegen.extract_function_from_jit<bool()>(
+      "test_creating_nested_pod");
+
+    REQUIRE(test_creating_tested_pod());
+  }
+
+  SECTION("Nesting tuples/arrays in pod init") {
+    auto codegen = compile(R"(
+      pod Agent {
+        weights: f64[4],
+        chosen_move: (i32, bool)
+      }
+
+      fun kalah: bool {
+        agent := Agent {
+          .weights = [0.4, 0.2, 1.0, -0.1],
+          .chosen_move = (4, true)
+        };
+
+        if agent.weights[0] == 0.4 {
+          if agent.weights[1] == 0.2 {
+            if agent.weights[2] == 1.0 {
+              if agent.weights[3] == -0.1 {
+                bind (pit, best_move) = agent.chosen_move;
+                if pit == 4 {
+                  if best_move {
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        }
+        return false;
+      }
+    )");
+    auto kalah = codegen.extract_function_from_jit<bool()>("kalah");
+    REQUIRE(kalah());
   }
 }

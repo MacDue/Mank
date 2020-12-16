@@ -34,6 +34,14 @@ Symbol* Semantics::emit_warning_if_shadows(
   return pior_symbol;
 }
 
+template<typename T>
+Ast_Identifier* get_symbol_identifer_if_type(Symbol* symbol) {
+  if (auto type = std::get_if<T>(&symbol->type->v)) {
+    return type->identifier.get_raw_self();
+  }
+  return nullptr;
+}
+
 void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
@@ -57,10 +65,29 @@ void Semantics::analyse_file(Ast_File& file) {
       Symbol(SymbolName(type_name), type, Symbol::TYPE));
   }
 
+  auto check_top_level_decl = [&](
+    char const * decl_name, Symbol::Kind sym_kind, Ast_Identifier& ident,
+    auto get_previous_decl
+  ) {
+    // This is not very efficient, top level symbols could be placed in a hashmap
+    if (auto symbol = global_scope.lookup_first_name(ident)) {
+      Ast_Identifier* pior_ident = nullptr;
+      if (symbol->kind == sym_kind && (pior_ident = get_previous_decl(symbol))) {
+        // If there's not a pior ident then it must be something else...
+        throw_sema_error_at(ident,
+          "redeclaration of {} (previously on line {})",
+          decl_name, pior_ident->location.start_line + 1);
+      } else {
+        emit_warning_at(ident,
+          "{} declaration shadows existing symbol", decl_name);
+      }
+    }
+  };
+
   /* Add symbols for (yet to be checked) pods */
   for (auto pod: file.pods) {
-    emit_warning_if_shadows(pod->identifier, global_scope,
-      "pod declaration shadows existing symbol");
+    check_top_level_decl("pod", Symbol::TYPE, pod->identifier,
+      get_symbol_identifer_if_type<Ast_Pod_Declaration>);
     file.scope.add(
       Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
   }
@@ -72,18 +99,8 @@ void Semantics::analyse_file(Ast_File& file) {
 
   /* Add function headers into scope, resolve function return/param types */
   for (auto func: file.functions) {
-    // This is not very efficient, top level symbols could be placed in a hashmap
-    if (auto symbol = global_scope.lookup_first_name(func->identifier)) {
-      if (symbol->kind == Symbol::FUNCTION) {
-        auto& pior_func = std::get<Ast_Function_Declaration>(symbol->type->v);
-        throw_sema_error_at(func->identifier,
-          "redeclaration of function (previously on line {})",
-          pior_func.identifier.location.start_line + 1);
-      } else {
-        emit_warning_at(func->identifier,
-          "function declaration shadows existing symbol");
-      }
-    }
+    check_top_level_decl("function", Symbol::FUNCTION, func->identifier,
+      get_symbol_identifer_if_type<Ast_Function_Declaration>);
     file.scope.add(
       Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
     func->body.scope.set_parent(global_scope);

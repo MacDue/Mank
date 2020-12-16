@@ -408,7 +408,6 @@ void Semantics::check_tuple_bindings(
   using namespace mpark::patterns;
   auto constraint = infer->generate_tuple_destructure_constraints(
     bindings, init_type, bindings.location);
-  // to_infer = to_infer | gen_constraints;
   if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {
     if (tuple_type->element_types.size() != bindings.binds.size()) {
       throw_sema_error_at(init, "tuple not the right shape for binding");
@@ -446,12 +445,7 @@ void Semantics::analyse_tuple_binding_decl(
   Ast_Tuple_Structural_Binding& binding, Scope& scope
 ) {
   auto init_type = analyse_expression(*binding.initializer, scope);
-  // auto pior_type = init_type.get();
   check_tuple_bindings(binding.bindings, *binding.initializer, init_type, scope);
-  // if (pior_type != init_type.get()) {
-  //   // Tuple type must have been replaced (to infered type)
-  //   binding.initializer->meta.owned_type = init_type;
-  // }
 }
 
 #define AUTO_LAMBDA "!auto_lambda"

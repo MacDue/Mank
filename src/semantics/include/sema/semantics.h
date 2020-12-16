@@ -26,20 +26,17 @@ struct Semantics {
 
   inline Infer& get_infer_for_testing() { return *infer; }
 private:
-  // FIXME
-  // Thes both should be refs... but I don't the the ctor...
+  // FIXME: These both should be refs... but I don't have the ctor...
   AstContext* ctx;
   std::optional<AstBuilder> builder;
   std::optional<Infer> infer;
 
   struct PodInfo {
-    struct FieldInfo {
-      Type_Ptr type;
-      uint index;
-    };
-    std::map<std::string_view, FieldInfo> field_info;
+    // Type + Resolved index
+    using FieldInfo = std::pair<Type_Ptr, uint>;
+    std::map<std::string_view, FieldInfo> fields;
   };
-  std::map<std::string_view, PodInfo> pod_info;
+  std::map<std::string_view, PodInfo> resolved_pods;
 
   // Only used for testing allows to seperate sema + infer
   bool disable_type_infer = false;

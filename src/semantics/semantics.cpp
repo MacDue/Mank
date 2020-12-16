@@ -116,11 +116,11 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
 }
 
 void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
-  PodInfo this_pod_info;
+  PodInfo pod_info;
   uint field_index = 0;
   for (auto& field: pod.fields) {
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
-    if (this_pod_info.field_info.contains(field.name.name)) {
+    if (pod_info.fields.contains(field.name.name)) {
       throw_sema_error_at(field.name, "duplicate pod field");
     }
     if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
@@ -133,18 +133,16 @@ void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
         field.type = nullptr; // cycles bad
       }
     }
-    this_pod_info.field_info.insert({
+    pod_info.fields.insert({
       field.name.name,
-      PodInfo::FieldInfo {
-        .type = field.type,
-        .index = field_index
-      }
+      std::make_pair(field.type, field_index)
     });
     field_index += 1;
   }
-  pod_info.insert({
+
+  this->resolved_pods.insert({
     pod.identifier.name,
-    this_pod_info
+    pod_info
   });
 }
 
@@ -358,7 +356,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
           var_decl.type = initializer_type;
         }
       } else {
-        emit_warning_at(var_decl, "default initialization is currently unimplemented");
+        throw_sema_error_at(var_decl, "uninitialized variable declaration");
       }
       assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer.get());
       emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
@@ -650,32 +648,30 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         });
       return ctx->new_type(tuple_type);
     },
-    pattern(as<Ast_Pod_Literal>(arg)) = [&](auto& pod) {
-      // resolve pod & then check all fields in pod covered
-      // inc count of init fields
-      resolve_type_or_fail(scope, pod.pod, "undeclared pod type {}");
+    pattern(as<Ast_Pod_Literal>(arg)) = [&](auto& pod_init) {
+      resolve_type_or_fail(scope, pod_init.pod, "undeclared pod type {}");
       std::unordered_set<std::string_view> seen_fields;
-      auto& pod_type = std::get<Ast_Pod_Declaration>(pod.pod->v);
-      auto& pod_meta = this->pod_info.at(pod_type.identifier.name);
-      for (auto& field: pod.fields) {
-        if (seen_fields.contains(field.field.name)) {
-          throw_sema_error_at(field.field, "repeated field in initializer");
+      auto& pod_type = std::get<Ast_Pod_Declaration>(pod_init.pod->v);
+      auto& pod_info = this->resolved_pods.at(pod_type.identifier.name);
+      for (auto& init: pod_init.fields) {
+        if (seen_fields.contains(init.field.name)) {
+          throw_sema_error_at(init.field, "repeated field in initializer");
         }
-        if (!pod_meta.field_info.contains(field.field.name)) {
-          throw_sema_error_at(field.field, "unknown field");
+        if (!pod_info.fields.contains(init.field.name)) {
+          throw_sema_error_at(init.field, "{} contains no field named \"{}\"",
+            pod_type.identifier.name, init.field.name);
         }
-        auto& field_info = pod_meta.field_info.at(field.field.name);
-        auto expected_type = field_info.type;
-        auto init_type = analyse_expression(*field.initializer, scope);
-        infer->match_or_constrain_types_at(field.initializer, init_type, expected_type,
+        auto [expected_type, field_index] = pod_info.fields.at(init.field.name);
+        auto init_type = analyse_expression(*init.initializer, scope);
+        infer->match_or_constrain_types_at(init.initializer, init_type, expected_type,
           "initializer type {} does not match expected type {}");
-        field.field_index = field_info.index;
-        seen_fields.insert(field.field.name);
+        init.field_index = field_index;
+        seen_fields.insert(init.field.name);
       }
-      if (seen_fields.size() != pod_meta.field_info.size()) {
-        throw_sema_error_at(pod, "incomplete pod initialization");
+      if (seen_fields.size() != pod_info.fields.size()) {
+        throw_sema_error_at(pod_init, "incomplete pod initialization");
       }
-      return pod.pod;
+      return pod_init.pod;
     },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");

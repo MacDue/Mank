@@ -8,6 +8,7 @@
 #include "ast/types.h"
 #include "ast/ast_builder.h"
 
+#include "sema/pod_info.h"
 #include "sema/type_infer.h"
 #include "sema/sema_errors.h"
 
@@ -39,7 +40,8 @@ T min_type(T a, T b) {
 
 TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 
-Type_Ptr get_field_type(Type_Ptr type, Ast_Field_Access& access);
+Type_Ptr get_field_type(
+  Type_Ptr type, Ast_Field_Access& access, ResolvedPodInfoMap const & pod_info);
 
 template<typename T>
 static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {

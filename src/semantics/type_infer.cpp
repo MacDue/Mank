@@ -211,12 +211,14 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
       };
     },
     pattern(as<TypeFieldConstraint>(arg), _) = [&](auto field_constraint) {
-      auto field_type = get_field_type(field_constraint.type, *field_constraint.field_access);
+      auto field_type = get_field_type(
+        field_constraint.type, *field_constraint.field_access, resolved_pods);
       Constraint fc{field_type, c.t2};
       return try_unify_sub_constraints(c, { fc });
     },
     pattern(_, as<TypeFieldConstraint>(arg)) = [&](auto field_constraint) {
-      auto field_type = get_field_type(field_constraint.type, *field_constraint.field_access);
+      auto field_type = get_field_type(
+        field_constraint.type, *field_constraint.field_access, resolved_pods);
       Constraint fc{c.t1, field_type};
       return try_unify_sub_constraints(c, { fc });
     },

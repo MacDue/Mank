@@ -5,6 +5,7 @@
 #include <formatxx/std_string.h>
 
 #include "sema/types.h"
+#include "sema/pod_info.h"
 #include "sema/type_infer.h"
 
 #include "ast/ast.h"
@@ -31,12 +32,7 @@ private:
   std::optional<AstBuilder> builder;
   std::optional<Infer> infer;
 
-  struct PodInfo {
-    // Type + Resolved index
-    using FieldInfo = std::pair<Type_Ptr, uint>;
-    std::map<std::string_view, FieldInfo> fields;
-  };
-  std::map<std::string_view, PodInfo> resolved_pods;
+  ResolvedPodInfoMap resolved_pods;
 
   // Only used for testing allows to seperate sema + infer
   bool disable_type_infer = false;

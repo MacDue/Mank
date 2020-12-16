@@ -38,7 +38,7 @@ void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
   this->builder.emplace(AstBuilder(file));
-  this->infer.emplace(Infer(*this->ctx, [&](CompilerMessage msg){
+  this->infer.emplace(Infer(*this->ctx, resolved_pods, [&](CompilerMessage msg){
     warnings.emplace_back(msg);
   }));
 
@@ -117,6 +117,7 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
 
 void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
   PodInfo pod_info;
+  pod_info.type = pod.get_self();
   uint field_index = 0;
   for (auto& field: pod.fields) {
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
@@ -575,7 +576,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             field_type, field_constraint);
           return field_type;
         } else {
-          return get_field_type(object_type, access);
+          return get_field_type(object_type, access, resolved_pods);
         }
       } else {
         throw_sema_error_at(access.object, "is void?");
@@ -651,11 +652,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         if (seen_fields.contains(init.field.name)) {
           throw_sema_error_at(init.field, "repeated field in initializer");
         }
-        if (!pod_info.fields.contains(init.field.name)) {
-          throw_sema_error_at(init.field, "{} contains no field named \"{}\"",
-            pod_type.identifier.name, init.field.name);
-        }
-        auto [expected_type, field_index] = pod_info.fields.at(init.field.name);
+        auto [expected_type, field_index] = pod_info.get_field_or_fail(init.field);
         auto init_type = analyse_expression(*init.initializer, scope);
         infer->match_or_constrain_types_at(init.initializer, init_type, expected_type,
           "initializer type {} does not match expected type {}");

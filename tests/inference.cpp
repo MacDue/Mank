@@ -203,7 +203,7 @@ TEST_CASE("Field constraints", "[Infer]") {
 
       proc test {
         a := \ -> {
-          foo:Foo;
+          foo := Foo {.bar = 42};
           foo # Binds T0 (return) to Foo
         }
         my_foo := a(); # my_foo = T0
@@ -238,8 +238,7 @@ TEST_CASE("Field constraints", "[Infer]") {
 
       proc test {
         a := \ -> {
-          foo:Foo;
-          foo.bar.baz = 666;
+          foo := Foo {.bar = Bar{ .baz = 666 }};
           foo
         }
 
@@ -268,7 +267,7 @@ TEST_CASE("Field constraints", "[Infer]") {
 
       proc test {
         a := \x -> { x.bar } # requires infering Foo type earlier in code
-        my_foo:Foo;
+        my_foo := Foo {.bar = 42};
         bar := a(my_foo);
       }
     )");

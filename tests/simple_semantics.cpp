@@ -605,7 +605,7 @@ TEST_CASE("Variable declaration semantics", "[Sema]") {
     auto code = Parser::parse_from_string(R"(
       proc make_int {
         my_int:i32 = 10;
-        my_other_int:f64;
+        my_other_int:f64 = 1.0;
       }
     )");
 
@@ -762,7 +762,10 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
       }
 
       fun bean_stuff_you_would_not_understand: f64 {
-        bean: AbstractBean;
+        bean := AbstractBean {
+          .coolness = -1,
+          .abstractness = 0.0
+        };
         bean.coolness = 10000;
         bean.abstractness = 32839.9999;
         bean.abstractness
@@ -798,7 +801,13 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
       }
 
       proc main {
-        cee: C;
+        cee := C{
+          .bee = B{
+            .ayy = A{
+              .test = -5
+            }
+          }
+        };
         cee.bee.ayy.test = 10;
       }
     )");
@@ -822,7 +831,7 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
       pod Ben {}
 
       fun sad: i32 {
-        ben: Ben;
+        ben := Ben{};
         ben.qi
       }
     )");
@@ -838,9 +847,10 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
       }
 
       fun make_bar: Bar {
-        bar: Bar;
-        bar.a = 1;
-        bar.b = 2;
+        bar := Bar {
+          .a = 1,
+          .b = 2
+        };
         bar
       }
 
@@ -879,7 +889,10 @@ TEST_CASE("Reference binding", "[Sema]") {
       }
 
       proc ref_test {
-        my_pod: Example;
+        my_pod := Example {
+          .my_float = 1.0,
+          .my_int = 100
+        };
         my_array := [1,2,3,4];
         my_var := 1;
 
@@ -963,7 +976,8 @@ TEST_CASE("Reference binding", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("must be initialized"));
+    REQUIRE_THROWS_WITH(sema.analyse_file(code),
+      Contains("must be initialized") || Contains("uninitialized"));
   }
 }
 
@@ -979,7 +993,7 @@ TEST_CASE("References act like their base type", "[Sema]") {
       a: i32 = 1;
       b: f64 = 1.0;
       c := [1, 2, 3];
-      d: Example;
+      d := Example { .a = 0 };
 
       # References
       a_ref := ref a;
@@ -1046,7 +1060,7 @@ TEST_CASE("Expressions that evaluate to references can be used as lvalues", "[Se
       fun ref_cast: ref i32 (a: ref i32) { a }
 
       proc ref_test {
-        a: i32;
+        a: i32 = 10;
         ref_cast(a) = 1;
       }
     )");

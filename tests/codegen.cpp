@@ -223,7 +223,10 @@ TEST_CASE("Abstract bean factory", "[Codegen]") {
     }
 
     fun abstract_bean_factory: AbstractBean (bean_kind: i32) {
-      bean: AbstractBean;
+      bean := AbstractBean {
+        .coolness = 0,
+        .abstractness = 1.0
+      };
       if bean_kind == 0 {
         bean.coolness = 5;
         bean.abstractness = 0.4;
@@ -272,7 +275,7 @@ TEST_CASE("Getting and setting in nested pods", "[Codegen]") {
     }
 
     fun make_nested_pod: One {
-      my_pod: One;
+      my_pod := One {.two = Two{.three = Three{.test = 0}}};
       my_pod.two.three.test = 42;
       my_pod
     }
@@ -535,7 +538,7 @@ TEST_CASE("Closures", "[Codegen]") {
   SECTION("Recursive lambda") {
     auto codegen = compile(R"(
       fun make_fib: \i32 -> i32 {
-        fib_proto : \i32 -> i32;
+        fib_proto := \x:i32 -> {0}; # dummy
         \ -> \i32 -> i32 {
           fib_ref := ref fib_proto;
           fib_proto = \n: i32 -> i32 {

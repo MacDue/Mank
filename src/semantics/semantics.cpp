@@ -78,6 +78,7 @@ void Semantics::analyse_file(Ast_File& file) {
           "redeclaration of {} (previously on line {})",
           decl_name, pior_ident->location.start_line + 1);
       } else {
+        // FIXME: a symbol of a different kind that shadows still overwrites the other
         emit_warning_at(ident,
           "{} declaration shadows existing symbol", decl_name);
       }

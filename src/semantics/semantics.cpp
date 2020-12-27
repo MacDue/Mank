@@ -69,7 +69,6 @@ void Semantics::analyse_file(Ast_File& file) {
     char const * decl_name, Symbol::Kind sym_kind, Ast_Identifier& ident,
     auto get_previous_decl
   ) {
-    // This is not very efficient, top level symbols could be placed in a hashmap
     if (auto symbol = global_scope.lookup_first_name(ident)) {
       Ast_Identifier* pior_ident = nullptr;
       if (symbol->kind == sym_kind && (pior_ident = get_previous_decl(symbol))) {

@@ -1,7 +1,8 @@
 #pragma once
 
-#include <vector>
 #include <memory>
+#include <vector>
+#include <unordered_map>
 
 #include "ast/node.h"
 
@@ -15,6 +16,7 @@ struct Scope;
 
 struct Symbol {
   SymbolName name;
+
   Type_Ptr type;
 
   enum Kind {
@@ -39,7 +41,7 @@ struct Symbol {
 };
 
 class Scope {
-  std::vector<Symbol> symbols;
+  std::unordered_map<std::string, std::vector<Symbol>> symbols;
   Scope* parent = nullptr;
   int level = 0;
 public:
@@ -57,7 +59,7 @@ public:
     return lookup_first(name.name);
   }
 
-  Symbol* lookup_first(std::string_view name);
+  Symbol* lookup_first(std::string const & name);
 
   void destroy_locals();
 };

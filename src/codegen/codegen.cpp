@@ -1164,13 +1164,18 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& sco
   idx_list.push_back(create_llvm_idx(0));
   auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
 
+  llvm::Value* source_address = nullptr;
   if (source_object.is_lvalue()) {
-    llvm::Value* source_address = address_of(source_object, scope);
-    llvm::Value* element_ptr = ir_builder.CreateGEP(source_address, idx_list, "index_access");
-    return ir_builder.CreateLoad(element_ptr, "load_element");
+    source_address = address_of(source_object, scope);
   } else {
-    assert(false && "todo");
+    // TODO: Find better way?
+    source_address = create_entry_alloca(
+      get_current_function(), scope, source_object.meta.type.get(), "index_temp");
+    ir_builder.CreateStore(codegen_expression(source_object, scope), source_address);
   }
+
+  llvm::Value* element_ptr = ir_builder.CreateGEP(source_address, idx_list, "index_access");
+  return ir_builder.CreateLoad(element_ptr, "load_element");
 }
 
 llvm::Value* LLVMCodeGen::create_lambda(

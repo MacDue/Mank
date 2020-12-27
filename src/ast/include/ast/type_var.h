@@ -36,5 +36,13 @@ DEF_TYPE(TypeFieldConstraint) {
   Type_Ptr type;
   SpAstPtr<Ast_Expression, Ast_Field_Access> field_access;
 
-  static Type_Ptr get(AstContext& ctx,  Ast_Field_Access& access);
+  static Type_Ptr get(AstContext& ctx, Ast_Field_Access& access);
+};
+
+struct Ast_Index_Access;
+DEF_TYPE(TypeIndexConstraint) {
+  Type_Ptr type;
+  SpAstPtr<Ast_Expression, Ast_Index_Access> index_access;
+
+  static Type_Ptr get(AstContext& ctx, Ast_Index_Access& access);
 };

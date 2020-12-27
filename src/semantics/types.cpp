@@ -136,6 +136,8 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
     });
 }
 
+#define TYPE_MUST_BE_KNOWN "type must be known here! Maybe add a type annotation?"
+
 Type_Ptr get_field_type(
   Type_Ptr type,
   Ast_Field_Access& access,
@@ -158,10 +160,45 @@ Type_Ptr get_field_type(
           return PrimativeType::int_ty();
         };
       },
+      pattern(as<TypeVar>(_)) = [&]() -> Type_Ptr {
+        throw_sema_error_at(access.object, TYPE_MUST_BE_KNOWN);
+        return nullptr;
+      },
       pattern(_) = []() -> Type_Ptr { return nullptr; });
     if (access_type) {
       return access_type;
     }
   }
   throw_sema_error_at(access.object, "not a pod type");
+}
+
+Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {
+  if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(type)) {
+    access.get_meta().value_type = access.object->meta.value_type;
+    access.object->meta.type = type; // hack
+    static_check_array_bounds(access);
+    return array_type->element_type;
+  } else {
+    throw_sema_error_at(access.object, "not an array type (is {})",
+      type_to_string(type.get()));
+  }
+}
+
+void static_check_array_bounds(Ast_Index_Access& index_access, bool allow_missing_types) {
+  if (auto index_value = index_access.index->meta.get_const_value()) {
+    auto object_type = index_access.object->meta.type;
+    // FIXME: Will break if more indexable types added
+    auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type);
+    if (!array_type) {
+      // Would only be a tvar
+      if (allow_missing_types) return;
+      throw_sema_error_at(index_access.object, TYPE_MUST_BE_KNOWN);
+    }
+    // assert(array_type && "should be an array type");
+    // FIXME: Will break with more integer types
+    auto int_index = std::get<int32_t>(*index_value);
+    if (int_index < 0 || static_cast<size_t>(int_index) >= array_type->size) {
+      throw_sema_error_at(index_access.index, "out of bounds index");
+    }
+  }
 }

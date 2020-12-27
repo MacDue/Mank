@@ -588,7 +588,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       if (object_type) {
         if (is_tvar(object_type)) {
           auto field_constraint = TypeFieldConstraint::get(*ctx, access);
-          auto field_type = ctx->new_type(TypeVar());
+          auto field_type = ctx->new_tvar();
           infer->add_constraint(AstHelper::extract_location(access),
             field_type, field_constraint);
           return field_type;
@@ -622,14 +622,18 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) {
       auto object_type = analyse_expression(*index.object, scope);
       auto index_type = analyse_expression(*index.index, scope);
-      if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(object_type)) {
-        infer->match_or_constrain_types_at(index.index, index_type, PrimativeType::int_ty(),
-          "invalid index type {}");
-        expr.inherit_value_type(*index.object);
-        return array_type->element_type;
+
+      infer->match_or_constrain_types_at(index.index, index_type, PrimativeType::int_ty(),
+        "invalid index type {}");
+
+      if (is_tvar(object_type)) {
+        auto index_constraint = TypeIndexConstraint::get(*ctx, index);
+        auto element_type = ctx->new_tvar();
+        infer->add_constraint(AstHelper::extract_location(index),
+          element_type, index_constraint);
+        return element_type;
       } else {
-        throw_sema_error_at(index.object, "not an array type (is {})",
-          type_to_string(object_type.get()));
+        return get_element_type(object_type, index);
       }
     },
     pattern(as<Ast_Lambda>(arg)) = [&](auto& lambda) {

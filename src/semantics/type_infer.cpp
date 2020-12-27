@@ -18,6 +18,8 @@ using SpecialConstraints = std::vector<SpecialConstraint>;
 
 /* Helpers */
 
+#define ACCESS_CONSTRAINT anyof(as<TypeFieldConstraint>(arg), as<TypeIndexConstraint>(arg))
+
 static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
   using namespace mpark::patterns;
   match(type->v)(
@@ -33,6 +35,14 @@ static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
         for (auto el_type: tuple.element_types) {
           extract_tvars(el_type, type_vars);
         }
+      },
+    pattern(ACCESS_CONSTRAINT) =
+      [&](auto const & access_constraint) {
+        extract_tvars(access_constraint.type, type_vars);
+      },
+    pattern(as<FixedSizeArrayType>(arg)) =
+      [&](auto const & array_type) {
+        extract_tvars(array_type.element_type, type_vars);
       },
     pattern(as<TypeVar>(arg)) = [&](auto tvar){ type_vars.insert(tvar); },
     pattern(_) = []{});
@@ -52,6 +62,14 @@ static bool occurs(TypeVar tvar, Type_Ptr type) {
           return std::any_of(tuple.element_types.begin(), tuple.element_types.end(),
             [&](auto el_type){ return occurs(tvar, el_type); });
       },
+    pattern(ACCESS_CONSTRAINT) =
+      [&](auto const & access_constraint) {
+        return occurs(tvar, access_constraint.type);
+      },
+    pattern(as<FixedSizeArrayType>(arg)) =
+      [&](auto const & array_type) {
+        return occurs(tvar, array_type.element_type);
+      },
     pattern(as<TypeVar>(arg)) =
       [&](auto const & current_tvar) {
         return tvar.id == TypeVar::ANY || current_tvar.id == tvar.id;
@@ -64,49 +82,65 @@ void Infer::Constraint::init() {
   extract_tvars(t2, tvars_closure);
 }
 
-Type_Ptr Infer::substitute(
-  Type_Ptr current_type, TypeVar tvar, Type_Ptr replacement, Substitution const & subs
+// array subs + check if new before new type
+bool Infer::substitute(
+  Type_Ptr& current_type, TypeVar tvar, Type_Ptr replacement, Substitution const & subs
 ) {
   using namespace mpark::patterns;
+
+  bool type_updated = false;
+  auto updated = [&](auto new_type) {
+    if (type_updated) {
+      // Only create a new type when needed
+      current_type = ctx.new_type(new_type);
+    }
+    return type_updated;
+  };
+
   return match(current_type->v)(
-    pattern(anyof(as<PrimativeType>(_), as<Ast_Pod_Declaration>(_))) = [&]{ return current_type; },
+    pattern(anyof(as<PrimativeType>(_), as<Ast_Pod_Declaration>(_))) = [&]{
+      return false;
+    },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
-      lambda_type.return_type = substitute(
-        lambda_type.return_type, tvar, replacement, subs);
+      type_updated |= substitute(lambda_type.return_type, tvar, replacement, subs);
       for (auto& arg_type: lambda_type.argument_types) {
-        arg_type = substitute(arg_type, tvar, replacement, subs);
+        type_updated |= substitute(arg_type, tvar, replacement, subs);
       }
-      return ctx.new_type(lambda_type);
+      return updated(lambda_type);
     },
     pattern(as<TupleType>(arg)) = [&](auto tuple_type) {
       for (auto& el_type: tuple_type.element_types) {
-        el_type = substitute(el_type, tvar, replacement, subs);
+        type_updated |= substitute(el_type, tvar, replacement, subs);
       }
-      return ctx.new_type(tuple_type);
+      return updated(tuple_type);
+    },
+    pattern(ACCESS_CONSTRAINT) = [&](auto access_constraint) {
+      type_updated |= substitute(access_constraint.type, tvar, replacement, subs);
+      return updated(access_constraint);
+    },
+    pattern(as<FixedSizeArrayType>(arg)) = [&](auto array_type) {
+      type_updated |= substitute(array_type.element_type, tvar, replacement, subs);
+      return updated(array_type);
     },
     pattern(as<TypeVar>(arg)) = [&](auto const & current_tvar) {
       // tvar already unified... to be replaced it needs to have already been unified
       if (current_tvar.id == tvar.id) {
-        return replacement;
+        current_type = replacement;
+        return true;
       }
-      return current_type;
+      return false;
     },
-    pattern(as<TypeFieldConstraint>(arg)) = [&](auto field_constraint) {
-      field_constraint.type = substitute(field_constraint.type, tvar, replacement, subs);
-      return ctx.new_type(field_constraint);
-    },
-    pattern(_) = [&]() -> Type_Ptr {
+    pattern(_) = [&]() -> bool {
       throw UnifyError("unknown type substitution " + type_to_string(current_type.get()));
     }
   );
 }
 
 Type_Ptr Infer::apply_type(Type_Ptr type, Substitution const & subs) {
-  auto result = type;
   for (auto& [tvar, solved_type]: subs) {
-    result = substitute(result, tvar, solved_type, subs);
+    substitute(type, tvar, solved_type, subs);
   }
-  return result;
+  return type;
 }
 
 void Infer::apply_constraint(Constraint& c, Substitution const & subs) {
@@ -170,8 +204,23 @@ Infer::Substitution Infer::try_unify_sub_constraints(
 
 Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
   using namespace mpark::patterns;
+  using namespace std::placeholders;
 
   // std::cout << "unify: " << type_to_string(c.t1.get()) << " = " << type_to_string(c.t2.get()) << '\n';
+  auto unify_field_constraint = [&](Type_Ptr other_type, TypeFieldConstraint& field_constraint) {
+    auto field_type = get_field_type(
+      field_constraint.type, *field_constraint.field_access, resolved_pods);
+    Constraint fc{field_type, other_type};
+    return try_unify_sub_constraints(c, { fc });
+  };
+
+  auto unify_index_constraint = [&](Type_Ptr other_type, TypeIndexConstraint& index_constraint) {
+    auto element_type = get_element_type(
+      index_constraint.type, *index_constraint.index_access);
+    Constraint ic{element_type, other_type};
+    return try_unify_sub_constraints(c, { ic });
+  };
+
   return match(c.t1->v, c.t2->v)(
     pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [](auto& p1, auto& p2){
       WHEN(p1.tag == p2.tag) {
@@ -210,17 +259,15 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
         return Substitution{};
       };
     },
-    pattern(as<TypeFieldConstraint>(arg), _) = [&](auto field_constraint) {
-      auto field_type = get_field_type(
-        field_constraint.type, *field_constraint.field_access, resolved_pods);
-      Constraint fc{field_type, c.t2};
-      return try_unify_sub_constraints(c, { fc });
-    },
-    pattern(_, as<TypeFieldConstraint>(arg)) = [&](auto field_constraint) {
-      auto field_type = get_field_type(
-        field_constraint.type, *field_constraint.field_access, resolved_pods);
-      Constraint fc{c.t1, field_type};
-      return try_unify_sub_constraints(c, { fc });
+    pattern(as<TypeFieldConstraint>(arg), _) = std::bind(unify_field_constraint, c.t2, _1),
+    pattern(_, as<TypeFieldConstraint>(arg)) = std::bind(unify_field_constraint, c.t1, _1),
+    pattern(as<TypeIndexConstraint>(arg), _) = std::bind(unify_index_constraint, c.t2, _1),
+    pattern(_, as<TypeIndexConstraint>(arg)) = std::bind(unify_index_constraint, c.t1, _1),
+    pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) = [&](auto& a1, auto& a2) {
+      WHEN(a1.size == a2.size) {
+        Constraint ec{a1.element_type, a2.element_type};
+        return try_unify_sub_constraints(c, { ec });
+      };
     },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
       return unify_var(tvar, c.t2, c.get_note_spot());
@@ -428,7 +475,8 @@ void Infer::generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call) {
 void generate_array_index_constraints(
   Type_Ptr& array_type, Ast_Index_Access& index
 ) {
-  // TODO
+  (void) array_type; (void) index;
+  assert(false && "todo?");
 }
 
 void Infer::generate_tuple_assign_constraints(Ast_Assign& tuple_assign) {

@@ -78,6 +78,9 @@ std::string type_to_string(Type const & type) {
         type_to_string(field_constraint.type.get()),
         field_constraint.field_access->field.name);
     },
+    pattern(as<TypeIndexConstraint>(arg)) = [](auto const & index_constraint) {
+      return formatxx::format_string("{}[Indexable]", type_to_string(index_constraint.type.get()));
+    },
     pattern(_) = []{
       return "???"s;
     });
@@ -127,4 +130,11 @@ Type_Ptr TypeFieldConstraint::get(AstContext& ctx, Ast_Field_Access& access) {
   fc.type = access.object->meta.type;
   fc.field_access = &access;
   return ctx.new_type(fc);
+}
+
+Type_Ptr TypeIndexConstraint::get(AstContext& ctx, Ast_Index_Access& access) {
+  TypeIndexConstraint ic;
+  ic.type = access.object->meta.type;
+  ic.index_access = &access;
+  return ctx.new_type(ic);
 }

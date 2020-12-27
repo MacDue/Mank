@@ -30,6 +30,10 @@ public:
     return add_type(Type(type));
   }
 
+  inline Type_Ptr new_tvar() {
+    return new_type(TypeVar());
+  }
+
   template <typename T>
   Stmt_Ptr new_stmt(T stmt) {
     return add_stmt(Ast_Statement(stmt));

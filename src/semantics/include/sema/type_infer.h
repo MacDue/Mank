@@ -144,8 +144,8 @@ private:
   int32_t tvar, std::vector<CompilerMessage>& msgs, Infer::Substitution const & subs);
 
   /* Sub */
-  Type_Ptr substitute(
-    Type_Ptr current_type, TypeVar tvar, Type_Ptr replacement,
+  bool substitute(
+    Type_Ptr& current_type, TypeVar tvar, Type_Ptr replacement,
     Substitution const & subs);
 
   /* Apply */

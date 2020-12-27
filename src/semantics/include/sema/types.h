@@ -43,6 +43,8 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 Type_Ptr get_field_type(
   Type_Ptr type, Ast_Field_Access& access, ResolvedPodInfoMap const & pod_info);
 
+Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);
+
 template<typename T>
 static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
   auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);
@@ -59,3 +61,5 @@ template<typename T1>
 T1* get_if_dereferenced_type(Type_Ptr& type) {
   return std::get_if<T1>(&remove_reference(type)->v);
 }
+
+void static_check_array_bounds(Ast_Index_Access& index_access, bool allow_missing_types = false);

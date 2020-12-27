@@ -144,7 +144,7 @@ std::vector<Ast_Argument> Parser::parse_arguments(
         throw_error_here("type name expected");
       }
     } else {
-      arg_type = ctx->new_type(TypeVar());
+      arg_type = ctx->new_tvar();
     }
 
     arguments.emplace_back(Ast_Argument {
@@ -349,7 +349,7 @@ TupleBinding Parser::parse_tuple_binding() {
       if(consume(TokenType::COLON)) {
         type = this->parse_type(true);
       } else {
-        type = ctx->new_type(TypeVar());
+        type = ctx->new_tvar();
       }
       binding.binds.push_back(Ast_Argument{
         .type = type,
@@ -835,7 +835,7 @@ Type_Ptr Parser::parse_base_type(bool default_tvar) {
 
   if (!type_name) {
     if (default_tvar) {
-      type = ctx->new_type(TypeVar());
+      type = ctx->new_tvar();
     } else {
       return nullptr;
     }

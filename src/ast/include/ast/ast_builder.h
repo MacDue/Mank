@@ -45,8 +45,15 @@ Ast_File& add_functions(TFunction && ... function) {
 
 inline Ast_Argument make_argument(Type_Ptr type, std::string name) {
   return Ast_Argument {
-      .type = type,
-      .name = Ast_Identifier(name)
+    .type = type,
+    .name = Ast_Identifier(name)
+  };
+}
+
+inline Ast_Argument make_argument(std::string name) {
+  return Ast_Argument {
+    .type = file.ctx.new_tvar(),
+    .name = Ast_Identifier(name)
   };
 }
 
@@ -152,6 +159,13 @@ Expr_Ptr make_stmt_block(TStmt && ... stmts) {
   return make_block(false, stmts...);
 }
 
+/* Types */
+
+inline Type_Ptr make_type(std::string name) {
+  UncheckedType type(Ast_Identifier{name});
+  return to_type_ptr(type);
+}
+
 /* -- Expressions -- */
 
 /* If expressions */
@@ -201,6 +215,12 @@ inline Expr_Ptr make_ident(std::string name) {
   return to_expr_ptr(ident);
 }
 
+inline Expr_Ptr make_macro_ident(std::string name) {
+  Ast_Macro_Identifier ident;
+  ident.name = name;
+  return to_expr_ptr(ident);
+}
+
 /* Calls */
 
 template <typename... TArgs>
@@ -244,6 +264,77 @@ inline Expr_Ptr make_access(Expr_Ptr object, std::string field) {
   access.object = object;
   access.field.name = field;
   return to_expr_ptr(access);
+}
+
+/* Array/tuple literals */
+
+template <typename TAgg, typename... TElements>
+inline Expr_Ptr make_expr_list(TElements && ... elements) {
+  TAgg agg;
+  agg.elements = std::vector<Expr_Ptr> { elements... };
+  return to_expr_ptr(agg);
+}
+
+template <typename... TElements>
+inline Expr_Ptr make_array(TElements && ... elements) {
+  return make_expr_list<Ast_Array_Literal>(elements...);
+}
+
+template <typename... TElements>
+inline Expr_Ptr make_tuple(TElements && ... elements) {
+  return make_expr_list<Ast_Tuple_Literal>(elements...);
+}
+
+/* Index access */
+
+inline Expr_Ptr make_index(Expr_Ptr object, Expr_Ptr index) {
+  Ast_Index_Access access;
+  access.object = object;
+  access.index = index;
+  return to_expr_ptr(access);
+}
+
+/* Lambda expr */
+
+inline Expr_Ptr make_lambda(
+  Type_Ptr return_type,
+  std::vector<Ast_Argument>&& args,
+  Ast_Block&& body
+) {
+  Ast_Lambda lambda;
+  lambda.arguments = args;
+  lambda.body = body;
+  lambda.return_type = return_type;
+  return to_expr_ptr(lambda);
+}
+
+inline Expr_Ptr make_lambda(
+  std::vector<Ast_Argument>&& args,
+  Ast_Block&& body
+) {
+  return make_lambda(file.ctx.new_tvar(), std::move(args), std::move(body));
+}
+
+/* Pod literal */
+
+inline PodFieldInitializer make_field_init(
+  std::string field_name, Expr_Ptr initializer
+) {
+  return PodFieldInitializer {
+    .field = Ast_Identifier(field_name),
+    .initializer = initializer
+  };
+}
+
+template <typename... TFieldInits>
+inline Expr_Ptr make_pod_init(
+  std::string pod_name,
+  TFieldInits && ... field_inits
+) {
+  Ast_Pod_Literal pod_literal;
+  pod_literal.pod = make_type(pod_name);
+  pod_literal.fields = std::vector<PodFieldInitializer> { field_inits... };
+  return to_expr_ptr(pod_literal);
 }
 
 /* -- Statements -- */
@@ -329,11 +420,22 @@ inline Stmt_Ptr make_for(
   return make_for(loop_value, nullptr, start_range, end_range, loop_body);
 }
 
-/* Types */
+template <typename... TBindings>
+inline TupleBinding make_tuple_binding(
+  TBindings && ... bindings
+) {
+  TupleBinding binding;
+  binding.binds.push_back(bindings...);
+  return binding;
+}
 
-inline Type_Ptr make_type(std::string name) {
-  UncheckedType type(Ast_Identifier{name});
-  return to_type_ptr(type);
+inline Stmt_Ptr make_bind(
+  TupleBinding bindings, Expr_Ptr initializer
+) {
+  Ast_Tuple_Structural_Binding tuple_binding;
+  tuple_binding.bindings = bindings;
+  tuple_binding.initializer = initializer;
+  return to_stmt_ptr(tuple_binding);
 }
 
 /* Test helpers */

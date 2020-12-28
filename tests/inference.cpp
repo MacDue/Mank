@@ -195,6 +195,7 @@ TEST_CASE("Incomplete substitution", "[Infer]") {
 
 TEST_CASE("Field constraints", "[Infer]") {
   Semantics sema;
+  using namespace Catch::Matchers;
   SECTION("Inferring with fields -- one level") {
     auto code = Parser::parse_from_string(R"(
       pod Foo {
@@ -272,6 +273,6 @@ TEST_CASE("Field constraints", "[Infer]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), "not a pod type");
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("type must be known here!"));
   }
 }

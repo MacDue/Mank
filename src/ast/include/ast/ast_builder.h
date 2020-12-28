@@ -425,7 +425,7 @@ inline TupleBinding make_tuple_binding(
   TBindings && ... bindings
 ) {
   TupleBinding binding;
-  binding.binds.push_back(bindings...);
+  (binding.binds.push_back(bindings), ...);
   return binding;
 }
 

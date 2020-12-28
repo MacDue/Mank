@@ -61,5 +61,5 @@ public:
   bool is_void() const;
 };
 
-std::string type_to_string(Type const & type);
-std::string type_to_string(Type const * type);
+std::string type_to_string(Type const & type, bool hide_lex_details = false);
+std::string type_to_string(Type const * type, bool hide_lex_details = false);

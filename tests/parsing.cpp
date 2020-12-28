@@ -580,3 +580,206 @@ TEST_CASE("Field access", "[Parser]") {
     MATCH_AST(parsed_access, expected_access);
   }
 }
+
+TEST_CASE("Array literals", "[Parser]") {
+  SECTION("1d arrays") {
+    auto parsed_array = Parser::parse_from_string(
+      WPS "[1,2,3,4,5];" WPE);
+
+    NEW_FILE(file);
+    auto& expected_array = f.wrap_expr(
+      f.make_array(
+        f.make_integer(1), f.make_integer(2), f.make_integer(3),
+        f.make_integer(4), f.make_integer(5)));
+
+    MATCH_AST(parsed_array, expected_array);
+  }
+
+  SECTION("Nested arrays") {
+    auto parsed_array = Parser::parse_from_string(
+      WPS "[[1,2,3],[1,2,3]];" WPE);
+
+    NEW_FILE(file);
+    auto& expected_array = f.wrap_expr(
+      f.make_array(
+        f.make_array(
+          f.make_integer(1), f.make_integer(2), f.make_integer(3)),
+        f.make_array(
+          f.make_integer(1), f.make_integer(2), f.make_integer(3))));
+
+    MATCH_AST(parsed_array, expected_array);
+  }
+}
+
+TEST_CASE("Tuple literals", "[Parser]") {
+  // Pretty much the same as arrays
+  SECTION("Simple tuples") {
+    auto parsed_tuple = Parser::parse_from_string(
+      WPS "(1, true, 3.000000);" WPE);
+
+    NEW_FILE(file);
+    auto& expected_tuple = f.wrap_expr(
+      f.make_tuple(
+        f.make_integer(1), f.make_boolean(true), f.make_float64(3.000000)));
+
+    MATCH_AST(parsed_tuple, expected_tuple);
+  }
+
+  SECTION("Nested tuples") {
+    auto parsed_tuple = Parser::parse_from_string(
+      WPS "((1, true), (false, 3));" WPE);
+
+    NEW_FILE(file);
+    auto& expected_tuple = f.wrap_expr(
+      f.make_tuple(
+        f.make_tuple(
+          f.make_integer(1), f.make_boolean(true)),
+        f.make_tuple(
+          f.make_boolean(false), f.make_integer(3))));
+
+    MATCH_AST(parsed_tuple, expected_tuple);
+  }
+}
+
+TEST_CASE("Index access", "[Parser]") {
+  SECTION("Single level access") {
+    auto parsed_index = Parser::parse_from_string(
+      WPS "foo[4];" WPE);
+
+    NEW_FILE(file);
+    auto& expected_index = f.wrap_expr(
+      f.make_index(f.make_ident("foo"), f.make_integer(4)));
+
+    MATCH_AST(parsed_index, expected_index);
+  }
+
+  SECTION("Nested access") {
+    auto parsed_index = Parser::parse_from_string(
+      WPS "foo[1][2][3];" WPE);
+
+    NEW_FILE(file);
+    auto& expected_index = f.wrap_expr(
+      f.make_index(
+        f.make_index(
+          f.make_index(
+            f.make_ident("foo"),
+            f.make_integer(1)),
+          f.make_integer(2)),
+        f.make_integer(3)));
+
+    MATCH_AST(parsed_index, expected_index);
+  }
+}
+
+TEST_CASE("Lambda exprs", "[Parser]") {
+  SECTION("Without type annotations") {
+    auto parsed_lambda = Parser::parse_from_string(
+      WPS R"(\x,y,z -> {};)" WPE);
+
+    NEW_FILE(file);
+    auto& expected_lambda = f.wrap_expr(
+      f.make_lambda(f.make_args(
+        f.make_argument("x"),
+        f.make_argument("y"),
+        f.make_argument("z")), f.make_body(false)));
+
+    MATCH_AST(parsed_lambda, expected_lambda);
+  }
+
+  SECTION("With type annotations") {
+    auto parsed_lambda = Parser::parse_from_string(
+      WPS R"(\x:i32,y:bool,z:f64 -> bool {};)" WPE);
+
+    NEW_FILE(file);
+    auto& expected_lambda = f.wrap_expr(
+      f.make_lambda(
+        f.make_type("bool"),
+        f.make_args(
+          f.make_argument(f.make_type("i32"), "x"),
+          f.make_argument(f.make_type("bool"), "y"),
+          f.make_argument(f.make_type("f64"), "z")),
+        f.make_body(false)));
+
+    MATCH_AST(parsed_lambda, expected_lambda);
+  }
+}
+
+TEST_CASE("Tuple binding", "[Parser]") {
+  SECTION("Simple tuple binding") {
+    auto parsed_binding = Parser::parse_from_string(
+      WPS "bind (x, y, z) = foo;" WPE);
+
+    NEW_FILE(file);
+    auto& expected_binding = f.wrap_stmt(
+      f.make_bind(
+        f.make_tuple_binding(
+          f.make_argument("x"),
+          f.make_argument("y"),
+          f.make_argument("z")), f.make_ident("foo")));
+
+    MATCH_AST(parsed_binding, expected_binding);
+  }
+
+  SECTION("Nested tuple binding") {
+    auto parsed_binding = Parser::parse_from_string(
+      WPS "bind (x, (y, z)) = foo;" WPE);
+
+    NEW_FILE(file);
+    auto& expected_binding = f.wrap_stmt(
+      f.make_bind(
+        f.make_tuple_binding(
+          f.make_argument("x"),
+          f.make_tuple_binding(
+            f.make_argument("y"),
+            f.make_argument("z"))),
+        f.make_ident("foo")));
+
+    MATCH_AST(parsed_binding, expected_binding);
+  }
+
+  SECTION("Tuple binding with types") {
+    auto parsed_binding = Parser::parse_from_string(
+      WPS "bind (x: i32, y: bool, z: f64) = foo;" WPE);
+
+    NEW_FILE(file);
+    auto& expected_binding = f.wrap_stmt(
+      f.make_bind(
+        f.make_tuple_binding(
+          f.make_argument(f.make_type("i32"), "x"),
+          f.make_argument(f.make_type("bool"), "y"),
+          f.make_argument(f.make_type("f64"), "z")),
+        f.make_ident("foo")));
+
+    MATCH_AST(parsed_binding, expected_binding);
+  }
+}
+
+TEST_CASE("Pod literals expressions", "[Parser]") {
+  SECTION("Simple pod literal") {
+    auto parsed_pod = Parser::parse_from_string(
+      WPS "Foo { .bar = 1, .baz = true };" WPE);
+
+    NEW_FILE(file);
+    auto& expected_pod = f.wrap_expr(
+      f.make_pod_init("Foo",
+        f.make_field_init("bar", f.make_integer(1)),
+        f.make_field_init("baz", f.make_boolean(true))));
+
+    MATCH_AST(parsed_pod, expected_pod);
+  }
+
+  SECTION("Nested pod literals") {
+    auto parsed_pod = Parser::parse_from_string(
+      WPS "Foo { .bar = 1, .baz = Baz { .bol = true }};" WPE);
+
+    NEW_FILE(file);
+    auto& expected_pod = f.wrap_expr(
+      f.make_pod_init("Foo",
+        f.make_field_init("bar", f.make_integer(1)),
+        f.make_field_init("baz",
+          f.make_pod_init("Baz",
+            f.make_field_init("bol", f.make_boolean(true))))));
+
+    MATCH_AST(parsed_pod, expected_pod);
+  }
+}

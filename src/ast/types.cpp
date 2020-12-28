@@ -10,7 +10,7 @@
 /* String helpers */
 
 static std::string type_list_to_string(
-  std::vector<Type_Ptr> const & types,
+  std::vector<Type_Ptr> const & types, bool hide_details,
   std::string_view seperator, std::string_view begin_padding = ""
 ) {
   std::string out;
@@ -22,12 +22,12 @@ static std::string type_list_to_string(
     } else {
       out += begin_padding;
     }
-    out += type_to_string(*it->get());
+    out += type_to_string(*it->get(), hide_details);
   }
   return out;
 }
 
-std::string type_to_string(Type const & type) {
+std::string type_to_string(Type const & type, bool hide_details) {
   using namespace std::string_literals;
   using namespace mpark::patterns;
   return match(type.v)(
@@ -40,26 +40,26 @@ std::string type_to_string(Type const & type) {
     pattern(as<Ast_Pod_Declaration>(arg)) = [](auto const & pod_type) {
       return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
-    pattern(as<FixedSizeArrayType>(arg)) = [](auto const & array_type) {
+    pattern(as<FixedSizeArrayType>(arg)) = [&](auto const & array_type) {
       return formatxx::format_string("{}[{}]",
-        type_to_string(array_type.element_type.get()), array_type.size);
+        type_to_string(array_type.element_type.get(), hide_details), array_type.size);
     },
-    pattern(as<ReferenceType>(arg)) = [](auto const & reference_type) {
+    pattern(as<ReferenceType>(arg)) = [&](auto const & reference_type) {
       return formatxx::format_string("reference to {}",
-        type_to_string(reference_type.references.get()));
+        type_to_string(reference_type.references.get(), hide_details), hide_details);
     },
-    pattern(as<LambdaType>(arg)) = [](auto const & lambda_type) {
+    pattern(as<LambdaType>(arg)) = [&](auto const & lambda_type) {
       std::string lambda_str = "lambda";
 
-      lambda_str += type_list_to_string(lambda_type.argument_types, ", ", " ");
-      lambda_str += " -> " + type_to_string(lambda_type.return_type.get());
+      lambda_str += type_list_to_string(lambda_type.argument_types, hide_details, ", ", " ");
+      lambda_str += " -> " + type_to_string(lambda_type.return_type.get(), hide_details);
       return lambda_str;
     },
-    pattern(as<TupleType>(arg)) = [](auto const & tuple_type) {
+    pattern(as<TupleType>(arg)) = [&](auto const & tuple_type) {
       return formatxx::format_string("({})",
-        type_list_to_string(tuple_type.element_types, ","));
+        type_list_to_string(tuple_type.element_types, hide_details, ","));
     },
-    pattern(as<TypeVar>(arg)) = [](auto const & type_var) {
+    pattern(as<TypeVar>(arg)) = [&](auto const & type_var) {
       if (type_var.special()) {
         switch (type_var.id)
         {
@@ -71,24 +71,25 @@ std::string type_to_string(Type const & type) {
             return "???"s;
         }
       }
-      return formatxx::format_string("T{}", type_var.id);
+      return formatxx::format_string(hide_details ? "T" : "T{}", type_var.id);
     },
-    pattern(as<TypeFieldConstraint>(arg)) = [](auto const & field_constraint) {
+    pattern(as<TypeFieldConstraint>(arg)) = [&](auto const & field_constraint) {
       return formatxx::format_string("{}[.{}]",
-        type_to_string(field_constraint.type.get()),
+        type_to_string(field_constraint.type.get(), hide_details),
         field_constraint.field_access->field.name);
     },
-    pattern(as<TypeIndexConstraint>(arg)) = [](auto const & index_constraint) {
-      return formatxx::format_string("{}[Indexable]", type_to_string(index_constraint.type.get()));
+    pattern(as<TypeIndexConstraint>(arg)) = [&](auto const & index_constraint) {
+      return formatxx::format_string("{}[Indexable]",
+        type_to_string(index_constraint.type.get(), hide_details));
     },
     pattern(_) = []{
       return "???"s;
     });
 }
 
-std::string type_to_string(Type const * type) {
+std::string type_to_string(Type const * type, bool hide_details) {
   if (type) {
-    return type_to_string(*type);
+    return type_to_string(*type, hide_details);
   } else {
     return "[MISSING TYPE]";
   }

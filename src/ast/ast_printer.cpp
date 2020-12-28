@@ -29,7 +29,7 @@ void AstPrinter::print_file(Ast_File& file) {
 
 void AstPrinter::print_args(std::vector<Ast_Argument> args) {
   for (auto& arg: args) {
-    indent(); putf(" {} : {}", arg.name.name, type_to_string(*arg.type));
+    indent(); putf(" {} : {}", arg.name.name, type_to_string(arg.type));
   }
 }
 
@@ -50,7 +50,7 @@ void AstPrinter::print_function(Ast_Function_Declaration& func) {
   putf("- External: {}", func.external);
   putf("- C function: {}", func.external);
   if (!func.procedure) {
-    putf("- Return type: {}", type_to_string(*func.return_type));
+    putf("- Return type: {}", type_to_string(func.return_type));
   }
   if (func.arguments.size() > 0) {
     putf("- Arguments:");
@@ -94,7 +94,7 @@ void AstPrinter::print_stmt(Ast_Assign& assign) {
 
 void AstPrinter::print_stmt(Ast_Variable_Declaration& var_decl) {
   putf("* Variable declaration");
-  putf("- {} : {}", var_decl.variable.name, type_to_string(var_decl.type.get()));
+  putf("- {} : {}", var_decl.variable.name, type_to_string(var_decl.type));
   if (var_decl.initializer) {
     putf("- Initializer:");
     self->print_expr(*var_decl.initializer);
@@ -104,7 +104,7 @@ void AstPrinter::print_stmt(Ast_Variable_Declaration& var_decl) {
 void AstPrinter::print_stmt(Ast_For_Loop& for_loop) {
   putf("* For loop");
   putf("- Loop variable: {} : {}", for_loop.loop_variable.name,
-    type_to_string(for_loop.type.get()));
+    type_to_string(for_loop.type));
   putf("- Range start:");
   self->print_expr(*for_loop.start_range);
   putf("- Range end:");
@@ -265,7 +265,7 @@ void AstPrinter::print_expr(Ast_Index_Access& index) {
 
 void AstPrinter::print_expr(Ast_Lambda& lambda) {
   putf("* Lambda");
-  putf("- Return type: {}", type_to_string(lambda.return_type.get()));
+  putf("- Return type: {}", type_to_string(lambda.return_type));
   if (lambda.arguments.size() > 0) {
     putf("- Arguments:");
     self->print_args(lambda.arguments);
@@ -287,7 +287,7 @@ void AstPrinter::print_expr(Ast_Tuple_Literal& tuple) {
 
 void AstPrinter::print_expr(Ast_Pod_Literal& pod) {
   putf("* Pod literal");
-  putf("- Pod: {}", type_to_string(pod.pod.get()));
+  putf("- Pod: {}", type_to_string(pod.pod));
   for (auto field: pod.fields) {
     indent();
     putf(".{}:", field.field.name);

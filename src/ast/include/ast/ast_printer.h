@@ -61,6 +61,10 @@ class AstPrinter {
       tab_width{tab_width},
       current_depth{current_depth} {}
 
+    inline std::string type_to_string(Type_Ptr type) {
+      return ::type_to_string(type.get(), hide_lex_details);
+    }
+
     void print_args(std::vector<Ast_Argument> args);
 
     void print_file(Ast_File& file);

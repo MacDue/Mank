@@ -342,7 +342,7 @@ TupleBinding Parser::parse_tuple_binding() {
     } else {
       auto named_bind = this->parse_identifier();
       if (!named_bind) {
-        throw_error_here("sdhsjdhsjd");
+        throw_error_here("expected bind name");
       }
       // Require types for now
       Type_Ptr type;

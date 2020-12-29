@@ -145,6 +145,12 @@ char Ast_Literal::as_char() const {
   return std::get<char>(this->const_value());
 }
 
+std::string Ast_Literal::as_string() const {
+  assert(literal_type == PrimativeType::STRING);
+  return std::get<std::string>(this->const_value());
+}
+
+
 int Ast_Literal::size_bytes() {
   return PrimativeType::type_size(literal_type);
 }

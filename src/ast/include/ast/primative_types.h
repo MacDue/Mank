@@ -14,7 +14,8 @@ using PrimativeValue = std::variant<
   int32_t,
   uint8_t,
   bool,
-  char>;
+  char,
+  std::string>; // it's not really primative but convenient
 
 DEF_TYPE(PrimativeType) {
   enum Tag {

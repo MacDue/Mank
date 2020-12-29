@@ -176,6 +176,23 @@ static char parse_char_literal(std::string_view literal) {
   }
 }
 
+static std::string parse_string_literal(std::string_view literal) {
+  // "Hello World"
+  // "Hello\nWorld";
+  // "Hello \"World\""
+  std::string result;
+  result.reserve(literal.size() - 2);
+  for (size_t idx = 1; idx < literal.length() - 1; idx += 1) {
+    if (literal[idx] == '\\') {
+      result += parse_char_literal(literal.substr(idx - 1, 3));
+      idx += 1;
+    } else {
+      result += literal[idx];
+    }
+  }
+  return result;
+}
+
 void ConstantVisitor::visit(Ast_Literal& literal) {
   auto& value = literal.value;
   switch (literal.literal_type) {
@@ -192,6 +209,7 @@ void ConstantVisitor::visit(Ast_Literal& literal) {
       literal.update_const_value(value == "true" ? true : false);
       break;
     case PrimativeType::STRING:
+      literal.update_const_value(parse_string_literal(value));
       break;
     case PrimativeType::CHAR:
      literal.update_const_value(parse_char_literal(value));

@@ -265,6 +265,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       void_return.location = AstHelper::extract_location(void_return.expression);
       assert_valid_binding({}, expected_return, void_return.expression.get());
       func.body.statements.emplace_back(ctx->new_stmt(void_return));
+      func.return_type = Type::void_ty(); // quick fix
     } else if (!func.return_type->is_void()) {
       throw_sema_error_at(func.identifier, "function possibly fails to return a value");
     }

@@ -30,6 +30,7 @@ DEF_EXPR(Ast_Literal) {
   float as_float32() const;
   bool as_bool() const;
   char as_char() const;
+  std::string as_string() const;
 
   int size_bytes();
 };

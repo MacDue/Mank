@@ -55,6 +55,23 @@ llvm::Function* LLVMCodeGen::get_gc_malloc() {
   return gc_malloc;
 }
 
+llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
+  Symbol* str_sym = scope.lookup_first("str");
+  assert(str_sym && match_types(str_sym->type, PrimativeType::get(PrimativeType::STRING)));
+
+  if (!str_sym->meta) {
+    llvm::Type* llvm_str_type = llvm::StructType::create(
+      llvm_context,
+      { llvm::Type::getInt64Ty(llvm_context), llvm::Type::getInt8PtrTy(llvm_context) },
+      "!str"
+    );
+    str_sym->meta = std::make_shared<SymbolMetaCompoundType>(llvm_str_type);
+    return llvm_str_type;
+  } else {
+    return static_cast<SymbolMetaCompoundType*>(str_sym->meta.get())->type;
+  }
+}
+
 LLVMCodeGen::ExpressionExtract::ExpressionExtract(
   LLVMCodeGen* codegen, Ast_Expression& expr, Scope& scope
 ): codegen{codegen}, is_lvalue{expr.is_lvalue()}
@@ -98,8 +115,8 @@ llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeType::Tag primative) {
       return llvm::Type::getFloatTy(llvm_context);
     case PrimativeType::FLOAT64:
       return llvm::Type::getDoubleTy(llvm_context);
-    case PrimativeType::STRING:
-      return llvm::Type::getInt8PtrTy(llvm_context);
+    // case PrimativeType::STRING:
+    //   return llvm::Type::getInt8PtrTy(llvm_context);
     case PrimativeType::BOOL:
       return llvm::Type::getInt1Ty(llvm_context);
     case PrimativeType::CHAR:
@@ -157,6 +174,9 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
   }
   return match(type->v)(
     pattern(as<PrimativeType>(arg)) = [&](auto const & primative){
+      if (primative.tag == PrimativeType::STRING) {
+        return get_string_ty(scope);
+      }
       return map_primative_to_llvm(primative.tag);
     },
     pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto const & pod_type) {
@@ -871,9 +891,13 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
     case PrimativeType::FLOAT64:
       return llvm::ConstantFP::get(llvm_context,
           llvm::APFloat(/*value:*/ literal.as_float64()));
-    case PrimativeType::STRING:
-      assert(false && "string literal codegen not implemented");
-      return nullptr;
+    case PrimativeType::STRING: {
+      auto str_value = literal.as_string();
+      llvm::Value* raw_str = ir_builder.CreateGlobalStringPtr(str_value, "!const_str_init");
+      llvm::Value* length = llvm::ConstantInt::get(
+        llvm_context, llvm::APInt(sizeof(size_t) * 8, str_value.length()));
+      return create_string(raw_str, length, scope);
+    }
     case PrimativeType::BOOL:
       return llvm::ConstantInt::get(llvm_context,
         llvm::APInt(/*bits:*/ literal.size_bytes(),
@@ -1079,11 +1103,26 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
+  using namespace mpark::patterns;
   auto pod_type = access.object->meta.type;
 
-  // FIXME: Special case, array length.
-  if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(pod_type)) {
-    return create_llvm_idx(array_type->size);
+  // FIXME: Special case, hardcoded lengths.
+  llvm::Value* special_value = match(remove_reference(pod_type)->v)(
+    pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
+      return create_llvm_idx(array_type.size);
+    },
+    pattern(as<PrimativeType>(arg)) = [&](auto& str_type) -> llvm::Value* {
+      assert(str_type.is_string_type());
+      llvm::Value* str_length = get_value_extractor(
+        *access.object, scope).get_value({0}, "str_length");
+      // FIXME: should really be u64 (but I don't have that type yet)
+      return ir_builder.CreateIntCast(
+        str_length, map_primative_to_llvm(PrimativeType::INTEGER), true, "str_length");
+    },
+    pattern(_) = []() -> llvm::Value* { return nullptr; });
+
+  if (special_value) {
+    return special_value;
   }
 
   std::vector<uint> idx_list;
@@ -1166,21 +1205,34 @@ Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& scope) {
-  std::vector<llvm::Value*> idx_list;
-  idx_list.push_back(create_llvm_idx(0));
-  auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
-
-  llvm::Value* source_address = nullptr;
-  if (source_object.is_lvalue()) {
-    source_address = address_of(source_object, scope);
+  llvm::Value* element_ptr = nullptr;
+  if (auto str_type = std::get_if<PrimativeType>(
+    &remove_reference(index.object->meta.type)->v)
+  ) {
+    // string indexes -- special case :(
+    assert(str_type->is_string_type());
+    // TODO: bounds check
+    llvm::Value* raw_str_pointer = get_value_extractor(
+      *index.object, scope).get_value({1}, "str_ptr");
+    element_ptr = ir_builder.CreateGEP(
+      raw_str_pointer, { codegen_expression(*index.index, scope) }, "str_index");
   } else {
-    // TODO: Find better way?
-    source_address = create_entry_alloca(
-      get_current_function(), scope, source_object.meta.type.get(), "index_temp");
-    ir_builder.CreateStore(codegen_expression(source_object, scope), source_address);
-  }
+    std::vector<llvm::Value*> idx_list;
+    idx_list.push_back(create_llvm_idx(0));
+    auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
 
-  llvm::Value* element_ptr = ir_builder.CreateGEP(source_address, idx_list, "index_access");
+    llvm::Value* source_address = nullptr;
+    if (source_object.is_lvalue()) {
+      source_address = address_of(source_object, scope);
+    } else {
+      // TODO: Find better way?
+      source_address = create_entry_alloca(
+        get_current_function(), scope, source_object.meta.type.get(), "index_temp");
+      ir_builder.CreateStore(codegen_expression(source_object, scope), source_address);
+    }
+
+    element_ptr = ir_builder.CreateGEP(source_address, idx_list, "index_access");
+  }
   return ir_builder.CreateLoad(element_ptr, "load_element");
 }
 
@@ -1192,6 +1244,16 @@ llvm::Value* LLVMCodeGen::create_lambda(
     llvm::UndefValue::get(lambda_type), env_ptr, {0});
   lambda_details = ir_builder.CreateInsertValue(lambda_details, body, {1});
   return lambda_details;
+}
+
+llvm::Value* LLVMCodeGen::create_string(
+  llvm::Value* raw_str_ptr, llvm::Value* length, Scope& scope
+) {
+  // size, ptr
+  llvm::Value* string = ir_builder.CreateInsertValue(
+    llvm::UndefValue::get(get_string_ty(scope)), length, {0});
+  string = ir_builder.CreateInsertValue(string, raw_str_ptr, {1});
+  return string;
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {

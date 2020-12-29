@@ -160,6 +160,11 @@ Type_Ptr get_field_type(
           return PrimativeType::int_ty();
         };
       },
+      pattern(as<PrimativeType>(arg)) = [&](auto& primative_type) {
+        WHEN(primative_type.is_string_type() && access.field.name == "length") {
+          return PrimativeType::int_ty();
+        };
+      },
       pattern(as<TypeVar>(_)) = [&]() -> Type_Ptr {
         throw_sema_error_at(access.object, TYPE_MUST_BE_KNOWN);
         return nullptr;
@@ -173,15 +178,26 @@ Type_Ptr get_field_type(
 }
 
 Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {
-  if (auto array_type = get_if_dereferenced_type<FixedSizeArrayType>(type)) {
-    access.get_meta().value_type = access.object->meta.value_type;
-    access.object->meta.type = type; // hack
-    static_check_array_bounds(access);
-    return array_type->element_type;
-  } else {
-    throw_sema_error_at(access.object, "not an array type (is {})",
-      type_to_string(type.get()));
-  }
+  using namespace mpark::patterns;
+  return match(remove_reference(type)->v)(
+    pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
+      access.get_meta().value_type = access.object->meta.value_type;
+      access.object->meta.type = type; // hack for bounds check
+      static_check_array_bounds(access);
+      return array_type.element_type;
+    },
+    pattern(as<PrimativeType>(arg)) = [](auto& primative_type) {
+      WHEN(primative_type.is_string_type()) {
+        // lvalue string indexs...?
+        return PrimativeType::get(PrimativeType::CHAR);
+      };
+    },
+    pattern(_) = [&]() -> Type_Ptr {
+      throw_sema_error_at(access.object, "not an indexable type (is {})",
+        type_to_string(type.get()));
+      return nullptr;
+    }
+  );
 }
 
 void static_check_array_bounds(Ast_Index_Access& index_access, bool allow_missing_types) {

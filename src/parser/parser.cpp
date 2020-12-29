@@ -760,11 +760,11 @@ Expr_Ptr Parser::parse_literal() {
 
   if (token.type != TokenType::TRUE && token.type != TokenType::FALSE) {
     parsed_literal.literal_type = token.literal_type;
-    if (token.literal_type == PrimativeType::STRING) {
-      // Remove ""s
-      parsed_literal.value
-        = parsed_literal.value.substr(1, parsed_literal.value.length() - 2);
-    }
+    // if (token.literal_type == PrimativeType::STRING) {
+    //   // Remove ""s
+    //   parsed_literal.value
+    //     = parsed_literal.value.substr(1, parsed_literal.value.length() - 2);
+    // }
   } else {
     parsed_literal.literal_type = PrimativeType::BOOL;
   }

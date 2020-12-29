@@ -193,7 +193,7 @@ inline Expr_Ptr make_literal(PrimativeType::Tag type, std::string value) {
 }
 
 inline Expr_Ptr make_string(std::string value) {
-  return make_literal(PrimativeType::STRING, value);
+  return make_literal(PrimativeType::STRING, formatxx::format_string("\"{}\"", value));
 }
 
 inline Expr_Ptr make_integer(int value) {

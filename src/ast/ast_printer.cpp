@@ -189,8 +189,7 @@ void AstPrinter::print_expr(Ast_Call& call) {
 
 void AstPrinter::print_expr(Ast_Literal& literal) {
   putf("* Literal");
-  putf(literal.literal_type == PrimativeType::STRING
-    ? "- {}: \"{}\"" : "- {}: {}",
+  putf("- {}: {}",
     PrimativeType::type_name(literal.literal_type),
     literal.value);
 }

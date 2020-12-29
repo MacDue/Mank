@@ -107,6 +107,7 @@ class LLVMCodeGen: public CodeGenerator {
   void create_module();
 
   llvm::Function* get_gc_malloc();
+  llvm::Type* get_string_ty(Scope& scope);
 
   llvm::Value* create_llvm_idx(uint value);
 
@@ -181,6 +182,7 @@ public:
   llvm::Value* codegen_bind(Ast_Expression& expr, Type_Ptr bound_to, Scope& scope);
 
   llvm::Value* create_lambda(llvm::Type* lambda_type, llvm::Function* body, llvm::Value* env_ptr);
+  llvm::Value* create_string(llvm::Value* raw_str_ptr, llvm::Value* length, Scope& scope);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);

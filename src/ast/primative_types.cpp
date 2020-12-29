@@ -51,7 +51,7 @@ char const * PrimativeType::type_name(Tag type) {
     case PrimativeType::UNSIGNED_BYTE:
       return "Unsigned byte";
     case PrimativeType::STRING:
-      return "Static string";
+      return "String";
     case PrimativeType::BOOL:
       return "Boolean";
     case PrimativeType::CHAR:

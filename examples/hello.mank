@@ -1,0 +1,28 @@
+
+
+proc mank_main {
+  people := [
+    "0.1x-ers",
+    "script kiddies",
+    "low coders",
+    "business analysts",
+    "HR"
+  ];
+
+  for i in 0 .. people.length {
+    print("Hello ");
+    print(people[i]);
+    println("!");
+  }
+}
+
+proc print(s: str) {
+  for i in 0 .. s.length {
+    putchar(s[i]);
+  }
+}
+
+proc println(s: str) {
+  print(s);
+  putchar('\n');
+}

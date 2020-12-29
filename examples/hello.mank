@@ -1,5 +1,3 @@
-
-
 proc mank_main {
   people := [
     "0.1x-ers",

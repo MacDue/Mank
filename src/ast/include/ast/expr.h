@@ -25,10 +25,11 @@ DEF_EXPR(Ast_Literal) {
   PrimativeType::Tag literal_type;
   std::string value;
 
-  int32_t as_int32();
-  double as_float64();
-  float as_float32();
-  bool as_bool();
+  int32_t as_int32() const;
+  double as_float64() const;
+  float as_float32() const;
+  bool as_bool() const;
+  char as_char() const;
 
   int size_bytes();
 };

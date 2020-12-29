@@ -225,6 +225,8 @@ void Lexer::next_token() {
     /* Numeric literal now matched & token set */
   } else if (match_string_literal()) {
     /* String literal now matched & token set */
+  } else if (match_char_literal()) {
+    /* Char literal now matched & token set */
   } else if (this->peek_next_char() == EOF) {
     this->last_token.type = TokenType::LEX_EOF;
   } else {
@@ -303,6 +305,7 @@ bool Lexer::match_string_literal() {
     while ((next_char = this->peek_next_char() != '"')) {
       if (next_char == EOF) {
         // TODO: Unclosed string literal
+        this->last_token.type = TokenType::INVALID;
         break;
       }
       if (!match("\\\"") /* match and consume \" (an escaped quote)*/) {
@@ -311,6 +314,26 @@ bool Lexer::match_string_literal() {
     }
 
     this->consume_char();
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool Lexer::match_char_literal() {
+  if (match("'")) {
+    this->last_token.type = TokenType::LITERAL;
+    this->last_token.literal_type = PrimativeType::CHAR;
+    if (match("\\")) {
+      this->consume_char();
+    } else if (this->peek_next_char() != '\'') {
+      this->consume_char();
+    } else {
+      this->last_token.type = TokenType::INVALID;
+    }
+    if (!this->match("'")) {
+      this->last_token.type = TokenType::INVALID;
+    }
     return true;
   } else {
     return false;

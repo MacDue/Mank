@@ -65,6 +65,7 @@ private:
   bool match_digits(int& start, int& end);
   bool match_numeric_literal();
   bool match_string_literal();
+  bool match_char_literal();
   bool one_of(std::string_view chars);
 
   /* Helpers */

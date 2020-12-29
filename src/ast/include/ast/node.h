@@ -70,6 +70,10 @@ public:
     return this->get_self().class_ptr()->meta;
   }
 
+  inline Expression_Meta const & get_meta() const {
+    return this->get_self().class_ptr()->meta;
+  }
+
   inline auto get_type() {
     return get_meta().type;
   }
@@ -78,7 +82,7 @@ public:
     get_meta().type = type;
   }
 
-  inline PrimativeValue const_value() {
+  inline PrimativeValue const_value() const {
     return get_meta().const_value;
   }
 

@@ -13,7 +13,8 @@ using PrimativeValue = std::variant<
   /* strings? */
   int32_t,
   uint8_t,
-  bool>;
+  bool,
+  char>;
 
 DEF_TYPE(PrimativeType) {
   enum Tag {
@@ -23,6 +24,7 @@ DEF_TYPE(PrimativeType) {
     INTEGER,
     UNSIGNED_BYTE,
     BOOL,
+    CHAR
     /* TODO: more integer types */
   } tag;
 
@@ -43,6 +45,7 @@ DEF_TYPE(PrimativeType) {
   bool is_float_type() const;
   bool is_string_type() const;
   bool is_boolean_type() const;
+  bool is_char_type() const;
 
   bool satisfies(TypeVar::Constraint constraint) const;
 private:

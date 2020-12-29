@@ -30,6 +30,10 @@ Type_Ptr PrimativeType::get(PrimativeType::Tag tag) {
       static Type Bool{PrimativeType(BOOL)};
       return AstContext::make_static_type_ptr(&Bool);
     }
+    case CHAR: {
+      static Type Char{PrimativeType(CHAR)};
+      return AstContext::make_static_type_ptr(&Char);
+    }
     default:
       assert(false && "fix me! missing primative!");
       return nullptr;
@@ -50,6 +54,8 @@ char const * PrimativeType::type_name(Tag type) {
       return "Static string";
     case PrimativeType::BOOL:
       return "Boolean";
+    case PrimativeType::CHAR:
+      return "Char";
     default:
       return "???";
   }
@@ -63,6 +69,7 @@ uint PrimativeType::type_size(Tag type_tag) {
       return 64;
     case PrimativeType::INTEGER:
       return 32;
+    case PrimativeType::CHAR:
     case PrimativeType::UNSIGNED_BYTE:
       return 8;
     case PrimativeType::STRING: {
@@ -96,6 +103,10 @@ bool PrimativeType::is_boolean_type() const {
   return tag == PrimativeType::BOOL;
 }
 
+bool PrimativeType::is_char_type() const {
+  return tag == PrimativeType::CHAR;
+}
+
 bool PrimativeType::satisfies(TypeVar::Constraint constraint) const {
   switch (constraint) {
     case TypeVar::Constraint::NUMERIC:
@@ -109,24 +120,29 @@ bool PrimativeType::satisfies(TypeVar::Constraint constraint) const {
 
 /* AST Literal */
 
-int32_t Ast_Literal::as_int32() {
+int32_t Ast_Literal::as_int32() const  {
   assert(literal_type == PrimativeType::INTEGER);
   return std::get<int32_t>(this->const_value());
 }
 
-double Ast_Literal::as_float64() {
+double Ast_Literal::as_float64() const {
   assert(literal_type == PrimativeType::FLOAT64);
   return std::get<double>(this->const_value());
 }
 
-float Ast_Literal::as_float32() {
+float Ast_Literal::as_float32() const {
   assert(literal_type == PrimativeType::FLOAT32);
   return std::get<float>(this->const_value());
 }
 
-bool Ast_Literal::as_bool() {
+bool Ast_Literal::as_bool() const {
   assert(literal_type == PrimativeType::BOOL);
   return std::get<bool>(this->const_value());
+}
+
+char Ast_Literal::as_char() const {
+  assert(literal_type == PrimativeType::CHAR);
+  return std::get<char>(this->const_value());
 }
 
 int Ast_Literal::size_bytes() {

@@ -153,6 +153,29 @@ void ConstantVisitor::after(Ast_Index_Access& index) {
   static_check_array_bounds(index, true);
 }
 
+static char parse_char_literal(std::string_view literal) {
+  // 'a'
+  // '\a'
+  if (literal[1] == '\\') {
+    switch (literal[2]) {
+      case 'b':
+        return '\b';
+      case 'n':
+        return '\n';
+      case 't':
+        return '\t';
+      case 'f':
+        return '\t';
+      case 'r':
+        return '\r';
+      default:
+        return literal[2];
+    }
+  } else {
+    return literal[1];
+  }
+}
+
 void ConstantVisitor::visit(Ast_Literal& literal) {
   auto& value = literal.value;
   switch (literal.literal_type) {
@@ -170,8 +193,12 @@ void ConstantVisitor::visit(Ast_Literal& literal) {
       break;
     case PrimativeType::STRING:
       break;
+    case PrimativeType::CHAR:
+     literal.update_const_value(parse_char_literal(value));
+     break;
     default:
       assert(false && "fix me! unknown primative type");
   }
 }
+
 }

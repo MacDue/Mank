@@ -58,6 +58,7 @@ void Semantics::analyse_file(Ast_File& file) {
     std::make_pair("i32", PrimativeType::get(PrimativeType::INTEGER)),
     std::make_pair("str", PrimativeType::get(PrimativeType::STRING)),
     std::make_pair("bool",PrimativeType::get(PrimativeType::BOOL)),
+    std::make_pair("char", PrimativeType::get(PrimativeType::CHAR))
   };
 
   for (auto [type_name, type] : primative_types) {

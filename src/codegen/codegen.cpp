@@ -102,6 +102,7 @@ llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeType::Tag primative) {
       return llvm::Type::getInt8PtrTy(llvm_context);
     case PrimativeType::BOOL:
       return llvm::Type::getInt1Ty(llvm_context);
+    case PrimativeType::CHAR:
     case PrimativeType::UNSIGNED_BYTE:
       return llvm::Type::getInt8Ty(llvm_context);
     default:
@@ -875,9 +876,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
       return nullptr;
     case PrimativeType::BOOL:
       return llvm::ConstantInt::get(llvm_context,
-        llvm::APInt(/*bits*/ literal.size_bytes(),
+        llvm::APInt(/*bits:*/ literal.size_bytes(),
                     /*value: */ literal.as_bool(),
                     /*signed: */ false));
+    case PrimativeType::CHAR:
+      return llvm::ConstantInt::get(llvm_context,
+        llvm::APInt(/*bits*/ literal.size_bytes(),
+                    /*value:*/ literal.as_char(),
+                    /*signed*/ true));
     default:
       assert(false && "fix me! codegen for unknown literal type");
   }

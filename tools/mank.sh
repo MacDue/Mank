@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Helper script to compile .mank files with a mank_main() to a binary
 # Usage: ./mank.sh my_prog.mank
@@ -24,7 +25,7 @@ EOF
 
 gcc ./main.c -c -o main.o
 $MANK_HOME/mankc $output_dir/$1 --codegen > mank_main.ll
-llc ./mank_main.ll
+llc -relocation-model=pic ./mank_main.ll
 
 bin_name=$(basename $1 .mank)
 gcc ./main.o ./mank_main.s -o ./$bin_name

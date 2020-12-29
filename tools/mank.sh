@@ -23,7 +23,7 @@ int main() {
 EOF
 
 gcc ./main.c -c -o main.o
-$MANK_HOME/mankc $output_dir/$1 --codegen --suppress-warnings > mank_main.ll
+$MANK_HOME/mankc $output_dir/$1 --codegen > mank_main.ll
 llc ./mank_main.ll
 
 bin_name=$(basename $1 .mank)

@@ -42,6 +42,23 @@ Ast_Identifier* get_symbol_identifer_if_type(Symbol* symbol) {
   return nullptr;
 }
 
+Symbol make_builtin_func(
+  AstContext& ctx,
+  std::string name,
+  std::vector<Ast_Argument> args,
+  Type_Ptr return_type = Type::void_ty(),
+  bool c_decl = false
+) {
+  Ast_Function_Declaration func_decl;
+  func_decl.return_type = return_type;
+  func_decl.identifier.name = name;
+  func_decl.arguments = args;
+  func_decl.external = true;
+  func_decl.c_function = c_decl;
+  return Symbol(
+    SymbolName(name), ctx.new_type(func_decl), Symbol::FUNCTION);
+}
+
 void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
@@ -64,6 +81,17 @@ void Semantics::analyse_file(Ast_File& file) {
   for (auto [type_name, type] : primative_types) {
     global_scope.add(
       Symbol(SymbolName(type_name), type, Symbol::TYPE));
+  }
+
+  static std::array builtin_funcs {
+    // C stdlib putchar
+    make_builtin_func(*ctx, "putchar", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
+      PrimativeType::get(PrimativeType::INTEGER), true)
+  };
+
+  for (auto builtin: builtin_funcs) {
+    global_scope.add(builtin);
   }
 
   auto check_top_level_decl = [&](
@@ -299,12 +327,19 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
   auto expression_type = analyse_expression(*expr_stmt.expression, scope);
   bool void_expr = expression_type->is_void();
   if (!expr_stmt.final_expr) {
-    bool is_call = std::get_if<Ast_Call>(&expr_stmt.expression->v) != nullptr;
+    auto call = std::get_if<Ast_Call>(&expr_stmt.expression->v);
     if (!expression_may_have_side_effects(*expr_stmt.expression)) {
       emit_warning_at(expr_stmt.expression, "statement has no effect");
-    } else if (!is_call && !void_expr) {
+    } else if (call == nullptr && !void_expr) {
       emit_warning_at(expr_stmt.expression, "result of expression discarded");
     } else if (!void_expr) {
+      if (auto func_decl = std::get_if<Ast_Function_Declaration>(&call->callee->meta.type->v)) {
+        if (func_decl->c_function) {
+          // builtin c lib function -- allow ignore return (as returns are semi-pointless errors)
+          // e.g. putchar returns an int.
+          return;
+        }
+      }
       throw_sema_error_at(expr_stmt.expression, "return value discarded");
     }
   }

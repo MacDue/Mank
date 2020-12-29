@@ -1068,3 +1068,303 @@ TEST_CASE("Expressions that evaluate to references can be used as lvalues", "[Se
     REQUIRE_NOTHROW(sema.analyse_file(code));
   }
 }
+
+#define GET_STMT(stmt, idx) \
+  std::get<stmt>(code.functions.at(0)->body.statements.at(idx)->v);
+
+#define FIRST_STMT(stmt) GET_STMT(stmt, 0)
+#define NEW_SEMA() Semantics sema;
+
+
+TEST_CASE("Array literal semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+  Semantics sema;
+
+  SECTION("All elements in an array must have the same type") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := [1,2,3,4];
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& array_decl = FIRST_STMT(Ast_Variable_Declaration);
+
+    FixedSizeArrayType array_type;
+    array_type.element_type = PrimativeType::get(PrimativeType::INTEGER);
+    array_type.size = 4;
+
+    auto array_type_ptr = code.ctx.new_type(array_type);
+    REQUIRE(match_types(array_type_ptr, array_decl.type));
+
+    NEW_SEMA();
+    auto bad_code = Parser::parse_from_string(R"(
+      proc test {
+        a := [1,2,3,4.0];
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(bad_code), Contains("does not match array type"));
+  }
+
+  SECTION("Nested arrays must have the same size") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := [[1,2],[1,2]];
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& array_decl = FIRST_STMT(Ast_Variable_Declaration);
+
+    FixedSizeArrayType top_array_type, nested_array_type;
+    nested_array_type.size = top_array_type.size = 2;
+    nested_array_type.element_type = PrimativeType::get(PrimativeType::INTEGER);
+    top_array_type.element_type = code.ctx.new_type(nested_array_type);
+
+    auto top_array_type_ptr = code.ctx.new_type(top_array_type);
+    REQUIRE(match_types(top_array_type_ptr, array_decl.type));
+
+    NEW_SEMA();
+    auto bad_code = Parser::parse_from_string(R"(
+      proc test {
+        a := [[1,2],[1,2,3]];
+      }
+    )");
+
+    // As arrays are fixed size & size is in type
+    REQUIRE_THROWS_WITH(sema.analyse_file(bad_code), Contains("does not match array type"));
+  }
+}
+
+TEST_CASE("Tuple literal semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+  Semantics sema;
+
+  SECTION("Tuples can have mixed types") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := (true, 1, 3.0);
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& tuple_decl = FIRST_STMT(Ast_Variable_Declaration);
+
+    TupleType tuple_type;
+    tuple_type.element_types = {
+      PrimativeType::get(PrimativeType::BOOL),
+      PrimativeType::get(PrimativeType::INTEGER),
+      PrimativeType::get(PrimativeType::FLOAT64)
+    };
+
+    auto tuple_type_ptr = code.ctx.new_type(tuple_type);
+    REQUIRE(match_types(tuple_type_ptr, tuple_decl.type));
+  }
+
+  SECTION("Tuples can be nested") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := (true, (1, 3.0));
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& tuple_decl = FIRST_STMT(Ast_Variable_Declaration);
+
+    TupleType tuple_type, nested_tuple_type;
+    nested_tuple_type.element_types = {
+      PrimativeType::get(PrimativeType::INTEGER),
+      PrimativeType::get(PrimativeType::FLOAT64)
+    };
+
+    tuple_type.element_types = {
+      PrimativeType::get(PrimativeType::BOOL),
+      code.ctx.new_type(nested_tuple_type)
+    };
+
+    auto tuple_type_ptr = code.ctx.new_type(tuple_type);
+    REQUIRE(match_types(tuple_type_ptr, tuple_decl.type));
+  }
+}
+
+TEST_CASE("Array indexing semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+  Semantics sema;
+
+  SECTION("Indexes must be integers (and 1D indexing)") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := [1,2,3][2];
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& a_decl = FIRST_STMT(Ast_Variable_Declaration);
+    REQUIRE(match_types(
+      PrimativeType::get(PrimativeType::INTEGER), a_decl.type));
+
+    NEW_SEMA();
+    auto bad_code = Parser::parse_from_string(R"(
+      proc test {
+        a := [1,2,3][3.0];
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(bad_code), Contains("invalid index"));
+  }
+
+  SECTION("Indexing in nested arrays") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        a := [[1,2],[1,2]];
+        b := a[0];
+        c := b[0];
+        c = a[1][1];
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& b_decl = GET_STMT(Ast_Variable_Declaration, 1);
+    auto& c_decl = GET_STMT(Ast_Variable_Declaration, 2);
+
+    FixedSizeArrayType nested_array_type;
+    nested_array_type.element_type = PrimativeType::get(PrimativeType::INTEGER);
+    nested_array_type.size = 2;
+
+    auto nested_array_type_ptr = code.ctx.new_type(nested_array_type);
+    REQUIRE(match_types(nested_array_type_ptr, b_decl.type));
+    REQUIRE(match_types(PrimativeType::get(PrimativeType::INTEGER), c_decl.type));
+  }
+}
+
+TEST_CASE("Tuple binding semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+  Semantics sema;
+
+  SECTION("Can bind to simple tuple, with correct shape") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        bind (x, y, z) = (1, 2, 3);
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& bind_stmt = FIRST_STMT(Ast_Tuple_Structural_Binding);
+
+    for (auto& bind: bind_stmt.bindings.binds) {
+      REQUIRE(match_types(
+        std::get<Ast_Argument>(bind).type, PrimativeType::get(PrimativeType::INTEGER)));
+    }
+    // bad 1: not tuple
+
+    NEW_SEMA();
+    auto bad_code = Parser::parse_from_string(R"(
+      proc test {
+        bind (a, b) = [1,2];
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(
+      sema.analyse_file(bad_code), Contains("must be a tuple"));
+
+    // bad 2: not correct shape
+
+    std::array wrong_shapes {
+      R"(
+        proc test {
+          bind (a, b) = (1, 2, 3);
+        }
+      )",
+      R"(
+        proc test {
+          bind (a, (b,c)) = (1, 2, 3);
+        }
+      )",
+    };
+
+    for (auto wrong_shape: wrong_shapes) {
+      NEW_SEMA();
+      auto bad_code_v2 = Parser::parse_from_string(wrong_shape);
+
+      REQUIRE_THROWS_WITH(
+        sema.analyse_file(bad_code_v2), Contains("not the right shape"));
+    }
+  }
+
+  SECTION("Can bind to nested tuple") {
+    auto code = Parser::parse_from_string(R"(
+      proc test {
+        bind (a, (b, c)) = (1, (2, 3));
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+    auto& bind_stmt = FIRST_STMT(Ast_Tuple_Structural_Binding);
+
+    auto a_type = std::get<Ast_Argument>(bind_stmt.bindings.binds.at(0)).type;
+    auto& nested_binds = std::get<TupleBinding>(bind_stmt.bindings.binds.at(1));
+    auto b_type = std::get<Ast_Argument>(nested_binds.binds.at(0)).type;
+    auto c_type = std::get<Ast_Argument>(nested_binds.binds.at(1)).type;
+
+    REQUIRE(match_types(a_type, PrimativeType::get(PrimativeType::INTEGER)));
+    REQUIRE(match_types(b_type, PrimativeType::get(PrimativeType::INTEGER)));
+    REQUIRE(match_types(c_type, PrimativeType::get(PrimativeType::INTEGER)));
+  }
+}
+
+TEST_CASE("Pod literal semantics", "[Sema]") {
+  using namespace Catch::Matchers;
+  Semantics sema;
+
+  SECTION("Simple pod literal") {
+    auto code = Parser::parse_from_string(R"(
+      pod Foo {
+        bar: i32,
+        baz: bool
+      }
+
+      proc test {
+        foo := Foo { .baz = true, .bar = 2 };
+      }
+    )");
+
+    REQUIRE_NOTHROW(sema.analyse_file(code));
+
+    auto& pod_decl = FIRST_STMT(Ast_Variable_Declaration);
+    REQUIRE(match_types(pod_decl.type, code.pods.at(0).class_ptr()));
+
+    // repeated init
+    {
+      NEW_SEMA();
+      auto code = Parser::parse_from_string(R"(
+        pod Foo {
+          bar: i32,
+          baz: bool
+        }
+
+        proc test {
+          foo := Foo { .baz = true, .baz = false };
+        }
+      )");
+
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("repeated field"));
+    }
+    // incomplete
+    {
+      NEW_SEMA();
+      auto code = Parser::parse_from_string(R"(
+        pod Foo {
+          bar: i32,
+          baz: bool
+        }
+
+        proc test {
+          foo := Foo { .bar = 1 };
+        }
+      )");
+
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("incomplete"));
+    }
+  }
+}

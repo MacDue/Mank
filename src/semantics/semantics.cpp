@@ -87,7 +87,8 @@ void Semantics::analyse_file(Ast_File& file) {
     // C stdlib putchar
     make_builtin_func(*ctx, "putchar", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
-      PrimativeType::get(PrimativeType::INTEGER), true)
+      PrimativeType::int_ty(), true),
+    make_builtin_func(*ctx, "getchar", {}, PrimativeType::int_ty(), true)
   };
 
   for (auto builtin: builtin_funcs) {

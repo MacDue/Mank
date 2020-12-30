@@ -28,7 +28,7 @@ Ast_Expression_Type builtin_print(Ast_Call& print_call, AstBuilder& builder, Inf
     throw_sema_error_at(*format_template, "must be a constant string literal");
   }
   // remove outer "s
-  std::string raw_template = format_template->value
+  auto raw_template = std::string_view(format_template->value)
     .substr(1, format_template->value.length() - 2);
 
   size_t holes_count = 0;

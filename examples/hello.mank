@@ -4,12 +4,11 @@ proc mank_main {
     "script kiddies",
     "low coders",
     "business analysts",
-    "HR"
+    "HR",
+    "Ben"
   ];
 
   for i in 0 .. people.length {
-    print("Hello ");
-    print(people[i]);
-    println("!");
+    println!("Hello {person}!", people[i]);
   }
 }

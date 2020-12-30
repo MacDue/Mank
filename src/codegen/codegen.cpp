@@ -24,6 +24,7 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
   }
 
   llvm_module->print(llvm::outs(), nullptr);
+  llvm::outs() << ";--fin\n";
 }
 
 void LLVMCodeGen::create_module() {

@@ -68,49 +68,83 @@ static void print_ast(Ast_File& ast) {
   ast_printer.print_file(ast);
 }
 
+static auto constexpr PRELUDE = R"(
+  # Some useful "stdlib" functions.
+
+  proc print(s: str) {
+    for i in 0 .. s.length {
+      putchar(s[i]);
+    }
+  }
+
+  proc println(s: str) {
+    print(s);
+    putchar('\n');
+  }
+)";
+
+static bool compile(std::string program, CompilerOptions options, bool path = true) {
+  Lexer lexer;
+  Parser parser(lexer);
+
+  if (path) {
+    lexer.load_file(program);
+  } else {
+    lexer.set_input_to_string(program);
+  }
+
+  Semantics sema;
+  std::optional<Ast_File> parsed_file;
+  std::optional<CompilerError> sema_error;
+  try {
+    parsed_file.emplace(parser.parse_file());
+    if (options.check_sema || options.code_gen) {
+      sema.analyse_file(*parsed_file);
+    }
+  } catch (CompilerError& e) {
+    sema_error = e;
+    sema_error->set_lexing_context(lexer);
+  }
+
+  if (parsed_file && options.print_ast) {
+    print_ast(*parsed_file);
+  }
+
+  // TODO: the error/warnings should already have a reference to the lexer
+  if (!options.suppress_warnings) {
+    for (auto& warning: sema.get_warnings()) {
+      warning.source_lexer = &lexer;
+      std::cerr << warning;
+    }
+  }
+
+  if (sema_error) {
+    std::cerr << *sema_error;
+    return false;
+  }
+
+  if (options.code_gen) {
+    CodeGen codegen(*parsed_file);
+  }
+
+  return true;
+}
+
 int main(int argc, char* argv[]) {
   auto selected_options = parse_command_line_args(argc, argv);
   if (selected_options.show_help) {
     return 0;
   }
 
-  Lexer lexer;
-  Parser parser(lexer);
+  // Hacky current solution to builtin functions
+  if (selected_options.code_gen) {
+    bool prelude_compiled = compile(PRELUDE, selected_options, false);
+    assert(prelude_compiled);
+  }
+
   for (auto const & input_file: selected_options.input_files) {
-    lexer.load_file(input_file);
-
-    Semantics sema;
-    std::optional<Ast_File> parsed_file;
-    std::optional<CompilerError> sema_error;
-    try {
-      parsed_file.emplace(parser.parse_file());
-      if (selected_options.check_sema || selected_options.code_gen) {
-        sema.analyse_file(*parsed_file);
-      }
-    } catch (CompilerError& e) {
-      sema_error = e;
-      sema_error->set_lexing_context(lexer);
-    }
-
-    if (parsed_file && selected_options.print_ast) {
-      print_ast(*parsed_file);
-    }
-
-    // TODO: the error/warnings should alreadg have a reference to the lexer
-    if (!selected_options.suppress_warnings) {
-      for (auto& warning: sema.get_warnings()) {
-        warning.source_lexer = &lexer;
-        std::cerr << warning;
-      }
-    }
-
-    if (sema_error) {
-      std::cerr << *sema_error;
+    if (!compile(input_file, selected_options)) {
       return 1;
-    }
-
-    if (selected_options.code_gen) {
-      CodeGen codegen(*parsed_file);
     }
   }
   return 0;

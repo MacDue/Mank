@@ -83,15 +83,22 @@ void Semantics::analyse_file(Ast_File& file) {
       Symbol(SymbolName(type_name), type, Symbol::TYPE));
   }
 
-  static std::array builtin_funcs {
-    // C stdlib putchar
+  std::array builtin_funcs {
+    // C stdlib putchar/getchar
     make_builtin_func(*ctx, "putchar", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
       PrimativeType::int_ty(), true),
-    make_builtin_func(*ctx, "getchar", {}, PrimativeType::int_ty(), true)
+    make_builtin_func(*ctx, "getchar", {}, PrimativeType::int_ty(), true),
+    // builtin mank functions
+    make_builtin_func(*ctx, "print", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+    make_builtin_func(*ctx, "println", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")))
   };
 
   for (auto builtin: builtin_funcs) {
+    // Needed for some decl types
+    std::get<Ast_Function_Declaration>(builtin.type->v).body.scope.set_parent(global_scope);
     global_scope.add(builtin);
   }
 
@@ -102,6 +109,11 @@ void Semantics::analyse_file(Ast_File& file) {
     if (auto symbol = global_scope.lookup_first_name(ident)) {
       Ast_Identifier* pior_ident = nullptr;
       if (symbol->kind == sym_kind && (pior_ident = get_previous_decl(symbol))) {
+        if (auto func_decl = std::get_if<Ast_Function_Declaration>(&symbol->type->v)) {
+          if (func_decl->external) {
+            return;
+          }
+        }
         // If there's not a pior ident then it must be something else...
         throw_sema_error_at(ident,
           "redeclaration of {} (previously on line {})",

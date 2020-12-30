@@ -13,14 +13,3 @@ proc mank_main {
     println("!");
   }
 }
-
-proc print(s: str) {
-  for i in 0 .. s.length {
-    putchar(s[i]);
-  }
-}
-
-proc println(s: str) {
-  print(s);
-  putchar('\n');
-}

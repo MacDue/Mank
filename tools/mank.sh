@@ -24,11 +24,16 @@ int main() {
 EOF
 
 gcc ./main.c -c -o main.o
-$MANK_HOME/mankc $output_dir/$1 --codegen > mank_main.ll
-llc -relocation-model=pic ./mank_main.ll
+$MANK_HOME/mankc $output_dir/$1 --codegen > mank_dump.ll.packed
+csplit --quiet -b "%d.ll" ./mank_dump.ll.packed "/;--fin/"
+
+for llvm_ir in ./*.ll
+do
+  llc -relocation-model=pic "$llvm_ir"
+done
 
 bin_name=$(basename $1 .mank)
-gcc ./main.o ./mank_main.s -o ./$bin_name
+gcc ./main.o ./*.s -o ./$bin_name
 
 mv ./$bin_name $output_dir/$bin_name
 

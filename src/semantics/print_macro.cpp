@@ -23,9 +23,10 @@ Ast_Expression_Type builtin_print(Ast_Call& print_call, AstBuilder& builder, Inf
   }
 
   // "Hello {}!\n Lol!"
-  auto format_template = std::get_if<Ast_Literal>(&print_call.arguments.at(0)->v);
-  if (format_template->literal_type != PrimativeType::STRING) {
-    throw_sema_error_at(*format_template, "must be a constant string literal");
+  auto first_arg = print_call.arguments.at(0);
+  auto format_template = std::get_if<Ast_Literal>(&first_arg->v);
+  if (!format_template || format_template->literal_type != PrimativeType::STRING) {
+    throw_sema_error_at(first_arg, "must be a constant string literal");
   }
   // remove outer "s
   auto raw_template = std::string_view(format_template->value)

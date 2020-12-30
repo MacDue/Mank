@@ -14,12 +14,15 @@
 // Macros
 #include "macros/bind_macro.h"
 #include "macros/curry_macro.h"
+#include "macros/print_macro.h"
 
 Semantics::Semantics() {
   static bool macros_loaded = false;
   if (!macros_loaded) {
     Macros::register_macro("pbind", Macros::builtin_bind);
     Macros::register_macro("curry", Macros::builtin_curry);
+    Macros::register_macro("print", Macros::builtin_print);
+    Macros::register_macro("println", Macros::builtin_print);
     macros_loaded = true;
   }
 }

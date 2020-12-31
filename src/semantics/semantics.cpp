@@ -92,10 +92,13 @@ void Semantics::analyse_file(Ast_File& file) {
       builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
       PrimativeType::int_ty(), true),
     make_builtin_func(*ctx, "getchar", {}, PrimativeType::int_ty(), true),
+    make_builtin_func(*ctx, "abort", {}, Type::void_ty(), true),
     // builtin mank functions
     make_builtin_func(*ctx, "print", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
     make_builtin_func(*ctx, "println", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+    make_builtin_func(*ctx, "fail", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")))
   };
 

@@ -81,6 +81,11 @@ static auto constexpr PRELUDE = R"(
     print(s);
     putchar('\n');
   }
+
+  proc fail(msg: str) {
+    println!("fail: {msg}", msg);
+    abort();
+  }
 )";
 
 static bool compile(std::string program, CompilerOptions options, bool path = true) {

@@ -16,7 +16,16 @@ output_dir=$(pwd)
 cd $build_dir
 
 cat << EOF > ./main.c
+#include <unistd.h>
+
 extern void mank_main(void);
+
+int stderr_putchar(char c) {
+  if (write(STDERR_FILENO, &c, 1) == -1) {
+    return -1;
+  }
+  return c;
+}
 
 int main() {
   mank_main();

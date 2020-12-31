@@ -396,6 +396,14 @@ static bool is_explict_reference(Ast_Expression& expr) {
   return unary && unary->operation == Ast_Operator::REF;
 }
 
+#define ANALYSE_LOOP_BODY(body) { \
+  auto body_type = analyse_block(body, scope);     \
+  if (!body_type->is_void()) {                     \
+    throw_sema_error_at(body.get_final_expr(),     \
+      "loop body should not evaluate to a value"); \
+  }                                                \
+}
+
 void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
   using namespace mpark::patterns;
   match(stmt.v)(
@@ -448,6 +456,15 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
     },
     pattern(as<Ast_Tuple_Structural_Binding>(arg)) = [&](auto& binding) {
       analyse_tuple_binding_decl(binding, scope);
+    },
+    pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {
+      ANALYSE_LOOP_BODY(loop.body);
+    },
+    pattern(as<Ast_While_Loop>(arg)) = [&](auto& while_loop) {
+      auto cond_type = analyse_expression(*while_loop.cond, scope);
+      infer->match_or_constrain_types_at(while_loop.cond, cond_type, PrimativeType::bool_ty(),
+        "while loop condition must be {1} (is {0})");
+      ANALYSE_LOOP_BODY(while_loop.body);
     }
   );
 }
@@ -479,10 +496,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   auto& body = for_loop.body;
   body.scope.add(Symbol(for_loop.loop_variable, for_loop.type, Symbol::LOCAL));
 
-  auto body_type = analyse_block(body, scope);
-  if (!body_type->is_void()) {
-    throw_sema_error_at(body.get_final_expr(), "loop body should not evaluate to a value");
-  }
+  ANALYSE_LOOP_BODY(body);
 }
 
 void Semantics::check_tuple_bindings(

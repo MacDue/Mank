@@ -71,26 +71,31 @@ static void print_ast(Ast_File& ast) {
 static auto constexpr PRELUDE = R"(
   # Some useful "stdlib" functions.
 
-  proc print(s: str) {
+  proc _print(s: str, out: \char -> i32) {
     for i in 0 .. s.length {
-      putchar(s[i]);
+      _ := out(s[i]);
     }
   }
 
-  proc println(s: str) {
-    print(s);
-    putchar('\n');
+  proc _println(s: str, out: \char -> i32) {
+    _print(s, out);
+    _ := out('\n');
+  }
+
+  proc print(s: str) {
+    _print(s, putchar)
   }
 
   proc eprint(s: str) {
-    for i in 0 .. s.length {
-      stderr_putchar(s[i]);
-    }
+    _print(s, stderr_putchar)
+  }
+
+  proc println(s: str) {
+    _println(s, putchar)
   }
 
   proc eprintln(s: str) {
-    eprint(s);
-    stderr_putchar('\n');
+    _println(s, stderr_putchar)
   }
 
   proc fail(msg: str) {

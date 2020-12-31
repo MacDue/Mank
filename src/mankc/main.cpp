@@ -82,8 +82,19 @@ static auto constexpr PRELUDE = R"(
     putchar('\n');
   }
 
+  proc eprint(s: str) {
+    for i in 0 .. s.length {
+      stderr_putchar(s[i]);
+    }
+  }
+
+  proc eprintln(s: str) {
+    eprint(s);
+    stderr_putchar('\n');
+  }
+
   proc fail(msg: str) {
-    println!("fail: {msg}", msg);
+    eprintln!("fail: {msg}", msg);
     abort();
   }
 )";
@@ -145,6 +156,10 @@ int main(int argc, char* argv[]) {
   if (selected_options.code_gen) {
     bool prelude_compiled = compile(PRELUDE, selected_options, false);
     assert(prelude_compiled);
+    if (!prelude_compiled) {
+      // Should not happen
+      return 1;
+    }
   }
 
   for (auto const & input_file: selected_options.input_files) {

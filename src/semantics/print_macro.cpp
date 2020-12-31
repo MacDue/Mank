@@ -1,5 +1,6 @@
 #include <iostream>
 #include <mpark/patterns.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "sema/macros.h"
 #include "sema/sema_errors.h"
@@ -16,6 +17,8 @@ namespace Macros {
 
 Ast_Expression_Type builtin_print(Ast_Call& print_call, AstBuilder& builder, Infer& infer) {
   using namespace mpark::patterns;
+  auto& called_name = std::get<Ast_Macro_Identifier>(print_call.callee->v).name;
+  bool error_print = called_name[0] == 'e';
 
   auto arg_count = print_call.arguments.size();
   if (arg_count < 1) {
@@ -44,7 +47,8 @@ Ast_Expression_Type builtin_print(Ast_Call& print_call, AstBuilder& builder, Inf
   for (size_t idx = 0; idx < raw_template.length() + 1; idx++) {
     auto add_str = [&](std::string str) {
       if (std::strlen(str.c_str()) > 0) {
-        auto print_call = builder.make_call("print", builder.make_string(str));
+        auto print_call = builder.make_call(
+          !error_print ? "print" : "eprint", builder.make_string(str));
         print_block.statements.push_back(builder.make_expr_stmt(print_call));
         current_string = "";
       }
@@ -81,8 +85,8 @@ Ast_Expression_Type builtin_print(Ast_Call& print_call, AstBuilder& builder, Inf
     GET_CALL(insert)->arguments.at(0) = arg;
   }
 
-  if (std::get<Ast_Macro_Identifier>(print_call.callee->v).name == "println") {
-    std::get<Ast_Identifier>(GET_CALL(print_block.statements.size() - 1)->callee->v).name = "println";
+  if (boost::algorithm::ends_with(called_name, "ln")) {
+    std::get<Ast_Identifier>(GET_CALL(print_block.statements.size() - 1)->callee->v).name += "ln";
   }
   return print_block;
 }

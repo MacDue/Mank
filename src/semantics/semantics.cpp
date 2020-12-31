@@ -23,6 +23,8 @@ Semantics::Semantics() {
     Macros::register_macro("curry", Macros::builtin_curry);
     Macros::register_macro("print", Macros::builtin_print);
     Macros::register_macro("println", Macros::builtin_print);
+    Macros::register_macro("eprint", Macros::builtin_print);
+    Macros::register_macro("eprintln", Macros::builtin_print);
     macros_loaded = true;
   }
 }
@@ -91,9 +93,16 @@ void Semantics::analyse_file(Ast_File& file) {
     make_builtin_func(*ctx, "putchar", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
       PrimativeType::int_ty(), true),
+    make_builtin_func(*ctx, "stderr_putchar", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
+      PrimativeType::int_ty(), true),
     make_builtin_func(*ctx, "getchar", {}, PrimativeType::int_ty(), true),
     make_builtin_func(*ctx, "abort", {}, Type::void_ty(), true),
     // builtin mank functions
+    make_builtin_func(*ctx, "eprint", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+    make_builtin_func(*ctx, "eprintln", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
     make_builtin_func(*ctx, "print", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
     make_builtin_func(*ctx, "println", builder->make_args(

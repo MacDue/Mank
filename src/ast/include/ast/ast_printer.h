@@ -78,6 +78,9 @@ class AstPrinter {
     void print_stmt(Ast_Variable_Declaration& var_decl);
     void print_stmt(Ast_For_Loop& for_loop);
     void print_stmt(Ast_Tuple_Structural_Binding& binding);
+    void print_stmt(Ast_Loop& loop);
+    void print_stmt(Ast_While_Loop& while_loop);
+    void print_stmt(Ast_Loop_Control& loop_control);
 
     void print_binding(TupleBinding& binding);
 

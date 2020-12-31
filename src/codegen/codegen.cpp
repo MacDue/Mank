@@ -626,6 +626,18 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   ir_builder.SetInsertPoint(for_end);
 }
 
+void LLVMCodeGen::codegen_statement(Ast_Loop& loop, Scope& scope) {
+  assert(false && "not implemented - loop");
+}
+
+void LLVMCodeGen::codegen_statement(Ast_While_Loop& while_loop, Scope& scope) {
+  assert(false && "not implemented - while loop");
+}
+
+void LLVMCodeGen::codegen_statement(Ast_Loop_Control& loop_control, Scope& scope) {
+  assert(false && "not implemented - loop control");
+}
+
 void LLVMCodeGen::codegen_tuple_bindings(
   TupleBinding& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope
 ){

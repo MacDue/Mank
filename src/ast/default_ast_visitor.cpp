@@ -75,6 +75,27 @@ void BaseAstVisitor::operator()(Ast_Tuple_Structural_Binding& binding) {
   after(binding);
 }
 
+void BaseAstVisitor::operator()(Ast_Loop& loop) {
+  before(loop);
+  visit(loop);
+  recur(loop.body);
+  after(loop);
+}
+
+void BaseAstVisitor::operator()(Ast_While_Loop& while_loop) {
+  before(while_loop);
+  visit(while_loop);
+  std::visit(recur, while_loop.cond->v);
+  recur(while_loop.body);
+  after(while_loop);
+}
+
+void BaseAstVisitor::operator()(Ast_Loop_Control& loop_control) {
+  before(loop_control);
+  visit(loop_control);
+  after(loop_control);
+}
+
 /* Expressions */
 
 void BaseAstVisitor::operator()(Ast_Block& block) {

@@ -149,6 +149,12 @@ static TokenType ident_to_token(std::string_view ident) {
     return TokenType::REF;
   } else if (ident == "bind") {
     return TokenType::BIND;
+  } else if (ident == "loop") {
+    return TokenType::LOOP;
+  } else if (ident == "break") {
+    return TokenType::BREAK;
+  } else if (ident == "continue") {
+    return TokenType::CONTINUE;
   } else {
     return TokenType::IDENT;
   }

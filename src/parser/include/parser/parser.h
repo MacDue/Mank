@@ -71,6 +71,8 @@ private:
   Stmt_Ptr parse_statement();
   Stmt_Ptr parse_assign(Expr_Ptr lhs);
   Stmt_Ptr parse_for_loop();
+  Stmt_Ptr parse_loop();
+  Stmt_Ptr parse_while_loop();
 
   TupleBinding parse_tuple_binding();
   Stmt_Ptr parse_tuple_structural_binding();

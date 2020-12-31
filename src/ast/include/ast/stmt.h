@@ -41,13 +41,33 @@ DEF_STMT(Ast_For_Loop) {
   Ast_Block body;
 };
 
+DEF_STMT(Ast_Loop) {
+  Ast_Block body;
+};
+
+DEF_STMT(Ast_While_Loop) {
+  Expr_Ptr cond;
+  Ast_Block body;
+};
+
+DEF_STMT(Ast_Loop_Control) {
+  enum {
+    NONE,
+    BREAK,
+    CONTINUE
+  } type = NONE;
+};
+
 using Ast_Statement_Type = std::variant<
   Ast_Expression_Statement,
   Ast_Return_Statement,
   Ast_Assign,
   Ast_Variable_Declaration,
+  Ast_Loop_Control,
   Ast_For_Loop,
-  Ast_Tuple_Structural_Binding>;
+  Ast_Tuple_Structural_Binding,
+  Ast_Loop,
+  Ast_While_Loop>;
 
 class Ast_Statement {
   Ast_Statement(Ast_Statement_Type v)

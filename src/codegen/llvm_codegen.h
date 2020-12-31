@@ -166,6 +166,9 @@ public:
   void codegen_statement(Ast_Assign& assign, Scope& scope);
   void codegen_statement(Ast_Variable_Declaration& var_decl, Scope& scope);
   void codegen_statement(Ast_For_Loop& for_loop, Scope& scope);
+  void codegen_statement(Ast_Loop& loop, Scope& scope);
+  void codegen_statement(Ast_While_Loop& while_loop, Scope& scope);
+  void codegen_statement(Ast_Loop_Control& loop_control, Scope& scope);
 
   void codegen_tuple_bindings(
     TupleBinding& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);

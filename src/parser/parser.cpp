@@ -216,6 +216,24 @@ Stmt_Ptr Parser::parse_statement() {
     stmt = this->parse_for_loop();
   } else if (peek(TokenType::BIND)) {
     stmt = this->parse_tuple_structural_binding();
+  } else if (peek(TokenType::LOOP)) {
+    stmt = this->parse_loop();
+  } else if (peek(TokenType::WHILE)) {
+    stmt = this->parse_while_loop();
+  } else if (peek(TokenType::BREAK) || peek(TokenType::CONTINUE)) {
+    Ast_Loop_Control loop_control;
+    switch (lexer.peek_next_token().type) {
+      case TokenType::BREAK:
+        loop_control.type = Ast_Loop_Control::BREAK;
+        break;
+      case TokenType::CONTINUE:
+        loop_control.type = Ast_Loop_Control::CONTINUE;
+        break;
+      default: assert(false); // unreachable
+    }
+    lexer.consume_token();
+    expect(TokenType::SEMICOLON);
+    stmt = ctx->new_stmt(loop_control);
   } else if (auto expr = this->parse_expression()) {
     bool simple_expression = false;
     if ((stmt = this->parse_assign(expr))) {
@@ -294,6 +312,13 @@ Stmt_Ptr Parser::parse_assign(Expr_Ptr lhs) {
   return ctx->new_stmt(assign);
 }
 
+#define PARSE_LOOP_BODY() ({ \
+  auto body = this->parse_block();                   \
+  if (!body) {                                       \
+    throw_error_here("expected (braced) loop body"); \
+  }                                                  \
+  *body; })
+
 Stmt_Ptr Parser::parse_for_loop() {
   /*
     for_loop = "for", white_space, identifier, [type_annotation], white_space,
@@ -319,17 +344,27 @@ Stmt_Ptr Parser::parse_for_loop() {
     expect(TokenType::DOUBLE_DOT);
     for_loop.end_range = this->parse_expression(true);
 
-    auto body = this->parse_block();
-
-    if (!body) {
-      throw_error_here("expected (braced) loop body");
-    }
-    for_loop.body = *body;
+    for_loop.body = PARSE_LOOP_BODY();
 
     return ctx->new_stmt(for_loop);
   } else {
     return nullptr; // impossible
   }
+}
+
+Stmt_Ptr Parser::parse_loop() {
+  expect(TokenType::LOOP);
+  Ast_Loop parsed_loop;
+  parsed_loop.body = PARSE_LOOP_BODY();
+  return ctx->new_stmt(parsed_loop);
+}
+
+Stmt_Ptr Parser::parse_while_loop() {
+  expect(TokenType::WHILE);
+  Ast_While_Loop parsed_while;
+  parsed_while.cond = this->parse_expression(true);
+  parsed_while.body = PARSE_LOOP_BODY();
+  return ctx->new_stmt(parsed_while);
 }
 
 TupleBinding Parser::parse_tuple_binding() {

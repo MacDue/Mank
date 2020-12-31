@@ -131,10 +131,39 @@ void AstPrinter::print_binding(TupleBinding& binding) {
 
 void AstPrinter::print_stmt(Ast_Tuple_Structural_Binding& tuple_binding) {
   putf("* Tuple structural binding");
-  putf("- Bindings");
+  putf("- Bindings:");
   this->print_binding(tuple_binding.bindings);
-  putf("- Initializer");
+  putf("- Initializer:");
   self->print_expr(*tuple_binding.initializer);
+}
+
+void AstPrinter::print_stmt(Ast_Loop& loop) {
+  putf("* Loop");
+  putf("- Body:");
+  self->print_expr(loop.body);
+}
+
+void AstPrinter::print_stmt(Ast_While_Loop& while_loop) {
+  putf("* While loop");
+  putf("- Condition:");
+  self->print_expr(*while_loop.cond);
+  putf("- Body:");
+  self->print_expr(while_loop.body);
+}
+
+void AstPrinter::print_stmt(Ast_Loop_Control& loop_control) {
+  putf("* Loop control");
+  switch (loop_control.type) {
+    case Ast_Loop_Control::BREAK:
+      putf("- Break");
+      break;
+    case Ast_Loop_Control::CONTINUE:
+      putf("- Continue");
+      break;
+    default:
+      assert(false && "fix me! unknown loop control");
+      break;
+  }
 }
 
 /* Expressions */

@@ -1,0 +1,7 @@
+proc mank_main {
+  a := getchar();
+  if a != 65 {
+    fail("not A??!?!?");
+  }
+  println("A :D");
+}

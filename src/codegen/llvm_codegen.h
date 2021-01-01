@@ -107,7 +107,7 @@ class LLVMCodeGen: public CodeGenerator {
     });
   }
 
-  inline void pop_loop_info() { current_loop_info.top(); }
+  inline void pop_loop_info() { current_loop_info.pop(); }
 
   LoopInfo& get_loop_info() {
     assert(!current_loop_info.empty());

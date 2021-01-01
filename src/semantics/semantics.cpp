@@ -404,6 +404,8 @@ static bool is_explict_reference(Ast_Expression& expr) {
   }                                                \
 }
 
+#define LOOP_ANALYSIS(code) { enter_loop(); code; exit_loop(); }
+
 void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
   using namespace mpark::patterns;
   match(stmt.v)(
@@ -414,7 +416,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       analyse_assignment(assign, scope);
     },
     pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop) {
-      analyse_for_loop(for_loop, scope);
+      LOOP_ANALYSIS(analyse_for_loop(for_loop, scope));
     },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
       auto& expected_return = expected_returns.top();
@@ -458,16 +460,20 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       analyse_tuple_binding_decl(binding, scope);
     },
     pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {
-      ANALYSE_LOOP_BODY(loop.body);
+      LOOP_ANALYSIS(ANALYSE_LOOP_BODY(loop.body));
     },
     pattern(as<Ast_While_Loop>(arg)) = [&](auto& while_loop) {
-      auto cond_type = analyse_expression(*while_loop.cond, scope);
-      infer->match_or_constrain_types_at(while_loop.cond, cond_type, PrimativeType::bool_ty(),
-        "while loop condition must be {1} (is {0})");
-      ANALYSE_LOOP_BODY(while_loop.body);
+      LOOP_ANALYSIS(({
+        auto cond_type = analyse_expression(*while_loop.cond, scope);
+        infer->match_or_constrain_types_at(while_loop.cond, cond_type, PrimativeType::bool_ty(),
+          "while loop condition must be {1} (is {0})");
+        ANALYSE_LOOP_BODY(while_loop.body);
+      }));
     },
-    pattern(as<Ast_Loop_Control>(_)) = []{
-      // TODO: Check in a loop!
+    pattern(as<Ast_Loop_Control>(arg)) = [&](auto& loop_control){
+      if (!in_loop()) {
+        throw_sema_error_at(loop_control, "must be within a loop!");
+      }
     }
   );
 }

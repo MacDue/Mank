@@ -24,11 +24,14 @@ static inline Stmt_Ptr first_statement_in_block(Expr_Ptr& expr) {
 bool all_paths_return(Ast_Block& block, Ast_Statement** unreachable_stmt) {
   for (uint stmt_idx = 0; stmt_idx < block.statements.size(); stmt_idx++) {
     auto& stmt = block.statements.at(stmt_idx);
-    if (all_paths_return(*stmt, unreachable_stmt)) {
+    bool loop_ctl = false;
+    if ((loop_ctl = std::holds_alternative<Ast_Loop_Control>(stmt->v))
+      || all_paths_return(*stmt, unreachable_stmt)
+    ) {
       if (stmt_idx + 1 < block.statements.size()) {
         LAST_UNREACHABLE_STMT(block.statements.at(stmt_idx + 1));
       }
-      return true;
+      return !loop_ctl;
     }
   }
   return false;

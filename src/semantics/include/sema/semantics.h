@@ -40,6 +40,11 @@ private:
   // Simply because it's a pain to pass this around (top of stack == current function)
   std::stack<Type_Ptr> expected_returns;
 
+  uint loop_level = 0;
+  inline void enter_loop() { ++loop_level; }
+  inline void exit_loop() { --loop_level; }
+  inline bool in_loop() { return loop_level > 0; }
+
   bool assert_valid_binding(
     Ast_Identifier const& lvalue,
     SourceLocation bind_location,

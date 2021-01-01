@@ -537,6 +537,7 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
 
 #define LOOP_RANGE_END   "!end_range"
 
+// TODO: Turn into simpler loop before codegen
 void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
   /*
     TODO: Move loop desugaring into parser
@@ -627,11 +628,33 @@ void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Loop& loop, Scope& scope) {
-  assert(false && "not implemented - loop");
+  llvm::Function* current_function = get_current_function();
+  llvm::BasicBlock* loop_body = llvm::BasicBlock::Create(
+    llvm_context, "loop_body", current_function);
+  ir_builder.CreateBr(loop_body); // enter loop
+  ir_builder.SetInsertPoint(loop_body);
+  codegen_expression(loop.body, scope);
+  create_exit_br(loop_body); // repeat?
 }
 
 void LLVMCodeGen::codegen_statement(Ast_While_Loop& while_loop, Scope& scope) {
-  assert(false && "not implemented - while loop");
+  llvm::Function* current_function = get_current_function();
+  llvm::BasicBlock* while_check = llvm::BasicBlock::Create(
+    llvm_context, "while_check", current_function);
+  llvm::BasicBlock* while_body = llvm::BasicBlock::Create(
+    llvm_context, "while_body");
+  llvm::BasicBlock* while_end = llvm::BasicBlock::Create(
+    llvm_context, "while_end");
+  ir_builder.CreateBr(while_check);
+  ir_builder.SetInsertPoint(while_check);
+  llvm::Value* cond = codegen_expression(*while_loop.cond, scope);
+  ir_builder.CreateCondBr(cond, while_body, while_end);
+  current_function->getBasicBlockList().push_back(while_body);
+  ir_builder.SetInsertPoint(while_body);
+  codegen_expression(while_loop.body, scope);
+  create_exit_br(while_check);
+  current_function->getBasicBlockList().push_back(while_end);
+  ir_builder.SetInsertPoint(while_end);
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Loop_Control& loop_control, Scope& scope) {

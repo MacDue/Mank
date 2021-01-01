@@ -38,7 +38,7 @@ csplit --quiet -b "%d.ll" ./mank_dump.ll.packed "/;--fin/"
 
 for llvm_ir in ./*.ll
 do
-  llc -relocation-model=pic "$llvm_ir"
+  llc $2 -relocation-model=pic "$llvm_ir"
 done
 
 bin_name=$(basename $1 .mank)

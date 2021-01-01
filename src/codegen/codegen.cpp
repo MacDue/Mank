@@ -953,7 +953,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
       auto str_value = literal.as_string();
       llvm::Value* raw_str = ir_builder.CreateGlobalStringPtr(str_value, "!const_str_init");
       llvm::Value* length = llvm::ConstantInt::get(
-        llvm_context, llvm::APInt(sizeof(size_t) * 8, str_value.length()));
+        llvm::Type::getInt64Ty(llvm_context), str_value.length());
       return create_string(raw_str, length, scope);
     }
     case PrimativeType::BOOL:

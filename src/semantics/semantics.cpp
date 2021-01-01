@@ -465,6 +465,9 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       infer->match_or_constrain_types_at(while_loop.cond, cond_type, PrimativeType::bool_ty(),
         "while loop condition must be {1} (is {0})");
       ANALYSE_LOOP_BODY(while_loop.body);
+    },
+    pattern(as<Ast_Loop_Control>(_)) = []{
+      // TODO: Check in a loop!
     }
   );
 }

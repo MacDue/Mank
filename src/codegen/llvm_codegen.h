@@ -93,8 +93,26 @@ class LLVMCodeGen: public CodeGenerator {
     llvm::Type* closure_type;
     llvm::Value* closure_ptr = nullptr;
   };
-
   std::stack<ClosureInfo> current_closure_info;
+
+  struct LoopInfo {
+    llvm::BasicBlock *loop_end = nullptr, *loop_head = nullptr;
+  };
+  std::stack<LoopInfo> current_loop_info;
+
+  inline void push_loop_info(llvm::BasicBlock* loop_end, llvm::BasicBlock* loop_head) {
+    current_loop_info.push(LoopInfo{
+      .loop_end = loop_end,
+      .loop_head = loop_head
+    });
+  }
+
+  inline void pop_loop_info() { current_loop_info.top(); }
+
+  LoopInfo& get_loop_info() {
+    assert(!current_loop_info.empty());
+    return current_loop_info.top();
+  }
 
   /* LLVM Helpers */
 

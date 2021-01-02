@@ -322,3 +322,10 @@ void AstPrinter::print_expr(Ast_Pod_Literal& pod) {
     self->print_expr(*field.initializer);
   }
 }
+
+void AstPrinter::print_expr(Ast_As_Cast& as_cast) {
+  putf("* As cast");
+  putf("- Target type: {}", type_to_string(as_cast.type));
+  putf("- Object:");
+  self->print_expr(*as_cast.object);
+}

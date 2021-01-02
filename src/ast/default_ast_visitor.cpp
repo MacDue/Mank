@@ -208,3 +208,10 @@ void BaseAstVisitor::operator()(Ast_Pod_Literal& pod) {
   }
   after(pod);
 }
+
+void BaseAstVisitor::operator()(Ast_As_Cast& as_cast) {
+  before(as_cast);
+  visit(as_cast);
+  std::visit(recur, as_cast.object->v);
+  after(as_cast);
+}

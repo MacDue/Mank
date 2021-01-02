@@ -449,6 +449,14 @@ Expr_Ptr Parser::parse_postfix_expression(bool brace_delimited) {
       expr = this->parse_field_access(std::move(expr));
     } else if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
       expr = this->parse_index_access(std::move(expr));
+    } else if (consume(TokenType::AS)) {
+      Ast_As_Cast parsed_as_cast;
+      parsed_as_cast.object = expr;
+      parsed_as_cast.type = this->parse_type();
+      if (!parsed_as_cast.type) {
+        throw_error_here("expected target type");
+      }
+      expr = ctx->new_expr(parsed_as_cast);
     } else {
       break;
     }

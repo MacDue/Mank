@@ -155,6 +155,8 @@ static TokenType ident_to_token(std::string_view ident) {
     return TokenType::BREAK;
   } else if (ident == "continue") {
     return TokenType::CONTINUE;
+  } else if (ident == "as") {
+    return TokenType::AS;
   } else {
     return TokenType::IDENT;
   }

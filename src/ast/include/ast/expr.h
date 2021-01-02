@@ -75,6 +75,11 @@ DEF_EXPR(Ast_Pod_Literal) {
   std::vector<PodFieldInitializer> fields;
 };
 
+DEF_EXPR(Ast_As_Cast) {
+  Expr_Ptr object;
+  Type_Ptr type;
+};
+
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
 
@@ -92,7 +97,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Lambda,
   Ast_Macro_Identifier,
   Ast_Tuple_Literal,
-  Ast_Pod_Literal>;
+  Ast_Pod_Literal,
+  Ast_As_Cast>;
 
 class Ast_Expression {
   template<typename Expr>

@@ -1386,11 +1386,9 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Pod_Literal& pod, Scope& scope)
   return ir_builder.CreateLoad(pod_alloca, "pod_expr");
 }
 
-
-// llvm::Value* LLVMCodeGen::codegen_expression(Ast_Tuple_Literal& tuple, Scope& scope) {
-//   assert(false && "fix me! tuple literal codegen");
-// }
-
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_As_Cast& as_cast, Scope& scope) {
+  assert(false && "todo implement as cast!");
+}
 
 /* JIT tools */
 

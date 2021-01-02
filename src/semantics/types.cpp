@@ -218,3 +218,48 @@ void static_check_array_bounds(Ast_Index_Access& index_access, bool allow_missin
     }
   }
 }
+
+static auto cast_closure(
+  std::set<std::pair<PrimativeType::Tag, PrimativeType::Tag>> casts
+){
+  while (true) {
+    auto new_casts = casts;
+    for (auto [t1, t2]: casts) { for (auto [t3, t4]: casts) {
+      if (t2 == t3) {
+        new_casts.insert(std::make_pair(t1, t4));
+      }
+    }}
+    if (new_casts.size() == casts.size()) {
+      break;
+    }
+    casts = new_casts;
+  }
+  return casts;
+};
+
+bool validate_type_cast(Type_Ptr source_type, Ast_As_Cast& as_cast) {
+  using namespace mpark::patterns;
+  if (match_types(source_type, as_cast.type)) {
+    return true;
+  }
+  bool valid_cast = match(remove_reference(source_type)->v, as_cast.type->v)(
+    pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [&](auto& s, auto& t) {
+      static auto const valid_casts = cast_closure({
+        {PrimativeType::INTEGER, PrimativeType::FLOAT32},
+        {PrimativeType::INTEGER, PrimativeType::FLOAT64},
+        {PrimativeType::FLOAT32, PrimativeType::INTEGER},
+        {PrimativeType::FLOAT64, PrimativeType::INTEGER},
+        {PrimativeType::INTEGER, PrimativeType::CHAR},
+        {PrimativeType::CHAR, PrimativeType::INTEGER},
+        {PrimativeType::BOOL, PrimativeType::INTEGER}
+      });
+      return valid_casts.contains(std::make_pair(s.tag,t.tag));
+    },
+    pattern(_, _) = []{ return false; });
+
+  if (!valid_cast) {
+    throw_sema_error_at(as_cast, "invalid cast from {} to {}",
+      type_to_string(source_type.get()), type_to_string(as_cast.type.get()));
+  }
+  return valid_cast;
+}

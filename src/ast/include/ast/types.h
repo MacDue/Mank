@@ -46,7 +46,8 @@ using Type_Type = std::variant<
   ReferenceType,
   LambdaType,
   TypeFieldConstraint,
-  TypeIndexConstraint>;
+  TypeIndexConstraint,
+  TypeCastConstraint>;
 
 class Type {
   Type(Type_Type v)

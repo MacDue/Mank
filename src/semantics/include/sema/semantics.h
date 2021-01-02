@@ -78,6 +78,7 @@ private:
   Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope);
   Type_Ptr analyse_binary_expression(Ast_Binary_Operation& expr, Scope& scope);
   Type_Ptr analyse_call(Ast_Call& expr, Scope& scope);
+  Type_Ptr analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope);
 
   void expand_macro_expression(Ast_Expression& target, Ast_Call& macro_call, Scope& scope);
 

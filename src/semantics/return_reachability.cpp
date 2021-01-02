@@ -160,6 +160,9 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
       return std::any_of(pod.fields.begin(), pod.fields.end(),
         [&](auto& field){ return all_paths_return(*field.initializer, unreachable_stmt); });
     },
+    pattern(as<Ast_As_Cast>(arg)) = [&](auto& as_cast) {
+      return all_paths_return(*as_cast.object, unreachable_stmt);
+    },
     pattern(_) = []{
       assert(false && "fix me! unknown expression in reachability checking");
       return false;

@@ -18,7 +18,10 @@ using SpecialConstraints = std::vector<SpecialConstraint>;
 
 /* Helpers */
 
-#define ACCESS_CONSTRAINT anyof(as<TypeFieldConstraint>(arg), as<TypeIndexConstraint>(arg))
+#define TYPE_PROPERTY_CONSTRAINT anyof( \
+  as<TypeFieldConstraint>(arg), \
+  as<TypeIndexConstraint>(arg), \
+  as<TypeCastConstraint>(arg))
 
 static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
   using namespace mpark::patterns;
@@ -36,9 +39,9 @@ static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
           extract_tvars(el_type, type_vars);
         }
       },
-    pattern(ACCESS_CONSTRAINT) =
-      [&](auto const & access_constraint) {
-        extract_tvars(access_constraint.type, type_vars);
+    pattern(TYPE_PROPERTY_CONSTRAINT) =
+      [&](auto const & propety_constraint) {
+        extract_tvars(propety_constraint.type, type_vars);
       },
     pattern(as<FixedSizeArrayType>(arg)) =
       [&](auto const & array_type) {
@@ -62,9 +65,9 @@ static bool occurs(TypeVar tvar, Type_Ptr type) {
           return std::any_of(tuple.element_types.begin(), tuple.element_types.end(),
             [&](auto el_type){ return occurs(tvar, el_type); });
       },
-    pattern(ACCESS_CONSTRAINT) =
-      [&](auto const & access_constraint) {
-        return occurs(tvar, access_constraint.type);
+    pattern(TYPE_PROPERTY_CONSTRAINT) =
+      [&](auto const & propety_constraint) {
+        return occurs(tvar, propety_constraint.type);
       },
     pattern(as<FixedSizeArrayType>(arg)) =
       [&](auto const & array_type) {
@@ -114,9 +117,9 @@ bool Infer::substitute(
       }
       return updated(tuple_type);
     },
-    pattern(ACCESS_CONSTRAINT) = [&](auto access_constraint) {
-      type_updated |= substitute(access_constraint.type, tvar, replacement, subs);
-      return updated(access_constraint);
+    pattern(TYPE_PROPERTY_CONSTRAINT) = [&](auto propety_constraint) {
+      type_updated |= substitute(propety_constraint.type, tvar, replacement, subs);
+      return updated(propety_constraint);
     },
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto array_type) {
       type_updated |= substitute(array_type.element_type, tvar, replacement, subs);
@@ -221,6 +224,11 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
     return try_unify_sub_constraints(c, { ic });
   };
 
+  auto unify_cast_constraint = [&](Type_Ptr other_type, TypeCastConstraint& cast_constraint) {
+    validate_type_cast(cast_constraint.type, *cast_constraint.as_cast);
+    return Substitution{};
+  };
+
   return match(c.t1->v, c.t2->v)(
     pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [](auto& p1, auto& p2){
       WHEN(p1.tag == p2.tag) {
@@ -263,6 +271,8 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
     pattern(_, as<TypeFieldConstraint>(arg)) = std::bind(unify_field_constraint, c.t1, _1),
     pattern(as<TypeIndexConstraint>(arg), _) = std::bind(unify_index_constraint, c.t2, _1),
     pattern(_, as<TypeIndexConstraint>(arg)) = std::bind(unify_index_constraint, c.t1, _1),
+    pattern(as<TypeCastConstraint>(arg), _) = std::bind(unify_cast_constraint, c.t2, _1),
+    pattern(_, as<TypeCastConstraint>(arg)) = std::bind(unify_cast_constraint, c.t1, _1),
     pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) = [&](auto& a1, auto& a2) {
       WHEN(a1.size == a2.size) {
         Constraint ec{a1.element_type, a2.element_type};

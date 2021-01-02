@@ -10,7 +10,6 @@ using PrimativeValue = std::variant<
   std::monostate,
   float,
   double,
-  /* strings? */
   int32_t,
   uint8_t,
   bool,

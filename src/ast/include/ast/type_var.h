@@ -46,3 +46,11 @@ DEF_TYPE(TypeIndexConstraint) {
 
   static Type_Ptr get(AstContext& ctx, Ast_Index_Access& access);
 };
+
+struct Ast_As_Cast;
+DEF_TYPE(TypeCastConstraint) {
+  Type_Ptr type;
+  SpAstPtr<Ast_Expression, Ast_As_Cast> as_cast;
+
+  static Type_Ptr get(AstContext& ctx, Ast_As_Cast& as_cast);
+};

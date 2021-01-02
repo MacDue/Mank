@@ -139,3 +139,10 @@ Type_Ptr TypeIndexConstraint::get(AstContext& ctx, Ast_Index_Access& access) {
   ic.index_access = &access;
   return ctx.new_type(ic);
 }
+
+Type_Ptr TypeCastConstraint::get(AstContext& ctx, Ast_As_Cast& as_cast) {
+  TypeCastConstraint cc;
+  cc.type = as_cast.object->meta.type;
+  cc.as_cast = &as_cast;
+  return ctx.new_type(cc);
+}

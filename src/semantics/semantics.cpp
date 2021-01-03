@@ -789,9 +789,6 @@ Type_Ptr Semantics::analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope) {
   using namespace mpark::patterns;
   resolve_type_or_fail(scope, as_cast.type, "undeclared cast target {}");
   auto source_type = analyse_expression(*as_cast.object, scope);
-  if (match_types(source_type, as_cast.type)) {
-    return as_cast.type;
-  }
   if (is_tvar(source_type)) {
     auto cast_constraint = TypeCastConstraint::get(*ctx, as_cast);
     infer->add_constraint(AstHelper::extract_location(as_cast),

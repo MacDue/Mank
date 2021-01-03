@@ -1387,7 +1387,38 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Pod_Literal& pod, Scope& scope)
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_As_Cast& as_cast, Scope& scope) {
-  assert(false && "todo implement as cast!");
+  using namespace mpark::patterns;
+  auto source_type = remove_reference(as_cast.object->meta.type);
+  auto target_type = as_cast.type;
+
+  llvm::Value* source_value = codegen_expression(*as_cast.object, scope);
+  return match(source_type->v, target_type->v)(
+    pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [&](auto& s, auto& t){
+      auto has_int_storage = [](PrimativeType& p) {
+        return p.tag == PrimativeType::CHAR || p.is_integer_type() || p.is_boolean_type();
+      };
+      llvm::Type* llvm_target = map_primative_to_llvm(t.tag);
+      if (has_int_storage(s) && has_int_storage(t)) {
+        return ir_builder.CreateIntCast(source_value, llvm_target, s.is_signed());
+      } else if (has_int_storage(s) && t.is_float_type()) {
+        if (s.is_signed()) {
+          return ir_builder.CreateSIToFP(source_value, llvm_target);
+        } else {
+          return ir_builder.CreateUIToFP(source_value, llvm_target);
+        }
+      } else if (s.is_float_type() && has_int_storage(t)) {
+        if (t.is_signed()) {
+          return ir_builder.CreateFPToSI(source_value, llvm_target);
+        } else {
+          return ir_builder.CreateFPToUI(source_value, llvm_target);
+        }
+      } else if (s.is_float_type() && t.is_float_type()) {
+        return ir_builder.CreateFPCast(source_value, llvm_target);
+      } else {
+        assert(false && "fix me! invalid primative cast");
+      }
+    } // TODO: special casts
+  );
 }
 
 /* JIT tools */

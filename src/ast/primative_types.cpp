@@ -107,6 +107,11 @@ bool PrimativeType::is_char_type() const {
   return tag == PrimativeType::CHAR;
 }
 
+bool PrimativeType::is_signed() const {
+  return !is_boolean_type();
+}
+
+
 bool PrimativeType::satisfies(TypeVar::Constraint constraint) const {
   switch (constraint) {
     case TypeVar::Constraint::NUMERIC:

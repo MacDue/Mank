@@ -239,7 +239,7 @@ static auto cast_closure(
 
 bool validate_type_cast(Type_Ptr source_type, Ast_As_Cast& as_cast) {
   using namespace mpark::patterns;
-  if (match_types(source_type, as_cast.type)) {
+  if (match_types(source_type, as_cast.type, std::nullopt, false)) {
     return true;
   }
   bool valid_cast = match(remove_reference(source_type)->v, as_cast.type->v)(

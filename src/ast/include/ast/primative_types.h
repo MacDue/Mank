@@ -47,6 +47,8 @@ DEF_TYPE(PrimativeType) {
   bool is_boolean_type() const;
   bool is_char_type() const;
 
+  bool is_signed() const;
+
   bool satisfies(TypeVar::Constraint constraint) const;
 private:
   PrimativeType() = default;

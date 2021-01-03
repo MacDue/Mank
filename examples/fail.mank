@@ -1,6 +1,6 @@
 proc mank_main {
-  a := getchar();
-  if a != 65 {
+  a := getchar() as char;
+  if a != 'A' {
     fail("not A??!?!?");
   }
   println("A :D");

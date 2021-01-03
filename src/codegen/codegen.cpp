@@ -669,6 +669,7 @@ void LLVMCodeGen::codegen_statement(Ast_While_Loop& while_loop, Scope& scope) {
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Loop_Control& loop_control, Scope& scope) {
+  (void) scope;
   assert(!current_loop_info.empty() && "must be in a loop!");
   auto& loop_info = get_loop_info();
   switch (loop_control.type) {
@@ -1039,45 +1040,46 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
   llvm::Value* left = codegen_expression(*binop.left, scope);
   llvm::Value* right = codegen_expression(*binop.right, scope);
 
+  #define INT_TYPE anyof(PrimativeType::INTEGER, PrimativeType::CHAR)
   return match(binop_primative.tag, binop.operation)(
     /* Basic integer operations */
-    pattern(PrimativeType::INTEGER, Ast_Operator::PLUS) = [&]{
+    pattern(INT_TYPE, Ast_Operator::PLUS) = [&]{
       return ir_builder.CreateAdd(left, right, "int_add");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::MINUS) = [&]{
+    pattern(INT_TYPE, Ast_Operator::MINUS) = [&]{
       return ir_builder.CreateSub(left, right, "int_sub");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::DIVIDE) = [&]{
+    pattern(INT_TYPE, Ast_Operator::DIVIDE) = [&]{
       return ir_builder.CreateSDiv(left, right, "int_div");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::TIMES) = [&]{
+    pattern(INT_TYPE, Ast_Operator::TIMES) = [&]{
       return ir_builder.CreateMul(left, right, "int_mult");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::MODULO) = [&]{
+    pattern(INT_TYPE, Ast_Operator::MODULO) = [&]{
       return ir_builder.CreateSRem(left, right, "int_mod");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::LESS_THAN) = [&]{
+    pattern(INT_TYPE, Ast_Operator::LESS_THAN) = [&]{
       return ir_builder.CreateICmpSLT(left, right, "int_lt");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::GREATER_THAN) = [&]{
+    pattern(INT_TYPE, Ast_Operator::GREATER_THAN) = [&]{
       return ir_builder.CreateICmpSGT(left, right, "int_gt");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::BITWISE_AND) = [&]{
+    pattern(INT_TYPE, Ast_Operator::BITWISE_AND) = [&]{
       return ir_builder.CreateAnd(left, right, "int_bitwise_and");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::BITWISE_OR) = [&]{
+    pattern(INT_TYPE, Ast_Operator::BITWISE_OR) = [&]{
       return ir_builder.CreateOr(left, right, "int_bitwise_or");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::GREATER_EQUAL) = [&]{
+    pattern(INT_TYPE, Ast_Operator::GREATER_EQUAL) = [&]{
       return ir_builder.CreateICmpSGE(left, right, "int_ge");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::LESS_EQUAL) = [&]{
+    pattern(INT_TYPE, Ast_Operator::LESS_EQUAL) = [&]{
       return ir_builder.CreateICmpSLE(left, right, "int_le");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::EQUAL_TO) = [&]{
+    pattern(INT_TYPE, Ast_Operator::EQUAL_TO) = [&]{
       return ir_builder.CreateICmpEQ(left, right, "int_eq");
     },
-    pattern(PrimativeType::INTEGER, Ast_Operator::NOT_EQUAL_TO) = [&]{
+    pattern(INT_TYPE, Ast_Operator::NOT_EQUAL_TO) = [&]{
       return ir_builder.CreateICmpNE(left, right, "int_ne");
     },
     /*

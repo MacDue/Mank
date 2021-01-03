@@ -88,7 +88,9 @@ bool PrimativeType::is_numeric_type() const {
 }
 
 bool PrimativeType::is_integer_type() const {
-  return tag == PrimativeType::INTEGER || tag == PrimativeType::UNSIGNED_BYTE;
+  return tag == PrimativeType::INTEGER
+    || tag == PrimativeType::UNSIGNED_BYTE
+    || tag == PrimativeType::CHAR; // _pretty_ much ;)
 }
 
 bool PrimativeType::is_float_type() const {

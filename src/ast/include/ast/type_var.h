@@ -8,6 +8,7 @@ DEF_TYPE(TypeVar) {
   enum Constraint {
     NUMERIC = -1, // any int or float
     INTEGER = -2, // any int
+    ADDABLE = -3, // any int, float or string
   };
 
   static int32_t constexpr ANY = -42; // magic id for any tvar

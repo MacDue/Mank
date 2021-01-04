@@ -120,6 +120,8 @@ bool PrimativeType::satisfies(TypeVar::Constraint constraint) const {
       return is_numeric_type();
     case TypeVar::Constraint::INTEGER:
       return is_integer_type();
+    case TypeVar::Constraint::ADDABLE:
+      return is_numeric_type() || is_string_type();
     default:
       assert(false && "fix me! unknown constraint");
   }

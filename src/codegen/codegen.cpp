@@ -73,6 +73,87 @@ llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
   }
 }
 
+#define MANK_STR_CONCAT_INTERNAL "mank_str_concat_internal"
+
+llvm::Function* LLVMCodeGen::get_str_concat_internal() {
+  llvm::Function* str_concat = llvm_module->getFunction(MANK_STR_CONCAT_INTERNAL);
+  if (str_concat) {
+    return str_concat;
+  }
+
+  llvm::FunctionType* str_concat_type = llvm::FunctionType::get(
+    llvm::Type::getInt8PtrTy(llvm_context),
+    {
+      llvm::Type::getInt64Ty(llvm_context),
+      llvm::Type::getInt8PtrTy(llvm_context),
+      llvm::Type::getInt64Ty(llvm_context),
+      llvm::Type::getInt8PtrTy(llvm_context),
+      llvm::Type::getInt64PtrTy(llvm_context)
+    }, false);
+
+  str_concat = llvm::Function::Create(
+    str_concat_type,
+    llvm::Function::ExternalLinkage,
+    MANK_STR_CONCAT_INTERNAL,
+    llvm_module.get());
+
+  return str_concat;
+}
+
+std::pair<llvm::Value*, llvm::Value*>
+LLVMCodeGen::extract_string_info(Ast_Expression& expr, Scope& scope) {
+  auto str_type = std::get_if<PrimativeType>(&expr.meta.type->v);
+  assert(str_type && str_type->is_string_type());
+  auto str_extract = get_value_extractor(expr, scope);
+  return std::make_pair(
+    str_extract.get_value({0}, "str_length"),
+    str_extract.get_value({1}, "str_ptr"));
+}
+
+llvm::Value* LLVMCodeGen::create_string_concat(
+  Ast_Expression& s1, Ast_Expression& s2, Scope& scope
+) {
+  auto [l1, p1] = extract_string_info(s1, scope);
+  auto [l2, p2] = extract_string_info(s2, scope);
+
+  llvm::Function* current_function = get_current_function();
+  llvm::Value* str_concat_len_ptr = create_entry_alloca(
+    current_function, llvm::Type::getInt64Ty(llvm_context), "str_concat_len");
+
+  llvm::Value* new_str = ir_builder.CreateCall(get_str_concat_internal(),
+    { l1, p1, l2, p2, str_concat_len_ptr }, "str_concat");
+
+  return create_string(new_str,
+    ir_builder.CreateLoad(str_concat_len_ptr, "str_concat_len"), scope);
+}
+
+#define MANK_STR_CAST_INTERNAL "mank_str_cast"
+
+llvm::Value* LLVMCodeGen::create_char_string_cast(llvm::Value* char_value, Scope& scope) {
+  auto get_str_cast = [&]{
+    llvm::Function* str_cast = llvm_module->getFunction(MANK_STR_CAST_INTERNAL);
+    if (str_cast) {
+      return str_cast;
+    }
+
+    llvm::FunctionType* str_cast_type = llvm::FunctionType::get(
+      llvm::Type::getInt8PtrTy(llvm_context),
+      llvm::Type::getInt8Ty(llvm_context), false);
+
+    str_cast = llvm::Function::Create(
+      str_cast_type,
+      llvm::Function::ExternalLinkage,
+      MANK_STR_CAST_INTERNAL,
+      llvm_module.get());
+
+    return str_cast;
+  };
+
+  llvm::Value* new_str = ir_builder.CreateCall(get_str_cast(), { char_value }, "str_char_cast");
+  return create_string(new_str,
+    llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_context), 1), scope);
+}
+
 LLVMCodeGen::ExpressionExtract::ExpressionExtract(
   LLVMCodeGen* codegen, Ast_Expression& expr, Scope& scope
 ): codegen{codegen}, is_lvalue{expr.is_lvalue()}
@@ -310,7 +391,7 @@ llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& f
 }
 
 llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(
-  llvm::Function* func, Scope& scope, Type* type, std::string name
+  llvm::Function* func, llvm::Type* type, std::string name
 ) {
   /*
     Create an alloca for a (local) symbol at a functions entry.
@@ -321,11 +402,16 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(
     &func->getEntryBlock(),
     func->getEntryBlock().begin());
 
-  llvm::Type* llvm_type = map_type_to_llvm(type, scope);
   llvm::AllocaInst* alloca = entry_ir_builder.CreateAlloca(
-    llvm_type, /*array size:*/ 0, name);
+    type, /*array size:*/ 0, name);
 
   return alloca;
+}
+
+llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(
+  llvm::Function* func, Scope& scope, Type* type, std::string name
+) {
+  return create_entry_alloca(func, map_type_to_llvm(type, scope), name);
 }
 
 llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol* symbol) {
@@ -1037,8 +1123,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
   auto binop_type = remove_reference(binop.left->meta.type);
   auto& binop_primative = std::get<PrimativeType>(binop_type->v);
 
-  llvm::Value* left = codegen_expression(*binop.left, scope);
-  llvm::Value* right = codegen_expression(*binop.right, scope);
+  llvm::Value *left = nullptr, *right = nullptr;
+  if (binop_primative.tag != PrimativeType::STRING) {
+    left = codegen_expression(*binop.left, scope);
+    right = codegen_expression(*binop.right, scope);
+  }
 
   #define INT_TYPE anyof(PrimativeType::INTEGER, PrimativeType::CHAR)
   return match(binop_primative.tag, binop.operation)(
@@ -1118,6 +1207,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     pattern(PrimativeType::FLOAT64, Ast_Operator::NOT_EQUAL_TO) = [&]{
       return ir_builder.CreateFCmpUNE(left, right, "float_ne");
     },
+    /* String ops */
+    pattern(PrimativeType::STRING, Ast_Operator::PLUS) = [&]{
+      return create_string_concat(*binop.left, *binop.right, scope);
+    },
     pattern(_, _) = [&]{
       llvm::errs() << formatxx::format_string(
         ":( binary operation {} not implemented for type {}\n",
@@ -1171,11 +1264,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
       return create_llvm_idx(array_type.size);
     },
-    pattern(as<PrimativeType>(arg)) = [&](auto& str_type) -> llvm::Value* {
-      assert(str_type.is_string_type());
-      llvm::Value* str_length = get_value_extractor(
-        *access.object, scope).get_value({0}, "str_length");
-      // FIXME: should really be u64 (but I don't have that type yet)
+    pattern(as<PrimativeType>(_)) = [&]() -> llvm::Value* {
+      auto [str_length, _] = extract_string_info(*access.object, scope);
       return ir_builder.CreateIntCast(
         str_length, map_primative_to_llvm(PrimativeType::INTEGER), true, "str_length");
     },
@@ -1399,7 +1489,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_As_Cast& as_cast, Scope& scope)
       auto has_int_storage = [](PrimativeType& p) {
         return p.tag == PrimativeType::CHAR || p.is_integer_type() || p.is_boolean_type();
       };
-      llvm::Type* llvm_target = map_primative_to_llvm(t.tag);
+      llvm::Type* llvm_target = !t.is_string_type()
+        ? map_primative_to_llvm(t.tag) : nullptr;
       if (has_int_storage(s) && has_int_storage(t)) {
         return ir_builder.CreateIntCast(source_value, llvm_target, s.is_signed());
       } else if (has_int_storage(s) && t.is_float_type()) {
@@ -1416,6 +1507,12 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_As_Cast& as_cast, Scope& scope)
         }
       } else if (s.is_float_type() && t.is_float_type()) {
         return ir_builder.CreateFPCast(source_value, llvm_target);
+      } else if (t.is_string_type()) {
+        if (s.tag != PrimativeType::CHAR) {
+          as_cast.type = PrimativeType::get(PrimativeType::CHAR); // FIXME: hack
+          source_value = codegen_expression(as_cast, scope);
+        }
+        return create_char_string_cast(source_value, scope);
       } else {
         assert(false && "fix me! invalid primative cast");
       }

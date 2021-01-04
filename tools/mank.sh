@@ -16,7 +16,9 @@ output_dir=$(pwd)
 cd $build_dir
 
 cat << EOF > ./main.c
+#include <gc/gc.h>
 #include <unistd.h>
+#include <string.h>
 
 extern void mank_main(void);
 
@@ -25,6 +27,20 @@ int stderr_putchar(char c) {
     return -1;
   }
   return c;
+}
+
+char* mank_str_concat_internal(size_t l1, char* s1, size_t l2, char* s2, size_t* l_out) {
+  *l_out = l1 + l2;
+  char* new_str = GC_MALLOC_ATOMIC(*l_out);
+  memcpy(new_str, s1, l1);
+  memcpy(new_str + l1, s2, l2);
+  return new_str;
+}
+
+char* mank_str_cast(char c) {
+  char* new_str = GC_MALLOC_ATOMIC(1);
+  *new_str = c;
+  return new_str;
 }
 
 int main() {
@@ -42,7 +58,7 @@ do
 done
 
 bin_name=$(basename $1 .mank)
-gcc ./main.o ./*.s -o ./$bin_name
+gcc ./main.o ./*.s -o ./$bin_name -lgc
 
 mv ./$bin_name $output_dir/$bin_name
 

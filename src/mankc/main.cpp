@@ -102,6 +102,26 @@ static auto constexpr PRELUDE = R"(
     eprintln!("fail: {msg}", msg);
     abort();
   }
+
+  fun input: str {
+    # Bad unbuffered impl
+    read: str = "";
+    loop {
+      next := getchar() as char;
+      if next == '\n' {
+        break;
+      }
+      read += next as str;
+    }
+    read
+  }
+
+  fun prompt: str (msg: str) {
+    if msg.length > 0 {
+      print!("{msg} ", msg);
+    }
+    input()
+  }
 )";
 
 static bool compile(std::string program, CompilerOptions options, bool path = true) {

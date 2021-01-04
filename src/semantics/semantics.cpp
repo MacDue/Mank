@@ -108,7 +108,11 @@ void Semantics::analyse_file(Ast_File& file) {
     make_builtin_func(*ctx, "println", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
     make_builtin_func(*ctx, "fail", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")))
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+    make_builtin_func(*ctx, "input", {}, PrimativeType::get(PrimativeType::STRING)),
+    make_builtin_func(*ctx, "prompt", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
+      PrimativeType::get(PrimativeType::STRING)),
   };
 
   for (auto builtin: builtin_funcs) {
@@ -873,7 +877,11 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       Ast_Operator::PLUS, Ast_Operator::MINUS, Ast_Operator::TIMES,
       Ast_Operator::DIVIDE
     )) = [&]{
-      WHEN(match_special_constraint_at(loc, left_type, TypeVar::NUMERIC, *infer)) {
+      WHEN(match_special_constraint_at(loc, left_type,
+        binop.operation == Ast_Operator::PLUS
+          ? TypeVar::ADDABLE
+          : TypeVar::NUMERIC, *infer)
+      ) {
         return left_type;
       };
     },

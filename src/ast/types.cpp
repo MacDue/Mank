@@ -67,6 +67,8 @@ std::string type_to_string(Type const & type, bool hide_details) {
             return "Integer"s;
           case TypeVar::NUMERIC:
             return "Numeric"s;
+          case TypeVar::ADDABLE:
+            return "Addable"s;
           default:
             return "???"s;
         }
@@ -120,6 +122,10 @@ Type_Ptr TypeVar::get(Constraint constraint) {
     case INTEGER: {
       static Type integer{TypeVar(INTEGER)};
       return AstContext::make_static_type_ptr(&integer);
+    }
+    case ADDABLE: {
+      static Type addable{TypeVar(ADDABLE)};
+      return AstContext::make_static_type_ptr(&addable);
     }
     default:
       assert(false && "fix me! unknown constraint");

@@ -251,7 +251,8 @@ bool validate_type_cast(Type_Ptr source_type, Ast_As_Cast& as_cast) {
         {PrimativeType::FLOAT64, PrimativeType::INTEGER},
         {PrimativeType::INTEGER, PrimativeType::CHAR},
         {PrimativeType::CHAR, PrimativeType::INTEGER},
-        {PrimativeType::BOOL, PrimativeType::INTEGER}
+        {PrimativeType::BOOL, PrimativeType::INTEGER},
+        {PrimativeType::CHAR, PrimativeType::STRING}
       });
       return valid_casts.contains(std::make_pair(s.tag,t.tag));
     },

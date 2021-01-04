@@ -125,7 +125,17 @@ class LLVMCodeGen: public CodeGenerator {
   void create_module();
 
   llvm::Function* get_gc_malloc();
+  llvm::Function* get_str_concat_internal();
+
   llvm::Type* get_string_ty(Scope& scope);
+
+  llvm::Value* create_string_concat(
+    Ast_Expression& s1, Ast_Expression& s2, Scope& scope);
+  llvm::Value* create_char_string_cast(llvm::Value* char_value, Scope& scope);
+
+  /* length/char ptr */
+  std::pair<llvm::Value*, llvm::Value*> extract_string_info(
+    Ast_Expression& expr, Scope& scope);
 
   llvm::Value* create_llvm_idx(uint value);
 
@@ -167,6 +177,8 @@ public:
   llvm::Function* get_current_function();
   llvm::Function* get_function(Ast_Function_Declaration& func);
   llvm::Function* codegen_function_header(Ast_Function_Declaration& func);
+  llvm::AllocaInst* create_entry_alloca(
+    llvm::Function* func, llvm::Type* type, std::string name);
   llvm::AllocaInst* create_entry_alloca(
     llvm::Function* func, Scope& scope, Type* type, std::string name);
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);

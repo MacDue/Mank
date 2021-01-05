@@ -192,20 +192,31 @@ inline Expr_Ptr make_literal(PrimativeType::Tag type, std::string value) {
   return to_expr_ptr(literal);
 }
 
+#define ADD_VALUE() \
+  if (add_value) {  \
+    literal->meta.const_value = value; \
+  }
+
 inline Expr_Ptr make_string(std::string value) {
   return make_literal(PrimativeType::STRING, formatxx::format_string("\"{}\"", value));
 }
 
-inline Expr_Ptr make_integer(int value) {
-  return make_literal(PrimativeType::INTEGER, std::to_string(value));
+inline Expr_Ptr make_integer(int value, bool add_value = false) {
+  auto literal = make_literal(PrimativeType::INTEGER, std::to_string(value));
+  ADD_VALUE();
+  return literal;
 }
 
-inline Expr_Ptr make_float64(double value) {
-  return make_literal(PrimativeType::FLOAT64, std::to_string(value));
+inline Expr_Ptr make_float64(double value, bool add_value = false) {
+  auto literal = make_literal(PrimativeType::FLOAT64, std::to_string(value));
+  ADD_VALUE();
+  return literal;
 }
 
-inline Expr_Ptr make_boolean(bool value) {
-  return make_literal(PrimativeType::BOOL, value ? "true" : "false");
+inline Expr_Ptr make_boolean(bool value, bool add_value = false) {
+  auto literal = make_literal(PrimativeType::BOOL, value ? "true" : "false");
+  ADD_VALUE();
+  return literal;
 }
 
 /* Idents */

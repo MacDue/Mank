@@ -224,6 +224,8 @@ public:
 
   llvm::Value* do_cast(llvm::Value* value, Type_Ptr source_type, Type_Ptr target_type, Scope& scope);
 
+  Expr_Ptr simplify_short_circuit(Ast_Binary_Operation& short_circuit);
+
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_Block& block, Scope& scope, bool as_lvalue = false);

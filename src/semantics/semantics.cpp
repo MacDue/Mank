@@ -901,6 +901,15 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
         return PrimativeType::bool_ty();
       };
     },
+    pattern(anyof(
+      Ast_Operator::LOGICAL_AND, Ast_Operator::LOGICAL_OR
+    )) = [&]{
+      WHEN(infer->match_or_constrain_types_at(binop, left_type, PrimativeType::bool_ty(),
+        "both operands must be {1} (are {0}}")
+      ) {
+        return left_type;
+      };
+    },
     pattern(_) = [&]{
       throw_sema_error_at(binop, "invalid operation for {}",
         type_to_string(left_type.get()));

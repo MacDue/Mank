@@ -951,7 +951,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope,
   ir_builder.SetInsertPoint(end_block);
 
   if (then_value && else_value) {
-    auto if_type = if_expr.then_block->meta.type;
+    auto if_type = if_expr.get_meta().type;
     if (!as_lvalue) {
       if_type = remove_reference(if_type);
     }
@@ -1103,13 +1103,34 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Unary_Operation& unary, Scope& 
   );
 }
 
+Expr_Ptr LLVMCodeGen::simplify_short_circuit(Ast_Binary_Operation& short_circuit) {
+  // Just convert short circuited operations to if exprs (ez)
+  bool or_not_and = short_circuit.operation == Ast_Operator::LOGICAL_OR;
+  Expr_Ptr lhs = ast_builder.make_boolean(or_not_and, true);
+  Expr_Ptr rhs = short_circuit.right;
+  if (!or_not_and) {
+    std::swap(lhs, rhs);
+  }
+  auto sc_if = ast_builder.make_if(short_circuit.left, lhs, rhs);
+  std::get<Ast_If_Expr>(sc_if->v).get_meta().type = PrimativeType::get(PrimativeType::BOOL);
+  return sc_if;
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope& scope) {
   using namespace mpark::patterns;
   auto binop_type = remove_reference(binop.left->meta.type);
   auto& binop_primative = std::get<PrimativeType>(binop_type->v);
 
   llvm::Value *left = nullptr, *right = nullptr;
-  if (binop_primative.tag != PrimativeType::STRING) {
+
+  // both string and bools are special cases:
+    // - string concat -> special function call
+    // - bools -> short circuit code gen
+    // so don't codegen their lhs/rhs (yet)
+  if (
+    !(binop_primative.tag == PrimativeType::STRING
+      || binop_primative.tag == PrimativeType::BOOL)
+  ) {
     left = codegen_expression(*binop.left, scope);
     right = codegen_expression(*binop.right, scope);
   }
@@ -1195,6 +1216,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     /* String ops */
     pattern(PrimativeType::STRING, Ast_Operator::PLUS) = [&]{
       return create_string_concat(*binop.left, *binop.right, scope);
+    },
+    pattern(PrimativeType::BOOL,
+      anyof(Ast_Operator::LOGICAL_AND, Ast_Operator::LOGICAL_OR)
+    ) = [&]{
+      return codegen_expression(*simplify_short_circuit(binop), scope);
     },
     pattern(_, _) = [&]{
       llvm::errs() << formatxx::format_string(

@@ -217,6 +217,8 @@ public:
   llvm::Value* create_lambda(llvm::Type* lambda_type, llvm::Function* body, llvm::Value* env_ptr);
   llvm::Value* create_string(llvm::Value* raw_str_ptr, llvm::Value* length, Scope& scope);
 
+  llvm::Value* do_cast(llvm::Value* value, Type_Ptr source_type, Type_Ptr target_type, Scope& scope);
+
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_Block& block, Scope& scope, bool as_lvalue = false);

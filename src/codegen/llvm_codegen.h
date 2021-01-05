@@ -124,6 +124,11 @@ class LLVMCodeGen: public CodeGenerator {
 
   void create_module();
 
+  llvm::Function* get_external(
+    llvm::StringRef name,
+    llvm::Type* return_type,
+    llvm::ArrayRef<llvm::Type*> arg_types);
+
   llvm::Function* get_gc_malloc();
   llvm::Function* get_str_concat_internal();
 

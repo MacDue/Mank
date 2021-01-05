@@ -34,26 +34,35 @@ void LLVMCodeGen::create_module() {
   /* TODO: set up optimizations */
 }
 
+
+llvm::Function* LLVMCodeGen::get_external(
+  llvm::StringRef name,
+  llvm::Type* return_type,
+  llvm::ArrayRef<llvm::Type*> arg_types
+) {
+  llvm::Function* func = llvm_module->getFunction(name);
+  if (func) {
+    return func;
+  }
+
+  llvm::FunctionType* func_type = llvm::FunctionType::get(
+     return_type, arg_types, false);
+
+  func = llvm::Function::Create(
+    func_type,
+    llvm::Function::ExternalLinkage,
+    name,
+    llvm_module.get());
+
+  return func;
+}
+
 #define GC_MALLOC "GC_malloc"
 
 llvm::Function* LLVMCodeGen::get_gc_malloc() {
-  llvm::Function* gc_malloc = llvm_module->getFunction(GC_MALLOC);
-
-  if (gc_malloc) {
-    return gc_malloc;
-  }
-
-  llvm::FunctionType* gc_malloc_type = llvm::FunctionType::get(
-     llvm::Type::getInt8PtrTy(llvm_context),
-     llvm::Type::getInt64Ty(llvm_context), false);
-
-  gc_malloc = llvm::Function::Create(
-    gc_malloc_type,
-    llvm::Function::ExternalLinkage,
-    GC_MALLOC,
-    llvm_module.get());
-
-  return gc_malloc;
+  return get_external(GC_MALLOC,
+    llvm::Type::getInt8PtrTy(llvm_context),
+    { llvm::Type::getInt64Ty(llvm_context) });
 }
 
 llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
@@ -76,12 +85,8 @@ llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
 #define MANK_STR_CONCAT_INTERNAL "mank_str_concat_internal"
 
 llvm::Function* LLVMCodeGen::get_str_concat_internal() {
-  llvm::Function* str_concat = llvm_module->getFunction(MANK_STR_CONCAT_INTERNAL);
-  if (str_concat) {
-    return str_concat;
-  }
-
-  llvm::FunctionType* str_concat_type = llvm::FunctionType::get(
+  return get_external(
+    MANK_STR_CONCAT_INTERNAL,
     llvm::Type::getInt8PtrTy(llvm_context),
     {
       llvm::Type::getInt64Ty(llvm_context),
@@ -89,15 +94,7 @@ llvm::Function* LLVMCodeGen::get_str_concat_internal() {
       llvm::Type::getInt64Ty(llvm_context),
       llvm::Type::getInt8PtrTy(llvm_context),
       llvm::Type::getInt64PtrTy(llvm_context)
-    }, false);
-
-  str_concat = llvm::Function::Create(
-    str_concat_type,
-    llvm::Function::ExternalLinkage,
-    MANK_STR_CONCAT_INTERNAL,
-    llvm_module.get());
-
-  return str_concat;
+    });
 }
 
 std::pair<llvm::Value*, llvm::Value*>
@@ -131,22 +128,10 @@ llvm::Value* LLVMCodeGen::create_string_concat(
 
 llvm::Value* LLVMCodeGen::create_char_string_cast(llvm::Value* char_value, Scope& scope) {
   auto get_str_cast = [&]{
-    llvm::Function* str_cast = llvm_module->getFunction(MANK_STR_CAST_INTERNAL);
-    if (str_cast) {
-      return str_cast;
-    }
-
-    llvm::FunctionType* str_cast_type = llvm::FunctionType::get(
-      llvm::Type::getInt8PtrTy(llvm_context),
-      llvm::Type::getInt8Ty(llvm_context), false);
-
-    str_cast = llvm::Function::Create(
-      str_cast_type,
-      llvm::Function::ExternalLinkage,
+    return get_external(
       MANK_STR_CAST_INTERNAL,
-      llvm_module.get());
-
-    return str_cast;
+      llvm::Type::getInt8PtrTy(llvm_context),
+      { llvm::Type::getInt8Ty(llvm_context) });
   };
 
   llvm::Value* new_str = ir_builder.CreateCall(get_str_cast(), { char_value }, "str_char_cast");

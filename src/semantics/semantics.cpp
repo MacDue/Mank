@@ -88,6 +88,12 @@ void Semantics::analyse_file(Ast_File& file) {
       Symbol(SymbolName(type_name), type, Symbol::TYPE));
   }
 
+  TupleType parse_int_ret;
+  parse_int_ret.element_types = {
+    PrimativeType::int_ty(),
+    PrimativeType::get(PrimativeType::BOOL)
+  };
+
   std::array builtin_funcs {
     // C stdlib putchar/getchar
     make_builtin_func(*ctx, "putchar", builder->make_args(
@@ -113,6 +119,16 @@ void Semantics::analyse_file(Ast_File& file) {
     make_builtin_func(*ctx, "prompt", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
       PrimativeType::get(PrimativeType::STRING)),
+    make_builtin_func(*ctx, "parse_int", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
+      ctx->new_type(parse_int_ret)),
+    make_builtin_func(*ctx, "int_to_string", builder->make_args(
+      builder->make_argument(PrimativeType::int_ty(), "i")),
+      PrimativeType::get(PrimativeType::STRING)),
+    make_builtin_func(*ctx, "input_int", {}, PrimativeType::int_ty()),
+    make_builtin_func(*ctx, "prompt_int", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
+      PrimativeType::int_ty()),
   };
 
   for (auto builtin: builtin_funcs) {

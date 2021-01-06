@@ -71,6 +71,8 @@ static void print_ast(Ast_File& ast) {
 static auto constexpr PRELUDE = R"(
   # Some useful "stdlib" functions.
 
+  # Output
+
   proc _print(s: str, out: \char -> i32) {
     for i in 0 .. s.length {
       _ := out(s[i]);
@@ -103,6 +105,8 @@ static auto constexpr PRELUDE = R"(
     abort();
   }
 
+  # Input
+
   fun input: str {
     # Bad unbuffered impl
     read: str = "";
@@ -121,6 +125,77 @@ static auto constexpr PRELUDE = R"(
       print!("{msg} ", msg);
     }
     input()
+  }
+
+  fun prompt_int: i32 (msg: str) {
+    bind (value, parsed) = (-1, false);
+    while (!parsed) {
+      value_str := prompt(msg);
+      (value, parsed) = parse_int(value_str);
+      if (!parsed) {
+        println("Please enter a valid number!");
+      }
+    }
+    value
+  }
+
+  fun input_int: i32 { prompt_int("") }
+
+  # Parsing
+
+  fun parse_int: (i32, bool) (s: str) {
+    value := 0;
+    is_neg := false;
+    for i in 0 .. s.length {
+      c := s[i];
+      if i == 0 {
+        if (c == '+') {
+          # do nothing
+          continue;
+        } else if (c == '-') {
+          is_neg = true;
+          continue;
+        }
+      }
+      if c >= '0' && c <= '9' {
+        value *= 10;
+        value += (c - '0') as i32;
+      } else {
+        return (-1, false);
+      }
+    }
+    return (if is_neg { -value } else { value }, true);
+  }
+
+  # String helpers
+
+  fun reverse_str: str (s: str) {
+    out := "";
+    for idx in 0 .. s.length {
+      out += s[s.length - idx - 1] as str;
+    }
+    out
+  }
+
+  fun int_to_string: str (value: i32) {
+    value_str := "";
+    bind (value, is_neg) = if value < 0 {
+      (-value, true)
+    } else {
+      (value, false)
+    };
+    loop {
+      value_str += ((value % 10) as char + '0') as str;
+      value = value / 10;
+      if value == 0 { break; }
+    }
+    # Temp hack till buffers -> str added
+    value_str = reverse_str(value_str);
+    if is_neg {
+      "-" + value_str
+    } else {
+      value_str
+    }
   }
 )";
 
@@ -152,7 +227,7 @@ static bool compile(std::string program, CompilerOptions options, bool path = tr
   }
 
   // TODO: the error/warnings should already have a reference to the lexer
-  if (!options.suppress_warnings) {
+  if (!options.suppress_warnings && path /* !path -> stdlib */) {
     for (auto& warning: sema.get_warnings()) {
       warning.source_lexer = &lexer;
       std::cerr << warning;

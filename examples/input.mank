@@ -1,0 +1,17 @@
+
+
+# todo fix reachablity with loop controls
+# buffer to string
+
+proc mank_main {
+  name := prompt("What is your name?");
+  println!("Hello {name}!", name);
+  current_year := prompt_int("What is the current year?");
+  age := prompt_int("How old will you be this year?");
+  for year in current_year - age .. current_year + 1 {
+    println!("In {year} you {were/are} {age_then}",
+      int_to_string(year),
+      if year != current_year { "were" } else { "are" },
+      int_to_string(age - (current_year - year)));
+  }
+}

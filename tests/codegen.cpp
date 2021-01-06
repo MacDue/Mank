@@ -824,3 +824,16 @@ TEST_CASE("Pod literals", "[Codegen]") {
     REQUIRE(kalah());
   }
 }
+
+TEST_CASE("Bug codegen, implicit void return", "[Codegen]") {
+  auto codegen = compile(R"(
+    proc mank_main {
+      a := \b,msg -> {
+        if (!b) {
+          fail(msg);
+        }
+      };
+    }
+  )");
+  // Should codegen...
+}

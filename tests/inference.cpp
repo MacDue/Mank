@@ -105,7 +105,7 @@ TEST_CASE("Inference enforces special constraints on operations", "[Infer]") {
     // Try to infer types
     auto& infer = sema.get_infer_for_testing();
     REQUIRE_THROWS_WITH(infer.unify_and_apply(),
-      "was expecting a Numeric type but inferred Boolean");
+      "was expecting a Addable type but inferred Boolean");
   }
 }
 

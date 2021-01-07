@@ -1,0 +1,123 @@
+
+
+pod GameState {
+  player: i32,
+  board: i32[9]
+}
+
+fun get_move: i32 (state: ref GameState) {
+  loop {
+    print!("Player {player} choose your move (1-9): ",
+      int_to_string(state.player));
+    move := input_int();
+    if move >= 1 && move <= 9 {
+      move -= 1;
+      if state.board[move] == 0 {
+        return move;
+      }
+    }
+    println("Please enter a valid move!");
+  }
+  -1 # Unreachable but reachablity currently can't handle loops
+}
+
+#  1 | 2 | 3
+# -----------
+#  4 | 5 | 6
+# -----------
+#  7 | 8 | 9
+
+fun colour_text: str (text: str, colour_code: i32) {
+  "\e[38;5;" + int_to_string(colour_code) + "m" + text + "\e[0m"
+}
+
+proc print_board(state: ref GameState) {
+  bind (GREY, X_COL, O_COL) = (239, 202, 33);
+  for cell_idx in 0 .. 9 {
+    value := state.board[cell_idx];
+    row_pos := cell_idx % 3;
+    mid_cell := row_pos == 1;
+    if mid_cell { putchar('|'); }
+    print!(" {} ", {
+      if value == 0 {
+        colour_text(('0' + (cell_idx + 1) as char) as str, GREY)
+      } else if value == 1 {
+        colour_text("X", X_COL)
+      } else {
+        colour_text("O", O_COL)
+      }
+    });
+    if mid_cell { putchar('|'); }
+    if row_pos == 2 {
+      println("\n-----------");
+    }
+  }
+}
+
+fun game_over: (i32, bool) (state: ref GameState) {
+  win := \x,y,z,w-> {
+    if w != -1 { return w; }
+    same := x == y && y == z;
+    if same && x != 0 { x } else { -1 }
+  };
+
+  winner := -1;
+  zero_seen := false;
+  b := ref state.board;
+  for i in 0 .. 3 {
+    row := i * 3;
+    bind (l,m,r) = (b[row + 0],b[row + 1],b[row + 2]);
+    winner = win(l,m,r, winner);
+    # no zero & no win means draw
+    if l == 0 || m == 0 || r == 0 {
+      zero_seen = true;
+    }
+    winner = win(b[i + 0],b[i + 3],b[i + 6], winner);
+  }
+  # diags
+  winner = win(b[0], b[4], b[8], winner);
+  winner = win(b[2], b[4], b[6], winner);
+
+  if winner == -1 {
+    if zero_seen {
+      (-1, true) # still turns
+    } else {
+      (-1, false) # draw
+    }
+  } else {
+    (winner, false) # winner
+  }
+}
+
+proc mank_main {
+  bind (BRIGHT_RED, PINK) = (196, 207);
+  game := GameState {
+    .player = 1,
+    .board = [0, 0, 0,
+              0, 0, 0,
+              0, 0, 0]
+  };
+
+  println("Welcome to Mank Noughts and Crosses!");
+  println(" ---------- GOTY Edition ---------- \n");
+
+  loop {
+    print_board(game);
+    move := get_move(game);
+    game.board[move] = game.player;
+    game.player = if game.player == 1 { 2 } else { 1 };
+    putchar('\n');
+
+    bind (winner, turns_left) = game_over(game);
+    if !turns_left {
+      print_board(game);
+      println(
+        if winner <= 0 {
+          colour_text("DRAW!", BRIGHT_RED)
+        } else {
+          colour_text("Winner! Player " + int_to_string(winner), PINK)
+        });
+      return;
+    }
+  }
+}

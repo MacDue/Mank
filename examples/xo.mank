@@ -1,5 +1,3 @@
-
-
 pod GameState {
   player: i32,
   board: i32[9]

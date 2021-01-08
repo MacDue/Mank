@@ -53,23 +53,33 @@ bool all_paths_return(Ast_Statement& statement, Ast_Statement** unreachable_stmt
     pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop){
       bool start_range_returns = all_paths_return(*for_loop.start_range, unreachable_stmt);
       bool end_range_returns = all_paths_return(*for_loop.end_range, unreachable_stmt);
-      bool body_returns = all_paths_return(for_loop.body, unreachable_stmt);
+      (void) all_paths_return(for_loop.body, unreachable_stmt);
 
       if (start_range_returns || end_range_returns) {
         LAST_UNREACHABLE_STMT(first_statement_in_block(for_loop.body));
       }
 
-      return start_range_returns || end_range_returns || body_returns;
+      // only 100% sure of return in range
+      return start_range_returns || end_range_returns;
     },
     pattern(as<Ast_Tuple_Structural_Binding>(arg)) = [&](auto& sad_binding) {
       return all_paths_return(*sad_binding.initializer, unreachable_stmt);
     },
     pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {
-      return all_paths_return(loop.body, unreachable_stmt);
+      if (!loop.may_break) {
+        return true; // it must be an infinite loop or contain a return
+      }
+      (void) all_paths_return(loop.body, unreachable_stmt);
+      return false; // can't statically tell if the loop with end
     },
     pattern(as<Ast_While_Loop>(arg)) = [&](auto& while_loop) {
-      return all_paths_return(*while_loop.cond, unreachable_stmt)
-        || all_paths_return(while_loop.body, unreachable_stmt);
+      bool return_in_cond = all_paths_return(*while_loop.cond, unreachable_stmt);
+      (void) all_paths_return(while_loop.body, unreachable_stmt);
+
+      if (return_in_cond) {
+        LAST_UNREACHABLE_STMT(first_statement_in_block(while_loop.body));
+      }
+      return return_in_cond; // only 100% sure of return in cond
     },
     pattern(as<Ast_Loop_Control>(_)) = []{ return false; },
     pattern(_) = []{

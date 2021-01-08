@@ -43,6 +43,7 @@ DEF_STMT(Ast_For_Loop) {
 
 DEF_STMT(Ast_Loop) {
   Ast_Block body;
+  bool may_break = false;
 };
 
 DEF_STMT(Ast_While_Loop) {

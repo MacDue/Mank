@@ -425,7 +425,7 @@ static bool is_explict_reference(Ast_Expression& expr) {
   }                                                \
 }
 
-#define LOOP_ANALYSIS(code) { enter_loop(); code; exit_loop(); }
+#define LOOP_ANALYSIS(loop,code) { enter_loop((&loop).class_ptr()); code; exit_loop(); }
 
 void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
   using namespace mpark::patterns;
@@ -437,7 +437,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       analyse_assignment(assign, scope);
     },
     pattern(as<Ast_For_Loop>(arg)) = [&](auto& for_loop) {
-      LOOP_ANALYSIS(analyse_for_loop(for_loop, scope));
+      LOOP_ANALYSIS(for_loop, analyse_for_loop(for_loop, scope));
     },
     pattern(as<Ast_Return_Statement>(arg)) = [&](auto& return_stmt){
       auto& expected_return = expected_returns.top();
@@ -481,10 +481,10 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       analyse_tuple_binding_decl(binding, scope);
     },
     pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {
-      LOOP_ANALYSIS(ANALYSE_LOOP_BODY(loop.body));
+      LOOP_ANALYSIS(loop, ANALYSE_LOOP_BODY(loop.body));
     },
     pattern(as<Ast_While_Loop>(arg)) = [&](auto& while_loop) {
-      LOOP_ANALYSIS(({
+      LOOP_ANALYSIS(while_loop, ({
         auto cond_type = analyse_expression(*while_loop.cond, scope);
         infer->match_or_constrain_types_at(while_loop.cond, cond_type, PrimativeType::bool_ty(),
           "while loop condition must be {1} (is {0})");
@@ -492,8 +492,14 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       }));
     },
     pattern(as<Ast_Loop_Control>(arg)) = [&](auto& loop_control){
-      if (!in_loop()) {
+      SpAstPtr<Ast_Statement, Ast_Loop> ast_loop; // loop {} (not any loop)
+      auto loop = in_loop();
+      if (!loop) {
         throw_sema_error_at(loop_control, "must be within a loop!");
+      } else if ((ast_loop = loop)) {
+        if (loop_control.type == Ast_Loop_Control::BREAK) {
+          ast_loop->may_break = true;
+        }
       }
     }
   );

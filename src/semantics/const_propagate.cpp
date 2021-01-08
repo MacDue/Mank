@@ -168,6 +168,8 @@ static char parse_char_literal(std::string_view literal) {
         return '\t';
       case 'r':
         return '\r';
+      case 'e':
+        return '\033';
       default:
         return literal[2];
     }

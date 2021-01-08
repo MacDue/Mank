@@ -18,7 +18,6 @@ fun get_move: i32 (state: ref GameState) {
     }
     println("Please enter a valid move!");
   }
-  -1 # Unreachable but reachablity currently can't handle loops
 }
 
 #  1 | 2 | 3

@@ -46,7 +46,7 @@ proc print_board(state: ref GameState) {
     });
     if mid_cell { putchar('|'); }
     if row_pos == 2 {
-      println("\n-----------");
+      println(if cell_idx != 8 { "\n-----------"} else { "\n" });
     }
   }
 }

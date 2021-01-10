@@ -18,6 +18,10 @@ struct Semantics {
 
   void analyse_file(Ast_File& file);
 
+  inline void set_source(Lexer& lexer) {
+    this->source_file = &lexer;
+  }
+
   CompilerWarnings const & get_warnings() { return warnings; }
 
   inline void disable_type_inference_for_testing() {
@@ -31,6 +35,8 @@ private:
   AstContext* ctx;
   std::optional<AstBuilder> builder;
   std::optional<Infer> infer;
+
+  Lexer* source_file = nullptr;
 
   ResolvedPodInfoMap resolved_pods;
 

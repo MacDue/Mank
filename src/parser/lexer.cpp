@@ -77,6 +77,11 @@ std::string_view Lexer::extract_lines(SourceLocation loc) const {
   return extract_string(line_start, line_end);
 }
 
+std::string_view Lexer::extract_source(SourceLocation loc) const {
+  return extract_string(loc.start_char_idx, loc.end_char_idx);
+}
+
+
 /* Char actions */
 
 int Lexer::peek_next_char() {

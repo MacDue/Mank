@@ -6,7 +6,9 @@
 
 namespace Macros {
 
-Ast_Expression_Type builtin_bind(Ast_Call& bind_call, AstBuilder& builder, Infer& infer) {
+Ast_Expression_Type builtin_bind(
+  Ast_Call& bind_call, AstBuilder& builder, Infer& infer, Lexer*
+) {
   auto arg_count = bind_call.arguments.size();
   if (arg_count <= 0) {
     throw_sema_error_at(bind_call, "bind needs some arguments");

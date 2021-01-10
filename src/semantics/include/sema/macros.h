@@ -10,7 +10,8 @@ struct AstBuilder;
 
 namespace Macros {
 
-using ExprMacroExpander = std::function<Ast_Expression_Type(Ast_Call&, AstBuilder&, Infer&)>;
+#define MACRO_PARAMS Ast_Call&, AstBuilder&, Infer&, Lexer*
+using ExprMacroExpander = std::function<Ast_Expression_Type(MACRO_PARAMS)>;
 
 ExprMacroExpander const * get_expr_macro_expander(Ast_Macro_Identifier const & macro);
 

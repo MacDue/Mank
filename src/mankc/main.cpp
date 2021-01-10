@@ -215,6 +215,7 @@ static bool compile(std::string program, CompilerOptions options, bool path = tr
   try {
     parsed_file.emplace(parser.parse_file());
     if (options.check_sema || options.code_gen) {
+      sema.set_source(lexer);
       sema.analyse_file(*parsed_file);
     }
   } catch (CompilerError& e) {

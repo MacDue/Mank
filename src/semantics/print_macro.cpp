@@ -15,7 +15,9 @@ namespace Macros {
   auto& stmt = std::get<Ast_Expression_Statement>(print_block.statements.at(idx)->v); \
   &std::get<Ast_Call>(stmt.expression->v); })
 
-Ast_Expression_Type builtin_print(Ast_Call& print_call, AstBuilder& builder, Infer& infer) {
+Ast_Expression_Type builtin_print(
+  Ast_Call& print_call, AstBuilder& builder, Infer&, Lexer*
+) {
   using namespace mpark::patterns;
   auto& called_name = std::get<Ast_Macro_Identifier>(print_call.callee->v).name;
   bool error_print = called_name[0] == 'e';

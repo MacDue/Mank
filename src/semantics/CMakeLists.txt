@@ -9,6 +9,7 @@ add_library(MankSemantics
   curry_macro.cpp
   type_infer.cpp
   print_macro.cpp
+  assert_macro.cpp
 )
 
 target_link_libraries(MankSemantics

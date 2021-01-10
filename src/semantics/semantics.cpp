@@ -15,6 +15,7 @@
 #include "macros/bind_macro.h"
 #include "macros/curry_macro.h"
 #include "macros/print_macro.h"
+#include "macros/assert_macro.h"
 
 Semantics::Semantics() {
   static bool macros_loaded = false;
@@ -25,6 +26,7 @@ Semantics::Semantics() {
     Macros::register_macro("println", Macros::builtin_print);
     Macros::register_macro("eprint", Macros::builtin_print);
     Macros::register_macro("eprintln", Macros::builtin_print);
+    Macros::register_macro("assert", Macros::builtin_assert);
     macros_loaded = true;
   }
 }
@@ -626,7 +628,7 @@ void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_
     (void) analyse_expression(*arg, scope);
   }
 
-  Ast_Expression_Type expansion = (*expander)(macro_call, *builder, *infer);
+  Ast_Expression_Type expansion = (*expander)(macro_call, *builder, *infer, source_file);
   AstHelper::rewrite_expr(target, expansion);
 }
 

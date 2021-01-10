@@ -9,7 +9,7 @@
 namespace Macros {
 
 Ast_Expression_Type builtin_curry(
-  Ast_Call& curry_call, AstBuilder& builder, Infer& infer
+  Ast_Call& curry_call, AstBuilder& builder, Infer& infer, Lexer*
 ) {
   (void) infer; // not used
 

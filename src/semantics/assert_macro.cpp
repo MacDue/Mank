@@ -64,6 +64,7 @@ Ast_Expression_Type builtin_assert(
       builder.make_block(false,
         builder.make_expr_stmt(check_error),
         builder.make_expr_stmt(builder.make_call(builder.make_ident("abort"))))));
+  assert_check.location = assert_call.location;
   return assert_check;
 }
 

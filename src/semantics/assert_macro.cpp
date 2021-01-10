@@ -6,11 +6,11 @@
 
 namespace Macros {
 
+#define ASSERT_TEMPLATE "Assertion failed: {source_location}: `{check_source}'"
+
 Ast_Expression_Type builtin_assert(
   Ast_Call& assert_call, AstBuilder& builder, Infer& infer, Lexer* source_file
 ) {
-  // Not the best assert implementation (but it does the trick).
-
   assert(source_file != nullptr);
   auto args_count = assert_call.arguments.size();
   if (args_count < 1 || args_count > 2) {
@@ -37,35 +37,33 @@ Ast_Expression_Type builtin_assert(
     {
       check := <check>;
       if !check {
-        fail(check_source)
+        eprintln!(...error...); # TODO: make special function for this in asserts
+        abort();
       }
     }
   */
 
   // <filename>:<line>:
-  auto check_location_str = formatxx::format_string("{}:{}: ",
+  auto check_location_str = formatxx::format_string("{}:{}",
     source_file->input_source_name(), check_location.start_line + 1);
 
-  // <expr> (<note>)
-  auto check_error = !check_note
-    ? builder.make_string(check_source)
-    : builder.make_binary(Ast_Operator::PLUS,
-        builder.make_string(check_source + " ("),
-        builder.make_binary(Ast_Operator::PLUS, check_note,
-        builder.make_string(")")));
+  auto check_error = builder.make_call(
+    builder.make_macro_ident("eprintln"),
+    builder.make_string(
+      !check_note ? ASSERT_TEMPLATE : ASSERT_TEMPLATE " ({note})"),
+    builder.make_string(check_location_str),
+    builder.make_string(check_source));
+  if (check_note) {
+    std::get<Ast_Call>(check_error->v).arguments.push_back(check_note);
+  }
 
-  // fail: <location> <error>
   auto assert_check = builder.make_body(false,
     builder.make_var_decl("!check", check),
     builder.make_if_stmt(
       builder.make_unary(Ast_Operator::LOGICAL_NOT, builder.make_ident("!check")),
       builder.make_block(false,
-        builder.make_expr_stmt(
-          builder.make_call("fail", builder.make_binary(
-            Ast_Operator::PLUS,
-            builder.make_string(check_location_str),
-            check_error
-          ))))));
+        builder.make_expr_stmt(check_error),
+        builder.make_expr_stmt(builder.make_call(builder.make_ident("abort"))))));
   return assert_check;
 }
 

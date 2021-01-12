@@ -1250,11 +1250,11 @@ TEST_CASE("Tuple binding semantics", "[Sema]") {
     )");
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
-    auto& bind_stmt = FIRST_STMT(Ast_Tuple_Structural_Binding);
+    auto& bind_stmt = FIRST_STMT(Ast_Structural_Binding);
 
-    for (auto& bind: bind_stmt.bindings.binds) {
+    for (auto& bind: std::get<Ast_Tuple_Binds>(bind_stmt.bindings).binds) {
       REQUIRE(match_types(
-        std::get<Ast_Argument>(bind).type, PrimativeType::get(PrimativeType::INTEGER)));
+        std::get<Ast_Bind>(bind).type, PrimativeType::get(PrimativeType::INTEGER)));
     }
     // bad 1: not tuple
 
@@ -1300,12 +1300,13 @@ TEST_CASE("Tuple binding semantics", "[Sema]") {
     )");
 
     REQUIRE_NOTHROW(sema.analyse_file(code));
-    auto& bind_stmt = FIRST_STMT(Ast_Tuple_Structural_Binding);
+    auto& bind_stmt = FIRST_STMT(Ast_Structural_Binding);
 
-    auto a_type = std::get<Ast_Argument>(bind_stmt.bindings.binds.at(0)).type;
-    auto& nested_binds = std::get<TupleBinding>(bind_stmt.bindings.binds.at(1));
-    auto b_type = std::get<Ast_Argument>(nested_binds.binds.at(0)).type;
-    auto c_type = std::get<Ast_Argument>(nested_binds.binds.at(1)).type;
+    auto& tuple_binds = std::get<Ast_Tuple_Binds>(bind_stmt.bindings);
+    auto a_type = std::get<Ast_Bind>(tuple_binds.binds.at(0)).type;
+    auto& nested_binds = std::get<Ast_Tuple_Binds>(tuple_binds.binds.at(1));
+    auto b_type = std::get<Ast_Bind>(nested_binds.binds.at(0)).type;
+    auto c_type = std::get<Ast_Bind>(nested_binds.binds.at(1)).type;
 
     REQUIRE(match_types(a_type, PrimativeType::get(PrimativeType::INTEGER)));
     REQUIRE(match_types(b_type, PrimativeType::get(PrimativeType::INTEGER)));

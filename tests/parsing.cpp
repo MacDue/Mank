@@ -712,7 +712,7 @@ TEST_CASE("Tuple binding", "[Parser]") {
     NEW_FILE(file);
     auto& expected_binding = f.wrap_stmt(
       f.make_bind(
-        f.make_tuple_binding(
+        f.make_tuple_bindings(
           f.make_argument("x"),
           f.make_argument("y"),
           f.make_argument("z")), f.make_ident("foo")));
@@ -727,9 +727,9 @@ TEST_CASE("Tuple binding", "[Parser]") {
     NEW_FILE(file);
     auto& expected_binding = f.wrap_stmt(
       f.make_bind(
-        f.make_tuple_binding(
+        f.make_tuple_bindings(
           f.make_argument("x"),
-          f.make_tuple_binding(
+          f.make_tuple_bindings(
             f.make_argument("y"),
             f.make_argument("z"))),
         f.make_ident("foo")));
@@ -744,7 +744,7 @@ TEST_CASE("Tuple binding", "[Parser]") {
     NEW_FILE(file);
     auto& expected_binding = f.wrap_stmt(
       f.make_bind(
-        f.make_tuple_binding(
+        f.make_tuple_bindings(
           f.make_argument(f.make_type("i32"), "x"),
           f.make_argument(f.make_type("bool"), "y"),
           f.make_argument(f.make_type("f64"), "z")),

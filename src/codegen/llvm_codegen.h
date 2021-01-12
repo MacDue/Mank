@@ -206,9 +206,9 @@ public:
   void codegen_statement(Ast_Loop_Control& loop_control, Scope& scope);
 
   void codegen_tuple_bindings(
-    TupleBinding& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
+    Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
 
-  void codegen_statement(Ast_Tuple_Structural_Binding& binding, Scope& scope);
+  void codegen_statement(Ast_Structural_Binding& binding, Scope& scope);
 
   Ast_Expression& flatten_nested_array_indexes(
     Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);

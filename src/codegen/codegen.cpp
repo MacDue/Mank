@@ -756,17 +756,17 @@ void LLVMCodeGen::codegen_statement(Ast_Loop_Control& loop_control, Scope& scope
 }
 
 void LLVMCodeGen::codegen_tuple_bindings(
-  TupleBinding& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope
+  Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope
 ){
   using namespace mpark::patterns;
   uint gep_idx = 0;
   for (auto& binding: tuple_binds.binds) {
     idxs.push_back(gep_idx);
     match(binding) (
-      pattern(as<TupleBinding>(arg)) = [&](auto& nested_bind) {
+      pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& nested_bind) {
         codegen_tuple_bindings(nested_bind, tuple, idxs, scope);
       },
-      pattern(as<Ast_Argument>(arg)) = [&](auto& bind){
+      pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
         llvm::Value* value;
         if (is_reference_type(bind.type)) {
           // the tuple expression must be an lvalue
@@ -788,9 +788,14 @@ void LLVMCodeGen::codegen_tuple_bindings(
   }
 }
 
-void LLVMCodeGen::codegen_statement(Ast_Tuple_Structural_Binding& bindings, Scope& scope) {
-  auto tuple_extract = get_tuple_extractor(*bindings.initializer, scope);
-  codegen_tuple_bindings(bindings.bindings, tuple_extract, {}, scope);
+void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& scope) {
+  using namespace mpark::patterns;
+  match(bindings.bindings)(
+    pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
+      auto tuple_extract = get_tuple_extractor(*bindings.initializer, scope);
+      codegen_tuple_bindings(tuple_binds, tuple_extract, {}, scope);
+    }
+  );
 }
 
 /* Expressions */

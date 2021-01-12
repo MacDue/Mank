@@ -479,8 +479,8 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
     },
-    pattern(as<Ast_Tuple_Structural_Binding>(arg)) = [&](auto& binding) {
-      analyse_tuple_binding_decl(binding, scope);
+    pattern(as<Ast_Structural_Binding>(arg)) = [&](auto& binding) {
+      analyse_binding_decl(binding, scope);
     },
     pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {
       LOOP_ANALYSIS(loop, ANALYSE_LOOP_BODY(loop.body));
@@ -538,7 +538,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
 }
 
 void Semantics::check_tuple_bindings(
-  TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope
+  Ast_Tuple_Binds& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope
 ) {
   using namespace mpark::patterns;
   auto constraint = infer->generate_tuple_destructure_constraints(
@@ -551,7 +551,7 @@ void Semantics::check_tuple_bindings(
     for (auto el_type: tuple_type->element_types) {
       auto& binding = bindings.binds.at(bind_idx);
       match(binding)(
-        pattern(as<Ast_Argument>(arg)) =
+        pattern(as<Ast_Bind>(arg)) =
           [&](auto& bind) {
             resolve_type_or_fail(scope, bind.type, "undeclared bind type {}");
             assert_valid_binding(
@@ -561,7 +561,7 @@ void Semantics::check_tuple_bindings(
               emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
               scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
           },
-        pattern(as<TupleBinding>(arg)) =
+        pattern(as<Ast_Tuple_Binds>(arg)) =
           [&](auto& nested_binds) {
             check_tuple_bindings(nested_binds, init, el_type, scope);
           }
@@ -576,11 +576,14 @@ void Semantics::check_tuple_bindings(
   }
 }
 
-void Semantics::analyse_tuple_binding_decl(
-  Ast_Tuple_Structural_Binding& binding, Scope& scope
-) {
+void Semantics::analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope) {
+  using namespace mpark::patterns;
   auto init_type = analyse_expression(*binding.initializer, scope);
-  check_tuple_bindings(binding.bindings, *binding.initializer, init_type, scope);
+  match(binding.bindings)(
+    pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
+      check_tuple_bindings(tuple_binds, *binding.initializer, init_type, scope);
+    }
+  );
 }
 
 #define AUTO_LAMBDA "!auto_lambda"

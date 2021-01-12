@@ -135,7 +135,7 @@ public:
   void generate_tuple_assign_constraints(Ast_Assign& tuple_assign);
 
   std::optional<Constraint> generate_tuple_destructure_constraints(
-    TupleBinding const & bindings, Type_Ptr& init_type, SourceLocation loc);
+    Ast_Tuple_Binds const & bindings, Type_Ptr& init_type, SourceLocation loc);
 private:
   Constraint top_failed_constraint;
   [[ noreturn ]] void throw_unify_error(Constraint const & constraint);

@@ -215,7 +215,7 @@ Stmt_Ptr Parser::parse_statement() {
   } else if (peek(TokenType::FOR)) {
     stmt = this->parse_for_loop();
   } else if (peek(TokenType::BIND)) {
-    stmt = this->parse_tuple_structural_binding();
+    stmt = this->parse_structural_binding();
   } else if (peek(TokenType::LOOP)) {
     stmt = this->parse_loop();
   } else if (peek(TokenType::WHILE)) {
@@ -367,13 +367,15 @@ Stmt_Ptr Parser::parse_while_loop() {
   return ctx->new_stmt(parsed_while);
 }
 
-TupleBinding Parser::parse_tuple_binding() {
-  TupleBinding binding;
+Ast_Tuple_Binds Parser::parse_tuple_binds() {
+  Ast_Tuple_Binds binding;
   auto binding_start = this->current_location();
   expect(TokenType::LEFT_PAREN);
   while (!peek(TokenType::RIGHT_PAREN)) {
     if (peek(TokenType::LEFT_PAREN)) {
-      binding.binds.push_back(this->parse_tuple_binding());
+      binding.binds.push_back(this->parse_tuple_binds());
+    } else if (peek(TokenType::LEFT_BRACE)) {
+      binding.binds.push_back(this->parse_pod_binds());
     } else {
       auto named_bind = this->parse_identifier();
       if (!named_bind) {
@@ -390,9 +392,9 @@ TupleBinding Parser::parse_tuple_binding() {
         .type = type,
         .name = *named_bind
       });
-      if (!consume(TokenType::COMMA)) {
-        break;
-      }
+    }
+    if (!consume(TokenType::COMMA)) {
+      break;
     }
   }
   expect(TokenType::RIGHT_PAREN);
@@ -400,7 +402,64 @@ TupleBinding Parser::parse_tuple_binding() {
   return binding;
 }
 
-Stmt_Ptr Parser::parse_tuple_structural_binding() {
+Ast_Pod_Binds Parser::parse_pod_binds() {
+  Ast_Pod_Binds binding;
+  auto binding_start = this->current_location();
+  expect(TokenType::LEFT_BRACE);
+  while (!peek(TokenType::RIGHT_BRACE)) {
+    Ast_Pod_Bind bind;
+    expect(TokenType::DOT);
+    auto field_name = this->parse_identifier();
+    if (!field_name) {
+      throw_error_here("expected field name");
+    }
+    bind.field = *field_name;
+    bool nested_bind = false;
+    if (consume(TokenType::DIVIDE)) {
+      auto peek_next = this->lexer.peek_next_token().type;
+      switch (peek_next) {
+        case TokenType::IDENT:
+          std::get<Ast_Bind>(bind.replacement).name = *this->parse_identifier();
+          break;
+        case TokenType::LEFT_PAREN:
+          bind.replacement = this->parse_tuple_binds();
+          nested_bind = true;
+          break;
+        case TokenType::LEFT_BRACE:
+          bind.replacement = this->parse_pod_binds();
+          nested_bind = true;
+          break;
+        default:
+          throw_error_here("expected replacement/bind");
+      }
+    }
+    if (!nested_bind) {
+      auto& field_bind = std::get<Ast_Bind>(bind.replacement);
+      if (consume(TokenType::COLON)) {
+        field_bind.type = this->parse_type(true);
+      } else {
+        field_bind.type = ctx->new_tvar();
+      }
+    }
+    binding.binds.push_back(bind);
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(TokenType::RIGHT_BRACE);
+  mark_ast_location(binding_start, binding);
+  return binding;
+}
+
+Ast_Binding Parser::parse_binding() {
+  if (peek(TokenType::LEFT_PAREN)) {
+    return this->parse_tuple_binds();
+  } else {
+    return this->parse_pod_binds();
+  }
+}
+
+Stmt_Ptr Parser::parse_structural_binding() {
   /*
     sad_binding = "bind", "(" [binding_list] ")"
     binding_list = binding, {",", binding}
@@ -409,9 +468,9 @@ Stmt_Ptr Parser::parse_tuple_structural_binding() {
   // bind (x, y)
   // bind (x: i32, y: i32)
   // bind (x: i32, (y: i32))
-  Ast_Tuple_Structural_Binding parsed_sad_binding;
+  Ast_Structural_Binding parsed_sad_binding;
   expect(TokenType::BIND);
-  parsed_sad_binding.bindings = this->parse_tuple_binding();
+  parsed_sad_binding.bindings = this->parse_binding();
   expect(TokenType::ASSIGN);
   parsed_sad_binding.initializer = this->parse_expression();
   expect(TokenType::SEMICOLON);

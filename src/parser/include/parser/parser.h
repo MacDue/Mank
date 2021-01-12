@@ -74,8 +74,13 @@ private:
   Stmt_Ptr parse_loop();
   Stmt_Ptr parse_while_loop();
 
-  TupleBinding parse_tuple_binding();
-  Stmt_Ptr parse_tuple_structural_binding();
+  // void parse_parse_tuple_bindings(bindings&)
+  // void parse_pod_bindings(bindings&)
+
+  Ast_Binding parse_binding();
+  Ast_Pod_Binds parse_pod_binds();
+  Ast_Tuple_Binds parse_tuple_binds();
+  Stmt_Ptr parse_structural_binding();
 
   /* Expressions */
   std::vector<Expr_Ptr> parse_expression_list(

@@ -81,8 +81,8 @@ private:
   void analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope);
 
   void check_tuple_bindings(
-    TupleBinding& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope);
-  void analyse_tuple_binding_decl(Ast_Tuple_Structural_Binding& binding, Scope& scope);
+    Ast_Tuple_Binds& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope);
+  void analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope);
 
   Type_Ptr analyse_block(Ast_Block& block, Scope& scope);
   Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope);

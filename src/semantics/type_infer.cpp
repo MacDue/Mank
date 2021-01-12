@@ -505,7 +505,7 @@ void Infer::generate_tuple_assign_constraints(Ast_Assign& tuple_assign) {
 }
 
 std::optional<Infer::Constraint> Infer::generate_tuple_destructure_constraints(
-  TupleBinding const & bindings, Type_Ptr& init_type, SourceLocation origin
+  Ast_Tuple_Binds const & bindings, Type_Ptr& init_type, SourceLocation origin
 ) {
   // Almost the same as assign
   if (is_tvar(init_type)) {

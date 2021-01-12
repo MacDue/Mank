@@ -432,21 +432,21 @@ inline Stmt_Ptr make_for(
 }
 
 template <typename... TBindings>
-inline TupleBinding make_tuple_binding(
+inline Ast_Tuple_Binds make_tuple_bindings(
   TBindings && ... bindings
 ) {
-  TupleBinding binding;
+  Ast_Tuple_Binds binding;
   (binding.binds.push_back(bindings), ...);
   return binding;
 }
 
 inline Stmt_Ptr make_bind(
-  TupleBinding bindings, Expr_Ptr initializer
+  Ast_Binding bindings, Expr_Ptr initializer
 ) {
-  Ast_Tuple_Structural_Binding tuple_binding;
-  tuple_binding.bindings = bindings;
-  tuple_binding.initializer = initializer;
-  return to_stmt_ptr(tuple_binding);
+  Ast_Structural_Binding binding;
+  binding.bindings = bindings;
+  binding.initializer = initializer;
+  return to_stmt_ptr(binding);
 }
 
 /* Test helpers */

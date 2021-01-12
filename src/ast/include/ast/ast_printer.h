@@ -77,12 +77,14 @@ class AstPrinter {
     void print_stmt(Ast_Assign& assign);
     void print_stmt(Ast_Variable_Declaration& var_decl);
     void print_stmt(Ast_For_Loop& for_loop);
-    void print_stmt(Ast_Tuple_Structural_Binding& binding);
+    void print_stmt(Ast_Structural_Binding& binding);
     void print_stmt(Ast_Loop& loop);
     void print_stmt(Ast_While_Loop& while_loop);
     void print_stmt(Ast_Loop_Control& loop_control);
 
-    void print_binding(TupleBinding& binding);
+    void print_binding(Ast_Binding& binding);
+    void print_binding(Ast_Tuple_Binds& tuple_binds);
+    void print_binding(Ast_Pod_Binds& pod_binds);
 
     void print_const(PrimativeValue const_value);
 

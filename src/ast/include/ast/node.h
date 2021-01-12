@@ -94,6 +94,8 @@ public:
 DEF_EXPR(Ast_Identifier) {
   std::string name;
 
+  inline bool empty() const { return name.empty(); }
+
   Ast_Identifier() = default;
   Ast_Identifier(SourceLocation location, std::string name)
     : Ast_Node(location), name{name} {}

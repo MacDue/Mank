@@ -53,7 +53,7 @@ struct BaseAstVisitor: public AstVisitor<
   Ast_Assign,
   Ast_Variable_Declaration,
   Ast_For_Loop,
-  Ast_Tuple_Structural_Binding,
+  Ast_Structural_Binding,
   Ast_Loop,
   Ast_While_Loop,
   Ast_Loop_Control,
@@ -82,7 +82,7 @@ struct BaseAstVisitor: public AstVisitor<
   void operator()(Ast_Assign& assign) override;
   void operator()(Ast_Variable_Declaration& var_decl) override;
   void operator()(Ast_For_Loop& for_loop) override;
-  void operator()(Ast_Tuple_Structural_Binding& binding) override;
+  void operator()(Ast_Structural_Binding& binding) override;
   void operator()(Ast_Loop& loop) override;
   void operator()(Ast_While_Loop& while_loop) override;
   void operator()(Ast_Loop_Control& loop_control) override;

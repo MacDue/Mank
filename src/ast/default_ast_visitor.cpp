@@ -68,7 +68,7 @@ void BaseAstVisitor::operator()(Ast_For_Loop& for_loop) {
   after(for_loop);
 }
 
-void BaseAstVisitor::operator()(Ast_Tuple_Structural_Binding& binding) {
+void BaseAstVisitor::operator()(Ast_Structural_Binding& binding) {
   before(binding);
   visit(binding);
   std::visit(recur, binding.initializer->v);

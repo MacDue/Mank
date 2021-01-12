@@ -113,26 +113,53 @@ void AstPrinter::print_stmt(Ast_For_Loop& for_loop) {
   self->print_expr(for_loop.body);
 }
 
-void AstPrinter::print_binding(TupleBinding& binding) {
+#define BINDS_PATTERN anyof(as<Ast_Tuple_Binds>(arg), as<Ast_Pod_Binds>(arg))
+
+void AstPrinter::print_binding(Ast_Tuple_Binds& tuple_binds) {
   using namespace mpark::patterns;
-  for (auto& binding: binding.binds) {
+  putf("* Tuple bindings");
+  for (auto& binding: tuple_binds.binds) {
     match(binding)(
-      pattern(as<Ast_Argument>(arg)) = [&](auto& arg) {
+      pattern(as<Ast_Bind>(arg)) = [&](auto& arg) {
         self->print_args({ arg });
       },
-      pattern(as<TupleBinding>(arg)) = [&](auto& nested) {
-        // FIXME: Hack
-        indent(); indent(); self->putf("- Nested bindings");
+      pattern(BINDS_PATTERN) = [&](auto& nested) {
         self->print_binding(nested);
       }
     );
   }
 }
 
-void AstPrinter::print_stmt(Ast_Tuple_Structural_Binding& tuple_binding) {
-  putf("* Tuple structural binding");
+void AstPrinter::print_binding(Ast_Pod_Binds& pod_binds) {
+  using namespace mpark::patterns;
+  putf("* Pod bindings");
+  for (auto& binding: pod_binds.binds) {
+    DepthUpdate _(this); DepthUpdate __(this);DepthUpdate ___(this);// hack
+    putf(".{}", binding.field.name);
+    match(binding.replacement)(
+      pattern(as<Ast_Bind>(arg)) = [&](auto& bind) {
+        if (!bind.name.empty()) {
+          indent(); putf("- Bound name: {}", bind.name.name);
+        }
+        indent(); putf("- Type: {}", type_to_string(bind.type));
+      },
+      pattern(BINDS_PATTERN) = [&](auto& nested) {
+        self->print_binding(nested);
+      }
+    );
+  }
+}
+
+void AstPrinter::print_binding(Ast_Binding& binding) {
+  std::visit([&](auto& bindings){
+    this->print_binding(bindings);
+  }, binding);
+}
+
+void AstPrinter::print_stmt(Ast_Structural_Binding& tuple_binding) {
+  putf("* Structural binding");
   putf("- Bindings:");
-  this->print_binding(tuple_binding.bindings);
+  self->print_binding(tuple_binding.bindings);
   putf("- Initializer:");
   self->print_expr(*tuple_binding.initializer);
 }

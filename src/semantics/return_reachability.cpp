@@ -62,7 +62,7 @@ bool all_paths_return(Ast_Statement& statement, Ast_Statement** unreachable_stmt
       // only 100% sure of return in range
       return start_range_returns || end_range_returns;
     },
-    pattern(as<Ast_Tuple_Structural_Binding>(arg)) = [&](auto& sad_binding) {
+    pattern(as<Ast_Structural_Binding>(arg)) = [&](auto& sad_binding) {
       return all_paths_return(*sad_binding.initializer, unreachable_stmt);
     },
     pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {

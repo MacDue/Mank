@@ -24,13 +24,42 @@ DEF_STMT(Ast_Variable_Declaration) {
   Expr_Ptr initializer;
 };
 
-struct TupleBinding {
+using Ast_Bind = Ast_Argument;
+
+#define AST_BINDS Ast_Tuple_Binds, Ast_Pod_Binds
+
+struct Ast_Pod_Bind;
+struct Ast_Pod_Binds {
   SourceLocation location;
-  std::vector<std::variant<Ast_Argument, TupleBinding>> binds;
+  std::vector<Ast_Pod_Bind> binds;
 };
 
-DEF_STMT(Ast_Tuple_Structural_Binding) {
-  TupleBinding bindings;
+struct Ast_Tuple_Binds {
+  SourceLocation location;
+  /*
+    (a, b)
+    (a, {.foo})
+    (a, (b,c))
+  */
+  std::vector<std::variant<Ast_Bind, AST_BINDS>> binds;
+};
+
+struct Ast_Pod_Bind {
+  Ast_Identifier field;
+  int field_index = -1;
+
+  /*
+    .foo
+    .foo/(a,b)
+    .foo/{.bar}
+  */
+  std::variant<Ast_Bind, AST_BINDS> replacement;
+};
+
+using Ast_Binding = std::variant<Ast_Tuple_Binds, Ast_Pod_Binds>;
+
+DEF_STMT(Ast_Structural_Binding) {
+  Ast_Binding bindings;
   Expr_Ptr initializer;
 };
 
@@ -66,7 +95,7 @@ using Ast_Statement_Type = std::variant<
   Ast_Variable_Declaration,
   Ast_Loop_Control,
   Ast_For_Loop,
-  Ast_Tuple_Structural_Binding,
+  Ast_Structural_Binding,
   Ast_Loop,
   Ast_While_Loop>;
 

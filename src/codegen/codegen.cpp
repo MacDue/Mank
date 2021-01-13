@@ -800,6 +800,15 @@ void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& sco
 
 /* Expressions */
 
+llvm::Value* LLVMCodeGen::dereference(llvm::Value* value, Type_Ptr type) {
+  if (type && is_reference_type(type)) {
+    // We want to dereference it
+    return ir_builder.CreateLoad(value, "dereference");
+  } else {
+    return value;
+  }
+}
+
 llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
   using namespace mpark::patterns;
   // must be lvalue
@@ -810,19 +819,17 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_Identifier>(arg)) = [&](auto& variable) -> llvm::Value* {
       auto type = variable.get_meta().type;
       llvm::Value* variable_alloca = get_local(variable, scope);
-      if (type && is_reference_type(type)) {
-        // We want to dereference it
-        return ir_builder.CreateLoad(variable_alloca, "dereference");
-      } else {
-        return variable_alloca;
-      }
+      return dereference(variable_alloca, type);
     },
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access) -> llvm::Value* {
       std::vector<uint> idx_list;
       auto& source_object = flatten_nested_pod_accesses(access, idx_list);
       llvm::Value* source_address = address_of(source_object, scope);
-      return ir_builder.CreateGEP(
+      llvm::Value* field_value = ir_builder.CreateGEP(
         source_address, make_idx_list_for_gep(idx_list), access.field.name);
+      auto pod_type = std::get<Ast_Pod_Declaration>(remove_reference(access.object->meta.type)->v);
+      auto type = pod_type.fields.at(idx_list.back()).type;
+      return dereference(field_value, type);
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
       std::vector<llvm::Value*> idx_list;
@@ -1242,7 +1249,10 @@ Ast_Expression& LLVMCodeGen::flatten_nested_pod_accesses(
   Ast_Field_Access& access, std::vector<uint>& idx_list
 ) {
   Ast_Expression* base_expr;
-  if (auto pior_access = std::get_if<Ast_Field_Access>(&access.object->v)) {
+  Ast_Field_Access* pior_access;
+  if ((pior_access = std::get_if<Ast_Field_Access>(&access.object->v))
+    && !is_reference_type(pior_access->object->meta.type)
+  ) {
     base_expr = &flatten_nested_pod_accesses(*pior_access, idx_list);
   } else {
     base_expr = access.object.get();
@@ -1273,10 +1283,10 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
   using namespace mpark::patterns;
-  auto pod_type = access.object->meta.type;
+  auto pod_type = remove_reference(access.object->meta.type);
 
   // FIXME: Special case, hardcoded lengths.
-  llvm::Value* special_value = match(remove_reference(pod_type)->v)(
+  llvm::Value* special_value = match(pod_type->v)(
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
       return create_llvm_idx(array_type.size);
     },
@@ -1291,9 +1301,15 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
     return special_value;
   }
 
+  auto accessed_type = std::get<Ast_Pod_Declaration>(pod_type->v)
+    .fields.at(access.field_index).type;
+
   std::vector<uint> idx_list;
   auto& source_object = flatten_nested_pod_accesses(access, idx_list);
-  return get_value_extractor(source_object, scope).get_value(idx_list, access.field.name);
+  llvm::Value* field_value = get_value_extractor(source_object, scope).get_value(idx_list, access.field.name);
+
+  // TODO: Must be better way...
+  return dereference(field_value, accessed_type);
 }
 
 void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope) {

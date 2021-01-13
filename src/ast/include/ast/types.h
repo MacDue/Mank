@@ -9,6 +9,7 @@
 #include "ast/array_type.h"
 #include "ast/tuple_type.h"
 #include "ast/primative_types.h"
+#include "ast/type_constraints.h"
 
 DEF_TYPE(UncheckedType) {
   Ast_Identifier identifier;

@@ -6,6 +6,7 @@
 #include "ast/ast.h"
 #include "ast/types.h"
 #include "ast/context.h"
+#include "ast/type_constraints.h"
 
 /* String helpers */
 
@@ -78,7 +79,7 @@ std::string type_to_string(Type const & type, bool hide_details) {
     pattern(as<TypeFieldConstraint>(arg)) = [&](auto const & field_constraint) {
       return formatxx::format_string("{}[.{}]",
         type_to_string(field_constraint.type.get(), hide_details),
-        field_constraint.field_access->field.name);
+        field_constraint.get_field().name);
     },
     pattern(as<TypeIndexConstraint>(arg)) = [&](auto const & index_constraint) {
       return formatxx::format_string("{}[Indexable]",
@@ -132,10 +133,28 @@ Type_Ptr TypeVar::get(Constraint constraint) {
   }
 }
 
+/* Type constraints */
+
+TypeFieldConstraint::TypeFieldConstraint(
+  Expr_Ptr object, Ast_Identifier const & field, int& field_index,
+  Expression_Meta::ValueType* value_type
+): type{object->meta.type}, field_access{
+      .object = object, .field = field.get_raw_self(), .field_index = &field_index,
+      .value_type = value_type} {}
+
+TypeFieldConstraint::TypeFieldConstraint(Ast_Field_Access& access)
+  : TypeFieldConstraint(access.object, access.field, access.field_index,
+    &access.get_meta().value_type) {}
+
 Type_Ptr TypeFieldConstraint::get(AstContext& ctx, Ast_Field_Access& access) {
-  TypeFieldConstraint fc;
-  fc.type = access.object->meta.type;
-  fc.field_access = &access;
+  TypeFieldConstraint fc(access);
+  return ctx.new_type(fc);
+}
+
+Type_Ptr TypeFieldConstraint::get(
+  AstContext& ctx, Expr_Ptr object, Ast_Identifier const & field, int& field_index
+) {
+  TypeFieldConstraint fc(object, field, field_index);
   return ctx.new_type(fc);
 }
 

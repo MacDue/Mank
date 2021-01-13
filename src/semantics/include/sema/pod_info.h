@@ -13,7 +13,7 @@ struct PodInfo {
   SpAstPtr<Type, Ast_Pod_Declaration> type;
   std::map<std::string_view, FieldInfo> fields;
 
-  inline FieldInfo get_field_or_fail(Ast_Identifier& field) const {
+  inline FieldInfo get_field_or_fail(Ast_Identifier const & field) const {
     if (!fields.contains(field.name)) {
       throw_sema_error_at(field, "{} contains no field named \"{}\"",
         type->identifier.name, field.name);

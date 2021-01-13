@@ -41,7 +41,17 @@ T min_type(T a, T b) {
 TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 
 Type_Ptr get_field_type(
-  Type_Ptr type, Ast_Field_Access& access, ResolvedPodInfoMap const & pod_info);
+  Ast_Field_Access& access,
+  ResolvedPodInfoMap const & pod_info);
+
+Type_Ptr get_field_type(
+  TypeFieldConstraint& field_constraint,
+  ResolvedPodInfoMap const & pod_info);
+
+Type_Ptr get_field_type(
+  Ast_Pod_Bind& pod_bind,
+  Expr_Ptr init,
+  ResolvedPodInfoMap const & pod_info);
 
 Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);
 

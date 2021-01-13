@@ -538,7 +538,7 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
 }
 
 void Semantics::check_tuple_bindings(
-  Ast_Tuple_Binds& bindings, Ast_Expression& init, Type_Ptr& init_type, Scope& scope
+  Ast_Tuple_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope
 ) {
   using namespace mpark::patterns;
   auto constraint = infer->generate_tuple_destructure_constraints(
@@ -551,20 +551,21 @@ void Semantics::check_tuple_bindings(
     for (auto el_type: tuple_type->element_types) {
       auto& binding = bindings.binds.at(bind_idx);
       match(binding)(
-        pattern(as<Ast_Bind>(arg)) =
-          [&](auto& bind) {
-            resolve_type_or_fail(scope, bind.type, "undeclared bind type {}");
-            assert_valid_binding(
-              bind.name,
-              bind.name.location,
-              bind.type, el_type, &init);
-              emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
-              scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
-          },
-        pattern(as<Ast_Tuple_Binds>(arg)) =
-          [&](auto& nested_binds) {
-            check_tuple_bindings(nested_binds, init, el_type, scope);
-          }
+        pattern(as<Ast_Bind>(arg)) = [&](auto& bind) {
+          resolve_type_or_fail(scope, bind.type, "undeclared tuple bind type {}");
+          assert_valid_binding(
+            bind.name,
+            bind.name.location,
+            bind.type, el_type, init.get());
+            emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
+            scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
+        },
+        pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& nested_binds) {
+          check_tuple_bindings(nested_binds, init, el_type, scope);
+        },
+        pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& nested_binds) {
+          check_pod_bindings(nested_binds, init, el_type, scope);
+        }
       );
       bind_idx += 1;
     }
@@ -576,12 +577,50 @@ void Semantics::check_tuple_bindings(
   }
 }
 
+void Semantics::check_pod_bindings(
+  Ast_Pod_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope
+) {
+  using namespace mpark::patterns;
+  for (auto& field_bind: bindings.binds) {
+    Type_Ptr field_type;
+    if (is_tvar(init_type)) {
+      auto field_constraint = TypeFieldConstraint::get(
+        *ctx, init, field_bind.field, field_bind.field_index);
+      field_type = ctx->new_tvar();
+      infer->add_constraint(field_bind.field.location, field_type, field_constraint);
+    } else {
+      field_type = get_field_type(field_bind, init, resolved_pods);
+    }
+    match(field_bind.replacement)(
+      pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
+        resolve_type_or_fail(scope, bind.type, "undeclared pod bind type {}");
+        assert_valid_binding(
+          field_bind.field,
+          field_bind.field.location,
+          bind.type, field_type, init.get());
+        auto bound_name = !bind.name.empty() ? bind.name : field_bind.field;
+        emit_warning_if_shadows(bound_name, scope, "pod binding shadows existing symbol");
+        scope.add(Symbol(bound_name, bind.type, Symbol::LOCAL));
+      },
+      pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& nested_binds) {
+        check_pod_bindings(nested_binds, init, field_type, scope);
+      },
+      pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& nested_binds) {
+        check_tuple_bindings(nested_binds, init, field_type, scope);
+      }
+    );
+  }
+}
+
 void Semantics::analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope) {
   using namespace mpark::patterns;
   auto init_type = analyse_expression(*binding.initializer, scope);
   match(binding.bindings)(
     pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
-      check_tuple_bindings(tuple_binds, *binding.initializer, init_type, scope);
+      check_tuple_bindings(tuple_binds, binding.initializer, init_type, scope);
+    },
+    pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds){
+      check_pod_bindings(pod_binds, binding.initializer, init_type, scope);
     }
   );
 }
@@ -713,7 +752,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
             field_type, field_constraint);
           return field_type;
         } else {
-          return get_field_type(object_type, access, resolved_pods);
+          return get_field_type(access, resolved_pods);
         }
       } else {
         throw_sema_error_at(access.object, "is void?");

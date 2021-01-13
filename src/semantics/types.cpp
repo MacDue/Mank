@@ -138,43 +138,95 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
 
 #define TYPE_MUST_BE_KNOWN "type must be known here! Maybe add a type annotation?"
 
-Type_Ptr get_field_type(
+static std::pair<Type_Ptr,int> get_field_type(
   Type_Ptr type,
-  Ast_Field_Access& access,
+  Expr_Ptr object,
+  Ast_Identifier const & field,
+  Expression_Meta::ValueType& value_type,
   ResolvedPodInfoMap const & pod_info
 ) {
   using namespace mpark::patterns;
   if (type) {
+    int resolved_field_index = -1;
     auto access_type = match(remove_reference(type)->v)(
       pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
         auto [field_type, field_index] =
-          pod_info.at(pod_type.identifier.name).get_field_or_fail(access.field);
-        access.field_index = field_index;
-        access.get_meta().value_type = access.object->meta.value_type;
-        // expr.inherit_value_type(*access.object);
+          pod_info.at(pod_type.identifier.name).get_field_or_fail(field);
+        // Only update value type here (all others are always rvalues)
+        value_type = object->meta.value_type;
+        resolved_field_index = field_index;
         return field_type;
       },
       // FIXME: Hardcoded .length
       pattern(as<FixedSizeArrayType>(_)) = [&]{
-        WHEN(access.field.name == "length") {
+        WHEN(field.name == "length") {
           return PrimativeType::int_ty();
         };
       },
       pattern(as<PrimativeType>(arg)) = [&](auto& primative_type) {
-        WHEN(primative_type.is_string_type() && access.field.name == "length") {
+        WHEN(primative_type.is_string_type() && field.name == "length") {
           return PrimativeType::int_ty();
         };
       },
       pattern(as<TypeVar>(_)) = [&]() -> Type_Ptr {
-        throw_sema_error_at(access.object, TYPE_MUST_BE_KNOWN);
+        throw_sema_error_at(object, TYPE_MUST_BE_KNOWN);
         return nullptr;
       },
       pattern(_) = []() -> Type_Ptr { return nullptr; });
     if (access_type) {
-      return access_type;
+      return std::make_pair(access_type, resolved_field_index);
     }
   }
-  throw_sema_error_at(access.object, "not a pod type");
+  throw_sema_error_at(object, "not a pod type");
+}
+
+Type_Ptr get_field_type(
+  Ast_Field_Access& access,
+  ResolvedPodInfoMap const & pod_info
+) {
+  auto [access_type, field_index] = get_field_type(
+    access.object->meta.type,
+    access.object,
+    access.field,
+    access.get_meta().value_type,
+    pod_info);
+  access.field_index = field_index;
+  return access_type;
+}
+
+Type_Ptr get_field_type(
+  TypeFieldConstraint& field_constraint,
+  ResolvedPodInfoMap const & pod_info
+) {
+  Expression_Meta::ValueType value_type;
+  if (auto pior_value_type = field_constraint.get_value_type()) {
+    value_type = *pior_value_type;
+  }
+  auto [access_type, field_index] = get_field_type(
+    field_constraint.type,
+    field_constraint.get_object(),
+    field_constraint.get_field(),
+    value_type, pod_info);
+  field_constraint.resolve_field_index(field_index);
+  // If there was no pior value is this a NOP.
+  field_constraint.resolve_value_type(value_type);
+  return access_type;
+}
+
+Type_Ptr get_field_type(
+  Ast_Pod_Bind& pod_bind,
+  Expr_Ptr init,
+  ResolvedPodInfoMap const & pod_info
+) {
+  Expression_Meta::ValueType _value_type; // no needed
+  auto [access_type, field_index] = get_field_type(
+    init->meta.type,
+    init,
+    pod_bind.field,
+    _value_type,
+    pod_info);
+  pod_bind.field_index = field_index;
+  return access_type;
 }
 
 Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {

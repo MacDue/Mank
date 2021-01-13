@@ -177,7 +177,7 @@ static std::pair<Type_Ptr,int> get_field_type(
       return std::make_pair(access_type, resolved_field_index);
     }
   }
-  throw_sema_error_at(object, "not a pod type");
+  throw_sema_error_at(object, "not a pod type (is {})", type_to_string(type.get()));
 }
 
 Type_Ptr get_field_type(
@@ -216,11 +216,12 @@ Type_Ptr get_field_type(
 Type_Ptr get_field_type(
   Ast_Pod_Bind& pod_bind,
   Expr_Ptr init,
+  Type_Ptr init_type,
   ResolvedPodInfoMap const & pod_info
 ) {
   Expression_Meta::ValueType _value_type; // no needed
   auto [access_type, field_index] = get_field_type(
-    init->meta.type,
+    init_type,
     init,
     pod_bind.field,
     _value_type,

@@ -51,6 +51,7 @@ Type_Ptr get_field_type(
 Type_Ptr get_field_type(
   Ast_Pod_Bind& pod_bind,
   Expr_Ptr init,
+  Type_Ptr init_type,
   ResolvedPodInfoMap const & pod_info);
 
 Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);

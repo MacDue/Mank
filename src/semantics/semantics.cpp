@@ -589,7 +589,7 @@ void Semantics::check_pod_bindings(
       field_type = ctx->new_tvar();
       infer->add_constraint(field_bind.field.location, field_type, field_constraint);
     } else {
-      field_type = get_field_type(field_bind, init, resolved_pods);
+      field_type = get_field_type(field_bind, init, init_type, resolved_pods);
     }
     match(field_bind.replacement)(
       pattern(as<Ast_Bind>(arg)) = [&](auto& bind){

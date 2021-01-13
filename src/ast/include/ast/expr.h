@@ -67,7 +67,9 @@ DEF_EXPR(Ast_Index_Access) {
 struct PodFieldInitializer {
   Ast_Identifier field;
   Expr_Ptr initializer;
+  // vvv Resolved in sema
   int field_index = -1;
+  Type_Ptr field_type = nullptr;
 };
 
 DEF_EXPR(Ast_Pod_Literal) {

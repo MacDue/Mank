@@ -1335,7 +1335,7 @@ void LLVMCodeGen::initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer,
         initialize_aggregate(field_ptr, nested_agg, scope);
       },
       pattern(_) = [&]{
-        llvm::Value* value = codegen_expression(*init.initializer, scope);
+        llvm::Value* value = codegen_bind(*init.initializer, init.field_type, scope);
         ir_builder.CreateStore(value, field_ptr);
       }
     );

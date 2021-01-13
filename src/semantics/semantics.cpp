@@ -838,6 +838,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
            expected_type, init_type, init.initializer.get());
 
         init.field_index = field_index;
+        init.field_type = expected_type;
         seen_fields.insert(init.field.name);
       }
       if (seen_fields.size() != pod_info.fields.size()) {

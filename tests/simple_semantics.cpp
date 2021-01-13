@@ -823,7 +823,7 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
       }
     )");
 
-    REQUIRE_THROWS_WITH(sema.analyse_file(code), "not a pod type");
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("not a pod type"));
   }
 
   SECTION("Accessing a field that does not exist on a pod is invalid") {

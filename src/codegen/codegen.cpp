@@ -1249,9 +1249,16 @@ Ast_Expression& LLVMCodeGen::flatten_nested_pod_accesses(
   Ast_Field_Access& access, std::vector<uint>& idx_list
 ) {
   Ast_Expression* base_expr;
+
+  auto pior_is_reference = [](Ast_Field_Access& pior_access) {
+    auto pior_type = remove_reference(pior_access.object->meta.type);
+    auto pior_pod = std::get<Ast_Pod_Declaration>(pior_type->v);
+    return is_reference_type(pior_pod.fields.at(pior_access.field_index).type);
+  };
+
   Ast_Field_Access* pior_access;
   if ((pior_access = std::get_if<Ast_Field_Access>(&access.object->v))
-    && !is_reference_type(pior_access->object->meta.type)
+    && !pior_is_reference(*pior_access)
   ) {
     base_expr = &flatten_nested_pod_accesses(*pior_access, idx_list);
   } else {

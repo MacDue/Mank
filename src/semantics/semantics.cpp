@@ -834,8 +834,9 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         }
         auto [expected_type, field_index] = pod_info.get_field_or_fail(init.field);
         auto init_type = analyse_expression(*init.initializer, scope);
-        infer->match_or_constrain_types_at(init.initializer, init_type, expected_type,
-          "initializer type {} does not match expected type {}");
+        assert_valid_binding({}, AstHelper::extract_location(init.initializer),
+           expected_type, init_type, init.initializer.get());
+
         init.field_index = field_index;
         seen_fields.insert(init.field.name);
       }

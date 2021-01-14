@@ -21,6 +21,10 @@ DEF_TYPE(Ast_Function_Declaration), Ast_Node {
 DEF_TYPE(Ast_Pod_Declaration), Ast_Node {
   Ast_Identifier identifier;
   std::vector<Ast_Argument> fields;
+
+  inline Type_Ptr get_field_type(size_t field_index) {
+    return fields.at(field_index).type;
+  }
 };
 
 using Function_Ptr = SpAstPtr<Type, Ast_Function_Declaration>;

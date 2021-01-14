@@ -150,6 +150,21 @@ LLVMCodeGen::ExpressionExtract::ExpressionExtract(
   }
 }
 
+// hack
+LLVMCodeGen::ExpressionExtract::ExpressionExtract(
+  LLVMCodeGen* codegen, llvm::Value* value, bool is_lvalue
+): codegen{codegen}, is_lvalue{is_lvalue}, value_or_address{value} {}
+
+llvm::Value* LLVMCodeGen::ExpressionExtract::get_value(
+  std::vector<unsigned> const & idx_list, llvm::Twine const & name
+) {
+  llvm::Value* value = this->get_bind(idx_list, name);
+  if (is_lvalue) {
+    value = codegen->ir_builder.CreateLoad(value, name);
+  }
+  return value;
+}
+
 llvm::Value* LLVMCodeGen::ExpressionExtract::get_bind(
   std::vector<unsigned> const & idx_list, llvm::Twine const & name
 ) {
@@ -162,12 +177,16 @@ llvm::Value* LLVMCodeGen::ExpressionExtract::get_bind(
   }
 }
 
-llvm::Value* LLVMCodeGen::ExpressionExtract::get_value(
-  std::vector<unsigned> const & idx_list, llvm::Twine const & name
+
+
+llvm::Value* LLVMCodeGen::ExpressionExtract::get_bind(
+  std::vector<unsigned> const & idx_list, Type_Ptr bound_to, llvm::Twine const & name
 ) {
-  llvm::Value* value = this->get_bind(idx_list, name);
-  if (is_lvalue) {
-    value = codegen->ir_builder.CreateLoad(value, name);
+  llvm::Value* value;
+  if (is_reference_type(bound_to)) {
+    value = get_bind(idx_list, name + "_ref");
+  } else {
+    value = get_value(idx_list, name + "_value");
   }
   return value;
 }
@@ -755,36 +774,91 @@ void LLVMCodeGen::codegen_statement(Ast_Loop_Control& loop_control, Scope& scope
   }
 }
 
+void LLVMCodeGen::codegen_value_bind(
+  Ast_Bind& bind,
+  Type_Ptr value_type,
+  Ast_Identifier& bound_name,
+  ExpressionExtract& aggregate,
+  std::vector<unsigned> const & idxs,
+  Scope& scope,
+  llvm::Twine const & codename
+) {
+  llvm::Value* value = aggregate.get_bind(idxs, bind.type, codename);
+  llvm::Function* current_function = get_current_function();
+  auto& local_symbol = scope.add(Symbol(bound_name, bind.type, Symbol::LOCAL));
+  llvm::AllocaInst* alloca = create_entry_alloca(current_function, &local_symbol);
+  // This will generate worse IR than using a var decl
+  // (since if you have an array it will copy it rather than inplace init)
+  // but llvm should be able to figure that out.
+  if (value_type) {
+    // FIXME: I don't think this should be here
+    value = dereference(value, value_type);
+  }
+  ir_builder.CreateStore(value, alloca);
+}
+
 void LLVMCodeGen::codegen_tuple_bindings(
-  Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope
+  Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple,
+  std::vector<unsigned> idxs, Scope& scope
 ){
   using namespace mpark::patterns;
   uint gep_idx = 0;
   for (auto& binding: tuple_binds.binds) {
     idxs.push_back(gep_idx);
     match(binding) (
-      pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& nested_bind) {
-        codegen_tuple_bindings(nested_bind, tuple, idxs, scope);
-      },
       pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
-        llvm::Value* value;
-        if (is_reference_type(bind.type)) {
-          // the tuple expression must be an lvalue
-          value = tuple.get_bind(idxs, "bound_tuple_ref");
-        } else {
-          value = tuple.get_value(idxs, "bound_tuple_value");
-        }
-        llvm::Function* current_function = get_current_function();
-        auto& local_symbol = scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
-        llvm::AllocaInst* alloca = create_entry_alloca(current_function, &local_symbol);
-        // This my generate worse IR than using a var decl
-        // (since if you have an array it will copy it rather than inplace init)
-        // but llvm should be able to figure that out.
-        ir_builder.CreateStore(value, alloca);
+        codegen_value_bind(bind, nullptr, bind.name, tuple, idxs, scope, "bound_tuple");
+      },
+      pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& nested_binds) {
+        codegen_tuple_bindings(nested_binds, tuple, idxs, scope);
+      },
+      pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& nested_binds) {
+        codegen_pod_bindings(nested_binds, tuple, idxs, scope);
       }
     );
     idxs.pop_back();
     ++gep_idx;
+  }
+}
+
+void LLVMCodeGen::codegen_pod_bindings(
+  Ast_Pod_Binds& pod_binds, ExpressionExtract& pod,
+  std::vector<unsigned> idxs, Scope& scope
+) {
+  using namespace mpark::patterns;
+  // TODO: Hardcoded fields
+  auto pod_type = std::get<Ast_Pod_Declaration>(
+    remove_reference(pod_binds.pod_type)->v);
+
+  auto get_nested_extractor = [&](bool reference_field) {
+    if (reference_field) {
+      llvm::Value* ptr = pod.get_value(idxs, "field_ptr");
+      ExpressionExtract nested_pod(this, ptr, true);
+      return std::make_pair(nested_pod, std::vector<unsigned>{});
+    }
+    return std::make_pair(pod, idxs);
+  };
+
+  for (auto& field_bind: pod_binds.binds) {
+    auto field_type = pod_type.get_field_type(field_bind.field_index);
+    bool field_is_ref = is_reference_type(field_type);
+
+    idxs.push_back(field_bind.field_index);
+    match(field_bind.replacement)(
+      pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
+        codegen_value_bind(bind, field_type,
+          *field_bind.bound_name, pod, idxs, scope, "pod_bind");
+      },
+      pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& nested_binds){
+        auto [nested_pod, nested_idxs] = get_nested_extractor(field_is_ref);
+        codegen_pod_bindings(nested_binds, nested_pod, nested_idxs, scope);
+      },
+      pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& nested_binds){
+        auto [nested_pod, nested_idxs] = get_nested_extractor(field_is_ref);
+        codegen_tuple_bindings(nested_binds, nested_pod, nested_idxs, scope);
+      }
+    );
+    idxs.pop_back();
   }
 }
 
@@ -794,6 +868,10 @@ void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& sco
     pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
       auto tuple_extract = get_tuple_extractor(*bindings.initializer, scope);
       codegen_tuple_bindings(tuple_binds, tuple_extract, {}, scope);
+    },
+    pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds) {
+      auto pod_extract = get_value_extractor(*bindings.initializer, scope);
+      codegen_pod_bindings(pod_binds, pod_extract, {}, scope);
     }
   );
 }
@@ -1253,7 +1331,7 @@ Ast_Expression& LLVMCodeGen::flatten_nested_pod_accesses(
   auto pior_is_reference = [](Ast_Field_Access& pior_access) {
     auto pior_type = remove_reference(pior_access.object->meta.type);
     auto pior_pod = std::get<Ast_Pod_Declaration>(pior_type->v);
-    return is_reference_type(pior_pod.fields.at(pior_access.field_index).type);
+    return is_reference_type(pior_pod.get_field_type(pior_access.field_index));
   };
 
   Ast_Field_Access* pior_access;
@@ -1309,7 +1387,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
   }
 
   auto accessed_type = std::get<Ast_Pod_Declaration>(pod_type->v)
-    .fields.at(access.field_index).type;
+    .get_field_type(access.field_index);
 
   std::vector<uint> idx_list;
   auto& source_object = flatten_nested_pod_accesses(access, idx_list);
@@ -1358,7 +1436,7 @@ void LLVMCodeGen::initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer,
         initialize_aggregate(field_ptr, nested_agg, scope);
       },
       pattern(_) = [&]{
-        auto field_type = std::get<Ast_Pod_Declaration>(pod_type->v).fields.at(init.field_index).type;
+        auto field_type = std::get<Ast_Pod_Declaration>(pod_type->v).get_field_type(init.field_index);
         llvm::Value* value = codegen_bind(*init.initializer, field_type, scope);
         ir_builder.CreateStore(value, field_ptr);
       }

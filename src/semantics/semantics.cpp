@@ -581,6 +581,7 @@ void Semantics::check_pod_bindings(
   Ast_Pod_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope
 ) {
   using namespace mpark::patterns;
+  bindings.pod_type = init_type; // help for codegen
   for (auto& field_bind: bindings.binds) {
     Type_Ptr field_type;
     if (is_tvar(init_type)) {
@@ -598,9 +599,9 @@ void Semantics::check_pod_bindings(
           field_bind.field,
           field_bind.field.location,
           bind.type, field_type, init.get());
-        auto bound_name = !bind.name.empty() ? bind.name : field_bind.field;
-        emit_warning_if_shadows(bound_name, scope, "pod binding shadows existing symbol");
-        scope.add(Symbol(bound_name, bind.type, Symbol::LOCAL));
+        field_bind.bound_name = (!bind.name.empty() ? bind.name : field_bind.field).get_raw_self();
+        emit_warning_if_shadows(*field_bind.bound_name, scope, "pod binding shadows existing symbol");
+        scope.add(Symbol(*field_bind.bound_name, bind.type, Symbol::LOCAL));
       },
       pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& nested_binds) {
         check_pod_bindings(nested_binds, init, field_type, scope);

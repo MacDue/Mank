@@ -158,11 +158,16 @@ class LLVMCodeGen: public CodeGenerator {
     llvm::Value* value_or_address;
 public:
     ExpressionExtract(LLVMCodeGen* codegen, Ast_Expression& expr, Scope& scope);
+    ExpressionExtract(LLVMCodeGen* codegen, llvm::Value* value, bool is_lvalue);
+
     llvm::Value* get_value(
       std::vector<unsigned> const & idx_list, llvm::Twine const & name);
 
     llvm::Value* get_bind(
       std::vector<unsigned> const & idx_list, llvm::Twine const & name);
+
+    llvm::Value* get_bind(
+      std::vector<unsigned> const & idx_list, Type_Ptr bound_to, llvm::Twine const & name);
   };
 
   inline ExpressionExtract get_value_extractor(Ast_Expression& expr, Scope& scope) {
@@ -205,8 +210,20 @@ public:
   void codegen_statement(Ast_While_Loop& while_loop, Scope& scope);
   void codegen_statement(Ast_Loop_Control& loop_control, Scope& scope);
 
+  void codegen_value_bind(
+    Ast_Bind& bind,
+    Type_Ptr value_type,
+    Ast_Identifier& bound_name,
+    ExpressionExtract& aggregate,
+    std::vector<unsigned> const & idxs,
+    Scope& scope,
+    llvm::Twine const & codename);
+
   void codegen_tuple_bindings(
     Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
+
+  void codegen_pod_bindings(
+    Ast_Pod_Binds& pod_binds, ExpressionExtract& pod, std::vector<unsigned> idxs, Scope& scope);
 
   void codegen_statement(Ast_Structural_Binding& binding, Scope& scope);
 

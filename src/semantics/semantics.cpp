@@ -541,6 +541,24 @@ void Semantics::check_tuple_bindings(
   Ast_Tuple_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope
 ) {
   using namespace mpark::patterns;
+  /*
+    TODO: Consider
+
+    If the outer tuple is a rvalue, but inside is a reference, should we allow
+    the inner reference to be extracted into bind reference?
+
+    Currently my codegen (and sema) can't figure this out (not fine grained enough)
+
+    e.g.
+
+    pod Test {
+      msg: ref str
+    }
+
+    # test is a Test
+    bind ({msg: ref}) = (test,) # currently unsupported
+  */
+  init->fix_tuple_hack(); // Makes sure the bindings are correct
   auto constraint = infer->generate_tuple_destructure_constraints(
     bindings, init_type, bindings.location);
   if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {

@@ -548,11 +548,7 @@ void LLVMCodeGen::codegen_tuple_assign(
 LLVMCodeGen::ExpressionExtract LLVMCodeGen::get_tuple_extractor(
   Ast_Expression& tuple, Scope& scope
 ) {
-  if (std::holds_alternative<Ast_Tuple_Literal>(tuple.v)) {
-    // In the semantics I lie and say a tuple literal with all lvalue values
-    // is an lvalue (this is true semantically -- but not really for code gen)
-    tuple.set_value_type(Expression_Meta::RVALUE); // make sure it's a rvalue (like all literals)
-  }
+  tuple.fix_tuple_hack();
   return get_value_extractor(tuple, scope);
 }
 

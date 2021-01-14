@@ -129,4 +129,13 @@ public:
   inline void inherit_value_type(Ast_Expression const & child) {
     set_value_type(child.meta.value_type);
   }
+
+  // FIXME: Ew!
+  inline void fix_tuple_hack() {
+    if (std::holds_alternative<Ast_Tuple_Literal>(v)) {
+      // In the semantics I lie and say a tuple literal with all lvalue values
+      // is an lvalue (this is true semantically -- but not really for code gen)
+      set_value_type(Expression_Meta::RVALUE); // make sure it's a rvalue (like all literals)
+    }
+  }
 };

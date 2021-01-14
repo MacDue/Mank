@@ -142,6 +142,8 @@ class LLVMCodeGen: public CodeGenerator {
   std::pair<llvm::Value*, llvm::Value*> extract_string_info(
     Ast_Expression& expr, Scope& scope);
 
+  llvm::Value* fix_string_length(llvm::Value* length);
+
   llvm::Value* create_llvm_idx(uint value);
 
   Ast_Expression& flatten_nested_pod_accesses(
@@ -219,6 +221,8 @@ public:
     Scope& scope,
     llvm::Twine const & codename);
 
+  void codegen_value_bind(Ast_Bind& bind, Ast_Identifier& bound_name, llvm::Value* value, Scope& scope);
+
   void codegen_tuple_bindings(
     Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
 
@@ -232,6 +236,8 @@ public:
 
   void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
   void initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope);
+
+  llvm::Value* get_special_field_value(Type_Ptr agg_type, Ast_Expression& agg, Scope& scope);
 
   llvm::Value* dereference(llvm::Value* value, Type_Ptr type);
   llvm::Value* address_of(Ast_Expression& expr, Scope& scope);

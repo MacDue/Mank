@@ -107,6 +107,12 @@ LLVMCodeGen::extract_string_info(Ast_Expression& expr, Scope& scope) {
     str_extract.get_value({1}, "str_ptr"));
 }
 
+llvm::Value* LLVMCodeGen::fix_string_length(llvm::Value* length) {
+  // FIXME: This should be removed when mank supports size_t as a type
+  return ir_builder.CreateIntCast(
+    length, map_primative_to_llvm(PrimativeType::INTEGER), true, "str_length");
+}
+
 llvm::Value* LLVMCodeGen::create_string_concat(
   Ast_Expression& s1, Ast_Expression& s2, Scope& scope
 ) {
@@ -774,6 +780,7 @@ void LLVMCodeGen::codegen_statement(Ast_Loop_Control& loop_control, Scope& scope
   }
 }
 
+// FIXME: This function is dumb
 void LLVMCodeGen::codegen_value_bind(
   Ast_Bind& bind,
   Type_Ptr value_type,
@@ -784,18 +791,25 @@ void LLVMCodeGen::codegen_value_bind(
   llvm::Twine const & codename
 ) {
   llvm::Value* value = aggregate.get_bind(idxs, bind.type, codename);
+  if (value_type) {
+    // FIXME: I don't think this should be here
+    value = dereference(value, value_type);
+  }
+  codegen_value_bind(bind, bound_name, value, scope);
+}
+
+void LLVMCodeGen::codegen_value_bind(
+  Ast_Bind& bind, Ast_Identifier& bound_name, llvm::Value* value, Scope& scope
+) {
   llvm::Function* current_function = get_current_function();
   auto& local_symbol = scope.add(Symbol(bound_name, bind.type, Symbol::LOCAL));
   llvm::AllocaInst* alloca = create_entry_alloca(current_function, &local_symbol);
   // This will generate worse IR than using a var decl
   // (since if you have an array it will copy it rather than inplace init)
   // but llvm should be able to figure that out.
-  if (value_type) {
-    // FIXME: I don't think this should be here
-    value = dereference(value, value_type);
-  }
   ir_builder.CreateStore(value, alloca);
 }
+
 
 void LLVMCodeGen::codegen_tuple_bindings(
   Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple,
@@ -826,9 +840,8 @@ void LLVMCodeGen::codegen_pod_bindings(
   std::vector<unsigned> idxs, Scope& scope
 ) {
   using namespace mpark::patterns;
-  // TODO: Hardcoded fields
-  auto pod_type = std::get<Ast_Pod_Declaration>(
-    remove_reference(pod_binds.pod_type)->v);
+  // (could be a string or an array -- special cases)
+  auto agg_type = remove_reference(pod_binds.pod_type);
 
   auto get_nested_extractor = [&](bool reference_field) {
     if (reference_field) {
@@ -840,14 +853,37 @@ void LLVMCodeGen::codegen_pod_bindings(
   };
 
   for (auto& field_bind: pod_binds.binds) {
-    auto field_type = pod_type.get_field_type(field_bind.field_index);
-    bool field_is_ref = is_reference_type(field_type);
-
+    Type_Ptr field_type;
+    bool field_is_ref = false;
+    // for special fields who's values are hallucinated
+    llvm::Value* value_override = nullptr;
     idxs.push_back(field_bind.field_index);
+
+    // FIXME! Can't think of a better way right now :(
+    match(agg_type->v)(
+      pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type){
+        field_type = pod_type.get_field_type(field_bind.field_index);
+        field_is_ref = is_reference_type(field_type);
+      },
+      pattern(as<PrimativeType>(arg)) = [&](auto& str_type){
+        assert(str_type.is_string_type());
+        idxs.back() = 0; // the string's length is in the first offset.
+        // Type passed to get_bind() does not matter (just needs to not be a ref)
+        value_override = pod.get_bind(idxs, PrimativeType::int_ty(), "str_length");
+        value_override = fix_string_length(value_override);
+      }, pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
+        value_override = create_llvm_idx(array_type.size);
+      }
+    );
+
     match(field_bind.replacement)(
       pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
-        codegen_value_bind(bind, field_type,
-          *field_bind.bound_name, pod, idxs, scope, "pod_bind");
+        if (!value_override) {
+          codegen_value_bind(bind, field_type,
+            *field_bind.bound_name, pod, idxs, scope, "pod_bind");
+        } else {
+          codegen_value_bind(bind, *field_bind.bound_name, value_override, scope);
+        }
       },
       pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& nested_binds){
         auto [nested_pod, nested_idxs] = get_nested_extractor(field_is_ref);
@@ -1366,22 +1402,26 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
   return llvm_idx_list;
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
+llvm::Value* LLVMCodeGen::get_special_field_value(
+  Type_Ptr agg_type, Ast_Expression& agg, Scope& scope
+) {
   using namespace mpark::patterns;
-  auto pod_type = remove_reference(access.object->meta.type);
-
-  // FIXME: Special case, hardcoded lengths.
-  llvm::Value* special_value = match(pod_type->v)(
+  return match(agg_type->v)(
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
       return create_llvm_idx(array_type.size);
     },
     pattern(as<PrimativeType>(_)) = [&]() -> llvm::Value* {
-      auto [str_length, _] = extract_string_info(*access.object, scope);
-      return ir_builder.CreateIntCast(
-        str_length, map_primative_to_llvm(PrimativeType::INTEGER), true, "str_length");
+      auto [str_length, _] = extract_string_info(agg, scope);
+      return fix_string_length(str_length);
     },
     pattern(_) = []() -> llvm::Value* { return nullptr; });
+}
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& scope) {
+  auto pod_type = remove_reference(access.object->meta.type);
+
+  // FIXME: Special case, hardcoded lengths.
+  llvm::Value* special_value = get_special_field_value(pod_type, *access.object, scope);
   if (special_value) {
     return special_value;
   }

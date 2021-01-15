@@ -1,0 +1,274 @@
+# Based on: https://www.scratchapixel.com/code.php?id=3&origin=/lessons/3d-basic-rendering/introduction-to-ray-tracing
+# Made nice and manky!
+
+fun trace: Vec3f (
+  ray_origin: Vec3f,
+  ray_dir: Vec3f,
+  spheres: ref Sphere[3], # hardcode for now
+  depth: i32
+) {
+  bind (INF, MAX_RAY_DEPTH) = (10000000000.0, 5);
+  t_near := INF;
+  hit_sphere_idx := -1;
+  for s_idx in 0 .. spheres.length {
+    bind (hit, t0, t1) = sphere_intersect(spheres[s_idx], ray_origin, ray_dir);
+    if hit {
+      if t0 < 0. { t0 = t1; }
+      if t0 < t_near {
+        t_near = t0;
+        hit_sphere_idx = s_idx;
+      }
+    }
+  }
+
+  if hit_sphere_idx < 0 {
+    return vec3f_from_f64(2.); # grey bg
+  }
+  hit_colour := new_vec3f();
+
+  hit_sphere := ref spheres[hit_sphere_idx];
+  hit_point := vec3_scalar_mult(vec3_add(ray_origin, ray_dir), t_near); # walk down ray
+  hit_normal := vec3_sub(hit_point, hit_sphere.centre);
+  vec3f_normalize(hit_normal);
+
+  # used to help with normals (just move them a tiny bit so their not on the surface)
+  bias := 1./10000.;
+
+  inside_sphere := false;
+  if vec3_dot(ray_dir, hit_normal) > 0. {
+    hit_normal = vec3_minus(hit_normal);
+    inside_sphere = true;
+  }
+
+  if (hit_sphere.transparency > 0. || hit_sphere.reflection > 0.) && depth < MAX_RAY_DEPTH {
+    facing_ratio := -vec3_dot(ray_dir, hit_normal);
+    fresnele := mix(pow(1. - facing_ratio, 3.), 1., 0.1);
+
+    reflect_dir := vec3_sub(ray_dir, vec3_scalar_mult(hit_normal, 2. * vec3_dot(ray_dir, hit_normal)));
+    vec3f_normalize(reflect_dir);
+    reflection := trace(vec3_add(hit_point, vec3_scalar_mult(hit_normal, bias)), reflect_dir, spheres, depth + 1);
+
+    # Now refraction/transmission
+    refraction := new_vec3f();
+    if hit_sphere.transparency > 0. {
+      # Spooky maths...
+      ior := 1.1;
+      eta := if inside_sphere { ior } else { 1. / ior };
+      cosi := -vec3_dot(hit_normal, ray_dir);
+      k := 1. - eta * eta * (1. - cosi * cosi);
+      refract_dir := vec3_add(
+        vec3_scalar_mult(ray_dir, eta),
+        vec3_scalar_mult(hit_normal, eta * cosi - sqrt(k)));
+      vec3f_normalize(reflect_dir);
+      refraction = trace(vec3_sub(hit_point, vec3_scalar_mult(hit_normal, bias)), refract_dir, spheres, depth + 1);
+    }
+
+    hit_colour = vec3_mult(
+      vec3_add(
+        vec3_scalar_mult(reflection, fresnele),
+        vec3_scalar_mult(refraction, (1. - fresnele) * hit_sphere.transparency)),
+      hit_sphere.colour);
+  } else {
+    # Boring faked diffuse / light
+    path_blocked := \light_idx, light_dir: Vec3f -> {
+      for s_idx in 0 .. spheres.length {
+        if s_idx == light_idx { continue; }
+        bind (hit, _, __) = sphere_intersect(spheres[s_idx],
+          vec3_add(hit_point, vec3_scalar_mult(hit_normal, bias)), light_dir);
+        if hit { return true; }
+      }
+      false
+    }
+
+    max := \a,b -> { if a > b { a } else { b } }
+
+    for s_idx in 0 .. spheres.length {
+      emission := ref spheres[s_idx].emission_colour;
+      if vec3_length(emission) > 0. {
+        # Light source
+        light_dir := vec3_sub(spheres[s_idx].centre, hit_normal);
+        vec3f_normalize(light_dir);
+        if path_blocked(s_idx, light_dir) {
+          continue;
+        }
+
+        # attenuation & emission
+        hit_colour = vec3_add(hit_colour, vec3_mult(hit_sphere.colour,
+           vec3_scalar_mult(emission, max(0., vec3_dot(hit_normal, light_dir)))));
+      }
+    }
+  }
+  hit_colour
+}
+
+proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[3]) {
+  # image pixel array not needed... if we just print pixels on the fly
+  # (vectors still very needed!)
+  # TODO: Vectors! Can only handle tiny images with stack memory :(
+  # image := [=[=new_vec3f();60];60];
+
+  M_PI := 3.141592653589793;
+  bind (fov, aspect) = (30., image_width as f64 / image_height as f64);
+
+  inverse_width := 1. / image_width as f64;
+  inverse_height := 1. / image_height as f64;
+  angle := tan(M_PI * 0.5 * fov / 180.);
+
+  float_to_char := \f -> {
+    (if f >= 1. {
+      1.
+    } else {
+      f
+    } * 255.) as char
+  };
+
+  output_rgb := \rgb: Vec3f -> {
+    bind {.x/r, .y/g, .z/b} = rgb;
+    putchar(float_to_char(r));
+    putchar(float_to_char(g));
+    putchar(float_to_char(b));
+  }
+
+  # Make .ppm image
+  println!("P6\n{width} {height}\n255",
+    int_to_string(image_width), int_to_string(image_height));
+  for y in 0 .. image_height {
+    for x in 0 .. image_width {
+      xx := (2. * ((x as f64 + 0.5) * inverse_width) - 1.) * angle * aspect;
+      yy := (1. - 2. * ((y as f64 + 0.5) * inverse_height)) * angle;
+      ray_dir := vec3f_from_xyz(xx, yy, -1.);
+      vec3f_normalize(ray_dir);
+      output_rgb(trace(new_vec3f(), ray_dir, spheres, 0));
+    }
+  }
+}
+
+proc mank_main {
+  spheres := [
+    make_sphere(
+      vec3f_from_xyz(0., 0., -20.), 4., vec3f_from_xyz(1., 0.32, 0.36), 1., 0.5, new_vec3f()),
+    make_sphere(
+      vec3f_from_xyz(5., -1., -15.), 2., vec3f_from_xyz(0.90, 0.76, 0.46), 1., 0., new_vec3f()),
+    make_sphere(
+      vec3f_from_xyz(-5.5, 0., -15.), 3., vec3f_from_xyz(0.90, 0.90, 0.90), 1., 0.0, new_vec3f())
+  ];
+
+  bind (WIDTH, HEIGHT) = (640, 480);
+  ray_trace(WIDTH, HEIGHT, spheres)
+}
+
+# Alpha mixing
+
+fun mix: f64 (a: f64, b: f64, mix: f64) {
+  b * mix + a * (1. - mix)
+}
+
+# Sphere
+
+pod Sphere {
+  # World
+  centre: Vec3f,
+  radius: f64,
+  radius_squared: f64,
+  # Props
+  transparency: f64,
+  reflection: f64,
+  # Colours
+  colour: Vec3f,
+  emission_colour: Vec3f
+}
+
+fun make_sphere: Sphere (
+  centre: Vec3f, radius: f64, colour: Vec3f,
+  reflection: f64, transparency: f64, emission_colour: Vec3f
+) {
+  Sphere {
+    .centre = centre,
+    .radius = radius,
+    .radius_squared = radius * radius,
+    .colour = colour,
+    .emission_colour = emission_colour,
+    .transparency = transparency,
+    .reflection = reflection
+  }
+}
+
+fun sphere_intersect: (bool, f64, f64) (
+  sphere: ref Sphere,
+  ray_origin: Vec3f,
+  ray_dir: Vec3f
+) {
+  # Some maths (copied -- including meaningless var names :()
+  MISS := (false, -1., -1.);
+  l := vec3_sub(sphere.centre, ray_origin);
+  tca := vec3_dot(l, ray_dir);
+  if (tca < 0.) { return MISS; }
+  d2 := vec3_dot(l,l) - tca * tca;
+  if (d2 > sphere.radius_squared) { return MISS; }
+  thc := sqrt(sphere.radius_squared - d2);
+  (true, tca - thc, tca + thc)
+}
+
+# Vector
+
+pod Vec3f {
+  x: f64, y: f64, z: f64
+}
+
+fun new_vec3f: Vec3f {
+  Vec3f { .x = 0., .y = 0., .z = 0. }
+}
+
+fun vec3f_from_f64: Vec3f (f: f64) {
+  Vec3f { .x = f, .y = f, .z = f}
+}
+
+fun vec3f_from_xyz: Vec3f (x: f64, y: f64, z: f64) {
+  Vec3f { .x = x, .y = y, .z = z}
+}
+
+fun vec3_length_squared: f64 (vec: ref Vec3f) {
+  bind {.x, .y, .z} = vec;
+  x * x + y * y + z * z
+}
+
+fun vec3_length: f64 (vec: ref Vec3f) {
+  sqrt(vec3_length_squared(vec))
+}
+
+proc vec3f_normalize(vec: ref Vec3f) {
+  l2 := vec3_length_squared(vec);
+  if l2 > 0. {
+    scale := 1. / sqrt(l2);
+    vec.x *= scale;
+    vec.y *= scale;
+    vec.z *= scale;
+  }
+}
+
+fun vec3_scalar_mult: Vec3f (vec: Vec3f, scalar: f64) {
+  vec.x *= scalar;
+  vec.y *= scalar;
+  vec.z *= scalar;
+  vec
+}
+
+fun vec3_mult: Vec3f (a: Vec3f, b: Vec3f) {
+  vec3f_from_xyz(a.x * b.x, a.y * b.y, a.z * b.z)
+}
+
+fun vec3_dot: f64 (a: ref Vec3f, b: ref Vec3f) {
+  a.x * b.x + a.y * b.y + a.z * b.z
+}
+
+fun vec3_sub: Vec3f (a: Vec3f, b: Vec3f) {
+  vec3f_from_xyz(a.x - b.x, a.y - b.y, a.z - b.z)
+}
+
+fun vec3_add: Vec3f (a: Vec3f, b: Vec3f) {
+  vec3f_from_xyz(a.x + b.x, a.y + b.y, a.z + b.z)
+}
+
+fun vec3_minus: Vec3f (vec: Vec3f) {
+  vec3f_from_xyz(-vec.x, -vec.y, -vec.z)
+}

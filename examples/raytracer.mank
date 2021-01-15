@@ -27,7 +27,7 @@ fun trace: Vec3f (
   hit_colour := new_vec3f();
 
   hit_sphere := ref spheres[hit_sphere_idx];
-  hit_point := vec3_scalar_mult(vec3_add(ray_origin, ray_dir), t_near); # walk down ray
+  hit_point := vec3_add(ray_origin, vec3_scalar_mult(ray_dir, t_near)); # walk down ray
   hit_normal := vec3_sub(hit_point, hit_sphere.centre);
   vec3f_normalize(hit_normal);
 
@@ -82,7 +82,7 @@ fun trace: Vec3f (
       false
     }
 
-    max := \a,b -> { if a > b { a } else { b } }
+    # max := \a,b -> { if a > b { a } else { b } }
 
     for s_idx in 0 .. spheres.length {
       emission := ref spheres[s_idx].emission_colour;
@@ -96,8 +96,10 @@ fun trace: Vec3f (
         }
 
         # attenuation & emission
-        hit_colour =  vec3_add(hit_colour, vec3_mult(hit_sphere.colour,
-          vec3_scalar_mult(emission, max(0., vec3_dot(hit_normal, light_dir)))));
+        hit_colour = vec3f_from_f64(10.); # fake it
+        # This does not work :(
+        # hit_colour = vec3_add(hit_colour, vec3_mult(hit_sphere.colour,
+        #   vec3_scalar_mult(emission, max(0., vec3_dot(hit_normal, light_dir)))));
       }
     }
   }

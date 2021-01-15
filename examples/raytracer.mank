@@ -4,7 +4,7 @@
 fun trace: Vec3f (
   ray_origin: Vec3f,
   ray_dir: Vec3f,
-  spheres: ref Sphere[3], # hardcode for now
+  spheres: ref Sphere[4], # hardcode for now
   depth: i32
 ) {
   bind (INF, MAX_RAY_DEPTH) = (10000000000.0, 5);
@@ -36,6 +36,7 @@ fun trace: Vec3f (
 
   inside_sphere := false;
   if vec3_dot(ray_dir, hit_normal) > 0. {
+    # view dir and normal not in opposite directions (inside)
     hit_normal = vec3_minus(hit_normal);
     inside_sphere = true;
   }
@@ -69,7 +70,8 @@ fun trace: Vec3f (
         vec3_scalar_mult(refraction, (1. - fresnele) * hit_sphere.transparency)),
       hit_sphere.colour);
   } else {
-    # Boring faked diffuse / light
+    # Boring faked diffuse / light (broken :()
+    # This bit is completely broken -- can't work out why.
     path_blocked := \light_idx, light_dir: Vec3f -> {
       for s_idx in 0 .. spheres.length {
         if s_idx == light_idx { continue; }
@@ -86,22 +88,23 @@ fun trace: Vec3f (
       emission := ref spheres[s_idx].emission_colour;
       if vec3_length(emission) > 0. {
         # Light source
-        light_dir := vec3_sub(spheres[s_idx].centre, hit_normal);
+        light_dir := vec3_sub(spheres[s_idx].centre, hit_point);
         vec3f_normalize(light_dir);
+
         if path_blocked(s_idx, light_dir) {
           continue;
         }
 
         # attenuation & emission
-        hit_colour = vec3_add(hit_colour, vec3_mult(hit_sphere.colour,
-           vec3_scalar_mult(emission, max(0., vec3_dot(hit_normal, light_dir)))));
+        hit_colour =  vec3_add(hit_colour, vec3_mult(hit_sphere.colour,
+          vec3_scalar_mult(emission, max(0., vec3_dot(hit_normal, light_dir)))));
       }
     }
   }
   hit_colour
 }
 
-proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[3]) {
+proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[4]) {
   # image pixel array not needed... if we just print pixels on the fly
   # (vectors still very needed!)
   # TODO: Vectors! Can only handle tiny images with stack memory :(
@@ -146,11 +149,13 @@ proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[3]) {
 proc mank_main {
   spheres := [
     make_sphere(
-      vec3f_from_xyz(0., 0., -20.), 4., vec3f_from_xyz(1., 0.32, 0.36), 1., 0.5, new_vec3f()),
+      vec3f_from_xyz(0., 0., -20.), 4., vec3f_from_xyz(1., 0.32, 0.36), 1., 0., new_vec3f()),
     make_sphere(
       vec3f_from_xyz(5., -1., -15.), 2., vec3f_from_xyz(0.90, 0.76, 0.46), 1., 0., new_vec3f()),
     make_sphere(
-      vec3f_from_xyz(-5.5, 0., -15.), 3., vec3f_from_xyz(0.90, 0.90, 0.90), 1., 0.0, new_vec3f())
+      vec3f_from_xyz(-5.5, 0., -15.), 3., vec3f_from_xyz(0.90, 0.90, 0.90), 1., 0., new_vec3f()),
+    make_sphere(
+      vec3f_from_xyz(0., 20., -30.), 3., new_vec3f(), 0.0, 0.0, vec3f_from_f64(3.))
   ];
 
   bind (WIDTH, HEIGHT) = (640, 480);
@@ -257,7 +262,7 @@ fun vec3_mult: Vec3f (a: Vec3f, b: Vec3f) {
   vec3f_from_xyz(a.x * b.x, a.y * b.y, a.z * b.z)
 }
 
-fun vec3_dot: f64 (a: ref Vec3f, b: ref Vec3f) {
+fun vec3_dot: f64 (a: Vec3f, b: Vec3f) {
   a.x * b.x + a.y * b.y + a.z * b.z
 }
 

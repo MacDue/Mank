@@ -106,6 +106,13 @@ void Semantics::analyse_file(Ast_File& file) {
       PrimativeType::int_ty(), true),
     make_builtin_func(*ctx, "getchar", {}, PrimativeType::int_ty(), true),
     make_builtin_func(*ctx, "abort", {}, Type::void_ty(), true),
+    make_builtin_func(*ctx, "sqrt", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
+      PrimativeType::get(PrimativeType::FLOAT64), true),
+    make_builtin_func(*ctx, "pow", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "x"),
+      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "y")),
+      PrimativeType::get(PrimativeType::FLOAT64), true),
     // builtin mank functions
     make_builtin_func(*ctx, "eprint", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),

@@ -58,7 +58,7 @@ do
 done
 
 bin_name=$(basename $1 .mank)
-gcc ./main.o ./*.s -o ./$bin_name -lgc
+gcc ./main.o ./*.s -o ./$bin_name -lgc -lm
 
 mv ./$bin_name $output_dir/$bin_name
 

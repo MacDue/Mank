@@ -215,3 +215,10 @@ void BaseAstVisitor::operator()(Ast_As_Cast& as_cast) {
   std::visit(recur, as_cast.object->v);
   after(as_cast);
 }
+
+void BaseAstVisitor::operator()(Ast_Array_Repeat& array_repeat) {
+  before(array_repeat);
+  visit(array_repeat);
+  std::visit(recur, array_repeat.initializer->v);
+  after(array_repeat);
+}

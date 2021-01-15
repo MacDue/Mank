@@ -356,3 +356,9 @@ void AstPrinter::print_expr(Ast_As_Cast& as_cast) {
   putf("- Object:");
   self->print_expr(*as_cast.object);
 }
+
+void AstPrinter::print_expr(Ast_Array_Repeat& array_repeat) {
+  putf("* Repeat array literal ({} repetitions)", array_repeat.repetitions);
+  putf("- Initializer:");
+  self->print_expr(*array_repeat.initializer);
+}

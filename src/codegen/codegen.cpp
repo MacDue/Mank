@@ -1683,6 +1683,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_As_Cast& as_cast, Scope& scope)
   return do_cast(source_value, source_type, target_type, scope);
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Repeat& array_repeat, Scope& scope) {
+  assert(false && "todo! array repeat codegen");
+}
+
+
 /* JIT tools */
 
 llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {

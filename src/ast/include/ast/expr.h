@@ -80,6 +80,11 @@ DEF_EXPR(Ast_As_Cast) {
   Type_Ptr type;
 };
 
+DEF_EXPR(Ast_Array_Repeat) {
+  Expr_Ptr initializer;
+  size_t repetitions;
+};
+
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
 
@@ -98,7 +103,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Macro_Identifier,
   Ast_Tuple_Literal,
   Ast_Pod_Literal,
-  Ast_As_Cast>;
+  Ast_As_Cast,
+  Ast_Array_Repeat>;
 
 class Ast_Expression {
   template<typename Expr>

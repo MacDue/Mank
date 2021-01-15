@@ -220,5 +220,6 @@ void BaseAstVisitor::operator()(Ast_Array_Repeat& array_repeat) {
   before(array_repeat);
   visit(array_repeat);
   std::visit(recur, array_repeat.initializer->v);
+  std::visit(recur, array_repeat.repetitions->v);
   after(array_repeat);
 }

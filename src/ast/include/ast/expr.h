@@ -82,7 +82,7 @@ DEF_EXPR(Ast_As_Cast) {
 
 DEF_EXPR(Ast_Array_Repeat) {
   Expr_Ptr initializer;
-  size_t repetitions;
+  Expr_Ptr repetitions; // constant expr
 };
 
 // Just want something different to make errors easier

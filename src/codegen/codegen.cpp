@@ -1683,10 +1683,74 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_As_Cast& as_cast, Scope& scope)
   return do_cast(source_value, source_type, target_type, scope);
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Repeat& array_repeat, Scope& scope) {
-  assert(false && "todo! array repeat codegen");
+Expr_Ptr LLVMCodeGen::mank_builtin_array_set(
+  Type_Ptr array_type, Expr_Ptr initializer, Scope& scope
+) {
+  /*
+    <I really don't have a good method of making these 'generic' builtins>
+    // FIXME: Replace with builtin stdlib generic function when possible
+    {
+      !array:<array_type>;
+      !init:<init_type> = <init>;
+      !i:i32 = 0;
+      loop {
+        if !i >= <len> {
+          break;
+        }
+        !array[!i] = !init;
+        !i = !i + 1;
+      }
+
+    }
+  */
+  auto fixed_type = std::get<FixedSizeArrayType>(array_type->v);
+  Ast_Loop init_loop;
+  Ast_Loop_Control _break;
+  _break.type = Ast_Loop_Control::BREAK;
+
+  auto idx = ast_builder.make_ident("!i");
+  auto array = ast_builder.make_ident("!array");
+  auto array_idx = ast_builder.make_index(array, idx);
+
+  idx->meta.type = PrimativeType::int_ty();
+  array_idx->meta.value_type
+    = array->meta.value_type
+    = idx->meta.value_type
+    = Expression_Meta::LVALUE;
+
+  auto end_of_array_check = ast_builder.make_binary(Ast_Operator::GREATER_EQUAL,
+    idx, ast_builder.make_integer(fixed_type.size, true));
+
+  auto inc_idx = ast_builder.make_binary(
+    Ast_Operator::PLUS, idx, ast_builder.make_integer(1, true));
+
+  init_loop.body = ast_builder.make_body(false,
+    ast_builder.make_if_stmt(end_of_array_check,
+      ast_builder.make_block(false,
+        mank_ctx.new_stmt(_break))),
+    ast_builder.make_assignment(array_idx, ast_builder.make_ident("!init")),
+    ast_builder.make_assignment(idx, inc_idx));
+  auto array_set_loop = mank_ctx.new_stmt(init_loop);
+
+  auto array_set = ast_builder.make_block(true,
+    ast_builder.make_var_decl("!array", array_type, nullptr),
+    ast_builder.make_var_decl("!init", fixed_type.element_type, initializer),
+    ast_builder.make_var_decl("!i", PrimativeType::int_ty(), ast_builder.make_integer(0, true)),
+    array_set_loop, ast_builder.make_expr_stmt(array));
+
+  // Fix scopes
+  auto& array_set_scope = std::get<Ast_Block>(array_set->v).scope;
+  auto& init_loop_scope = std::get<Ast_Loop>(array_set_loop->v).body.scope;
+  array_set_scope.set_parent(scope);
+  init_loop_scope.set_parent(array_set_scope);
+
+  return array_set;
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Repeat& array_repeat, Scope& scope) {
+  return codegen_expression(
+    *mank_builtin_array_set(array_repeat.get_meta().type, array_repeat.initializer, scope), scope);
+}
 
 /* JIT tools */
 

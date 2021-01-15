@@ -250,6 +250,8 @@ public:
 
   Expr_Ptr simplify_short_circuit(Ast_Binary_Operation& short_circuit);
 
+  Expr_Ptr mank_builtin_array_set(Type_Ptr array_type, Expr_Ptr initializer, Scope& scope);
+
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_Block& block, Scope& scope, bool as_lvalue = false);

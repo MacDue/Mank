@@ -519,7 +519,9 @@ std::vector<Expr_Ptr> Parser::parse_expression_list(
   TokenType left_delim, TokenType right_delim
 ) {
   std::vector<Expr_Ptr> expressions;
-  expect(left_delim);
+  if (left_delim != TokenType::INVALID) {
+    expect(left_delim);
+  }
   while (!peek(right_delim)) {
     expressions.emplace_back(this->parse_expression());
     if (!consume(TokenType::COMMA)) {
@@ -889,12 +891,23 @@ std::optional<Ast_Identifier> Parser::parse_identifier() {
 Expr_Ptr Parser::parse_array_literal() {
   /*
     array_literal = "[" [expression_list] "]" ;
+    repeat_array_literal "[", "=", expression, ";", expression "]" ;
   */
-  Ast_Array_Literal parsed_array;
-  parsed_array.elements = this->parse_expression_list(
-    TokenType::LEFT_SQUARE_BRACKET,
-    TokenType::RIGHT_SQUARE_BRACKET);
-  return ctx->new_expr(parsed_array);
+  expect(TokenType::LEFT_SQUARE_BRACKET);
+  if (consume(TokenType::ASSIGN)) {
+    Ast_Array_Repeat parsed_repeat;
+    parsed_repeat.initializer = this->parse_expression();
+    expect(TokenType::SEMICOLON);
+    parsed_repeat.repetitions = this->parse_expression();
+    expect(TokenType::RIGHT_SQUARE_BRACKET);
+    return ctx->new_expr(parsed_repeat);
+  } else {
+    Ast_Array_Literal parsed_array;
+    parsed_array.elements = this->parse_expression_list(
+      TokenType::INVALID,
+      TokenType::RIGHT_SQUARE_BRACKET);
+    return ctx->new_expr(parsed_array);
+  }
 }
 
 Expr_Ptr Parser::parse_lambda() {

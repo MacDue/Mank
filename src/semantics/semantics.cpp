@@ -874,6 +874,27 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
     pattern(as<Ast_As_Cast>(arg)) = [&](auto& as_cast){
       return analyse_as_cast(as_cast, scope);
     },
+    pattern(as<Ast_Array_Repeat>(arg)) = [&](auto& array_repeat){
+      auto init_type = analyse_expression(*array_repeat.initializer, scope);
+      auto repetitions_type = analyse_expression(*array_repeat.repetitions, scope);
+      // FIXME: Const eval will happen twice (currently const eval needs types)
+      AstHelper::constant_expr_eval(*array_repeat.repetitions);
+      if (auto const_repetitions = array_repeat.repetitions->meta.get_const_value()) {
+        if (!match_types(repetitions_type, PrimativeType::int_ty())) {
+          throw_sema_error_at(array_repeat.repetitions, "repetitions must be an integer amount");
+        }
+        auto repetitions = std::get<int32_t>(*const_repetitions);
+        if (repetitions < 0) {
+          throw_sema_error_at(array_repeat.repetitions, "cannot have negative repetitions");
+        }
+        FixedSizeArrayType array_type;
+        array_type.element_type = init_type;
+        array_type.size = repetitions;
+        return ctx->new_type(array_type);
+      } else {
+        throw_sema_error_at(array_repeat.repetitions, "repetitions must be constant");
+      }
+    },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
       return Type_Ptr(nullptr);

@@ -19,4 +19,9 @@ void constant_propagate(TAst& ast) {
   const_visitor(ast);
 }
 
+inline void constant_expr_eval(Ast_Expression& expr) {
+  ConstantVisitor const_visitor;
+  std::visit(const_visitor, expr.v);
+}
+
 }

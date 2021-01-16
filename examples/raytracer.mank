@@ -7,7 +7,7 @@ fun trace: Vec3f (
   spheres: ref Sphere[5], # hardcode for now
   depth: i32
 ) {
-  bind (INF, MAX_RAY_DEPTH) = (10000000000.0, 5);
+  bind (INF, MAX_RAY_DEPTH) = (10000000000.0, 10);
   t_near := INF;
   hit_sphere_idx := -1;
   for s_idx in 0 .. spheres.length {

@@ -70,8 +70,7 @@ fun trace: Vec3f (
         vec3_scalar_mult(refraction, (1. - fresnele) * hit_sphere.transparency)),
       hit_sphere.colour);
   } else {
-    # Boring faked diffuse / light (broken :()
-    # This bit is completely broken -- can't work out why.
+    # Boring faked diffuse light
     path_blocked := \light_idx, light_dir: Vec3f -> {
       for s_idx in 0 .. spheres.length {
         if s_idx == light_idx { continue; }

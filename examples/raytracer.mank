@@ -4,7 +4,7 @@
 fun trace: Vec3f (
   ray_origin: Vec3f,
   ray_dir: Vec3f,
-  spheres: ref Sphere[4], # hardcode for now
+  spheres: ref Sphere[5], # hardcode for now
   depth: i32
 ) {
   bind (INF, MAX_RAY_DEPTH) = (10000000000.0, 5);
@@ -22,7 +22,7 @@ fun trace: Vec3f (
   }
 
   if hit_sphere_idx < 0 {
-    return vec3f_from_f64(2.); # grey bg
+    return vec3f_from_f64(2.); # sky needs to be a very bright white
   }
   hit_colour := new_vec3f();
 
@@ -82,7 +82,7 @@ fun trace: Vec3f (
       false
     }
 
-    # max := \a,b -> { if a > b { a } else { b } }
+    max := \a,b -> { if a > b { a } else { b } }
 
     for s_idx in 0 .. spheres.length {
       emission := ref spheres[s_idx].emission_colour;
@@ -96,17 +96,16 @@ fun trace: Vec3f (
         }
 
         # attenuation & emission
-        hit_colour = vec3f_from_f64(10.); # fake it
-        # This does not work :(
-        # hit_colour = vec3_add(hit_colour, vec3_mult(hit_sphere.colour,
-        #   vec3_scalar_mult(emission, max(0., vec3_dot(hit_normal, light_dir)))));
+        hit_colour = vec3_add(hit_colour, vec3_mult(hit_sphere.colour,
+          vec3_scalar_mult(emission, max(0., vec3_dot(hit_normal, light_dir)))));
       }
     }
   }
-  hit_colour
+
+  vec3_add(hit_colour, hit_sphere.emission_colour)
 }
 
-proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[4]) {
+proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[5]) {
   # image pixel array not needed... if we just print pixels on the fly
   # (vectors still very needed!)
   # TODO: Vectors! Can only handle tiny images with stack memory :(
@@ -150,18 +149,27 @@ proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[4]) {
 
 proc mank_main {
   spheres := [
+    # Middle sphere
     make_sphere(
-      vec3f_from_xyz(0., 0., -20.), 4., vec3f_from_xyz(1., 0.32, 0.36), 1., 0., new_vec3f()),
+      vec3f_from_xyz(0., 0., -20.), 4., vec3f_from_xyz(1., 0.32, 0.36), 1., 0.5, new_vec3f()),
+    # Right sphere
     make_sphere(
       vec3f_from_xyz(5., -1., -15.), 2., vec3f_from_xyz(0.90, 0.76, 0.46), 1., 0., new_vec3f()),
+    # Left sphere
     make_sphere(
-      vec3f_from_xyz(-5.5, 0., -15.), 3., vec3f_from_xyz(0.90, 0.90, 0.90), 1., 0., new_vec3f()),
+      vec3f_from_xyz(-5.5, 0., -15.), 3., vec3f_from_xyz(0.67, 0.84, 0.90), 1., 0., new_vec3f()),
+    # Ground
+    make_sphere(
+      vec3f_from_xyz(0., -10004., -20.), 10000., vec3f_from_xyz(0.5,0.25,0.155), 0., 0., new_vec3f()),
+    # Light (behind view plane)
     make_sphere(
       vec3f_from_xyz(0., 20., -30.), 3., new_vec3f(), 0.0, 0.0, vec3f_from_f64(3.))
   ];
 
-  bind (WIDTH, HEIGHT) = (640, 480);
-  ray_trace(WIDTH, HEIGHT, spheres)
+  bind (WIDTH, HEIGHT) = (1920, 1080); # fine for my PC -- adjust as needed
+  eprintln("Tracing...");
+  ray_trace(WIDTH, HEIGHT, spheres);
+  eprintln("Done!");
 }
 
 # Alpha mixing

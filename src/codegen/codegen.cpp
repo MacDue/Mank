@@ -1299,6 +1299,13 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     pattern(INT_TYPE, Ast_Operator::NOT_EQUAL_TO) = [&]{
       return ir_builder.CreateICmpNE(left, right, "int_ne");
     },
+    pattern(INT_TYPE, Ast_Operator::LEFT_SHIFT) = [&]{
+      return ir_builder.CreateShl(left, right, "int_shl");
+    },
+    pattern(INT_TYPE, Ast_Operator::RIGHT_SHIFT) = [&]{
+      // >> = arithmetic shift right (add >>> for logical ?)
+      return ir_builder.CreateAShr(left, right, "int_ashr");
+    },
     /*
       Basic float operations
       TODO: Understand floating point ordering!

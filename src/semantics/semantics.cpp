@@ -122,6 +122,13 @@ void Semantics::analyse_file(Ast_File& file) {
     make_builtin_func(*ctx, "tan", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
       PrimativeType::get(PrimativeType::FLOAT64), true),
+    make_builtin_func(*ctx, "asin", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
+      PrimativeType::get(PrimativeType::FLOAT64), true),
+    make_builtin_func(*ctx, "atan2", builder->make_args(
+      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "x"),
+      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "y")),
+      PrimativeType::get(PrimativeType::FLOAT64), true),
     // builtin mank functions
     make_builtin_func(*ctx, "eprint", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),

@@ -17,8 +17,11 @@ public:
   void emit_object(std::string const & path);
 
   template<typename TFunc>
-  TFunc* extract_function_from_jit(std::string name) {
+  TFunc* extract_function_from_jit(std::string name, bool mank = true) {
     static_assert(std::is_function_v<TFunc> && "can only extract functions from jit");
+    if (mank) {
+      name = "__mank__" + name; // FIXME: Mangle hack!
+    }
     return reinterpret_cast<TFunc*>(find_jit_symbol(name));
   }
 };

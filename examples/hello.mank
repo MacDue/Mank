@@ -1,4 +1,4 @@
-proc mank_main {
+proc main {
   people := [
     "0.1x-ers",
     "script kiddies",

@@ -1,4 +1,4 @@
-proc mank_main {
+proc main {
   name := prompt("What is your name?");
   println!("Hello {name}!", name);
   current_year := prompt_int("What is the current year?");

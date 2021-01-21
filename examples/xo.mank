@@ -86,7 +86,7 @@ fun game_over: (i32, bool) (state: ref GameState) {
   }
 }
 
-proc mank_main {
+proc main {
   bind (BRIGHT_RED, PINK) = (196, 207);
   game := GameState {
     .player = 1,

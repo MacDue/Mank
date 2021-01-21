@@ -1,4 +1,4 @@
-proc mank_main {
+proc main {
   a := getchar() as char;
   if a != 'A' {
     fail("not A??!?!?");

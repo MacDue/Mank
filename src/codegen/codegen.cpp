@@ -8,6 +8,7 @@
 #include "sema/types.h"
 #include "llvm_codegen.h"
 #include "codegen/codegen.h"
+#include "codegen/mangle.h"
 #include "ast/ast_builder.h"
 #include "parser/token_helpers.h"
 
@@ -361,8 +362,10 @@ llvm::Function* LLVMCodeGen::get_current_function() {
   return ir_builder.GetInsertBlock()->getParent();
 }
 
+
+
 llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
-  if (auto llvm_func = llvm_module->getFunction(func.identifier.name)) {
+  if (auto llvm_func = llvm_module->getFunction(ABI::mangle(func))) {
     return llvm_func;
   } else {
     return codegen_function_header(func);
@@ -388,7 +391,7 @@ llvm::Function* LLVMCodeGen::codegen_function_header(Ast_Function_Declaration& f
   llvm::Function* llvm_func = llvm::Function::Create(
     func_type,
     llvm::Function::ExternalLinkage,
-    func.identifier.name,
+    ABI::mangle(func),
     llvm_module.get());
 
   uint arg_idx = 0;

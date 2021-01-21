@@ -1,6 +1,7 @@
 
 add_library(MankCodegen
   codegen.cpp
+  mangle.cpp
 )
 
 find_package(LLVM REQUIRED CONFIG)

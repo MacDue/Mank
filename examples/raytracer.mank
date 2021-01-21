@@ -152,7 +152,7 @@ proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[6]) {
   }
 }
 
-proc mank_main {
+proc main {
   spheres := [
     # Middle sphere
     make_sphere(

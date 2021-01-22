@@ -196,6 +196,9 @@ public:
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);
   void codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func = nullptr);
 
+  llvm::Value* create_heap_alloc(
+    llvm::Type* type, llvm::Twine const & name, llvm::Value** raw_ptr = nullptr);
+
   ExpressionExtract get_tuple_extractor(Ast_Expression& tuple, Scope& scope);
 
   void codegen_tuple_assign(

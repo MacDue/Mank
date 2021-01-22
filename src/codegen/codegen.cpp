@@ -1570,6 +1570,24 @@ llvm::Value* LLVMCodeGen::create_string(
   return string;
 }
 
+llvm::Value* LLVMCodeGen::create_heap_alloc(
+  llvm::Type* type, llvm::Twine const & name, llvm::Value** raw_ptr
+) {
+  llvm::BasicBlock* current_block = ir_builder.GetInsertBlock();
+  llvm::Constant* type_size = llvm::ConstantExpr::getSizeOf(type);
+  llvm::Type* llvm_i64 = llvm::Type::getInt64Ty(llvm_context);
+  type_size = llvm::ConstantExpr::getTruncOrBitCast(type_size, llvm_i64);
+  llvm::Instruction* type_malloc = llvm::CallInst::CreateMalloc(
+    current_block,
+    llvm_i64, // (think this is the pointer type?)
+    type, type_size, nullptr, get_gc_malloc());
+  if (raw_ptr) {
+    *raw_ptr = &current_block->back();
+  }
+  ir_builder.Insert(type_malloc, name);
+  return type_malloc;
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
   auto lambda_type = lambda.get_type();
   llvm::Type* llvm_lambda_type = map_type_to_llvm(lambda_type.get(), scope);
@@ -1605,15 +1623,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
       llvm_context, closure_types, "!lambda_closure");
 
     // Malloc closure
-    llvm::Constant* closure_size = llvm::ConstantExpr::getSizeOf(closure_info.closure_type);
-    llvm::Type* llvm_i64 = llvm::Type::getInt64Ty(llvm_context);
-    closure_size = llvm::ConstantExpr::getTruncOrBitCast(closure_size, llvm_i64);
-    llvm::Instruction* closure = llvm::CallInst::CreateMalloc(
-      ir_builder.GetInsertBlock(),
-      llvm_i64, // (think this is the pointer type?)
-      closure_info.closure_type, closure_size, nullptr, get_gc_malloc());
-    env_ptr = &saved_block->back();
-    ir_builder.Insert(closure, "closure_malloc");
+    llvm::Value* closure = create_heap_alloc(
+      closure_info.closure_type, "closure_malloc", &env_ptr);
 
     // Copy captures into the closure
     size_t capture_idx = 0;

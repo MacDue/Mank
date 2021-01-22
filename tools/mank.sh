@@ -20,7 +20,7 @@ cat << EOF > ./main.c
 #include <unistd.h>
 #include <string.h>
 
-extern void mank_main(void);
+extern void __mank__main(void);
 
 int stderr_putchar(char c) {
   if (write(STDERR_FILENO, &c, 1) == -1) {
@@ -29,22 +29,30 @@ int stderr_putchar(char c) {
   return c;
 }
 
-char* mank_str_concat_internal(size_t l1, char* s1, size_t l2, char* s2, size_t* l_out) {
+void* __mank_alloc__any(size_t bytes) {
+  return GC_MALLOC(bytes);
+}
+
+void* __mank_alloc__atomic(size_t bytes) {
+  return GC_MALLOC_ATOMIC(bytes);
+}
+
+char* __mank_builtin__str_concat(size_t l1, char* s1, size_t l2, char* s2, size_t* l_out) {
   *l_out = l1 + l2;
-  char* new_str = GC_MALLOC_ATOMIC(*l_out);
+  char* new_str = __mank_alloc__atomic(*l_out);
   memcpy(new_str, s1, l1);
   memcpy(new_str + l1, s2, l2);
   return new_str;
 }
 
-char* mank_str_cast(char c) {
-  char* new_str = GC_MALLOC_ATOMIC(1);
+char* __mank_builtin__str_cast(char c) {
+  char* new_str = __mank_alloc__atomic(1);
   *new_str = c;
   return new_str;
 }
 
 int main() {
-  mank_main();
+  __mank__main();
 }
 EOF
 

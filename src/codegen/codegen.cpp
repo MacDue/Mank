@@ -58,7 +58,7 @@ llvm::Function* LLVMCodeGen::get_external(
   return func;
 }
 
-#define GC_MALLOC "GC_malloc"
+#define GC_MALLOC "__mank_alloc__any"
 
 llvm::Function* LLVMCodeGen::get_gc_malloc() {
   return get_external(GC_MALLOC,
@@ -83,7 +83,7 @@ llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
   }
 }
 
-#define MANK_STR_CONCAT_INTERNAL "mank_str_concat_internal"
+#define MANK_STR_CONCAT_INTERNAL "__mank_builtin__str_concat"
 
 llvm::Function* LLVMCodeGen::get_str_concat_internal() {
   return get_external(
@@ -131,7 +131,7 @@ llvm::Value* LLVMCodeGen::create_string_concat(
     ir_builder.CreateLoad(str_concat_len_ptr, "str_concat_len"), scope);
 }
 
-#define MANK_STR_CAST_INTERNAL "mank_str_cast"
+#define MANK_STR_CAST_INTERNAL "__mank_builtin__str_cast"
 
 llvm::Value* LLVMCodeGen::create_char_string_cast(llvm::Value* char_value, Scope& scope) {
   auto get_str_cast = [&]{

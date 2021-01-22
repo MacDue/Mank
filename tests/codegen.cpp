@@ -18,6 +18,12 @@ CodeGen compile(std::string source) {
   return codegen;
 }
 
+extern "C" {
+  void* __mank_alloc__any(size_t bytes) {
+    return GC_MALLOC(bytes);
+  }
+}
+
 TEST_CASE("Simple addition", "[Codegen]") {
   auto codegen = compile(R"(
     fun add: i32 (a: i32, b: i32) {

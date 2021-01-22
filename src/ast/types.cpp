@@ -85,6 +85,9 @@ std::string type_to_string(Type const & type, bool hide_details) {
       return formatxx::format_string("{}[Indexable]",
         type_to_string(index_constraint.type.get(), hide_details));
     },
+    pattern(as<CellType>(arg)) = [&](auto const & cell) {
+      return formatxx::format_string("cell containing {}", type_to_string(cell.contains.get()));
+    },
     pattern(_) = []{
       return "???"s;
     });

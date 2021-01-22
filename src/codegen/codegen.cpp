@@ -1762,6 +1762,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Repeat& array_repeat, Sco
     *mank_builtin_array_set(array_repeat.get_meta().type, array_repeat.initializer, scope), scope);
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Spawn& spawn, Scope& scope) {
+  assert(false && "todo! spawn");
+}
+
 /* JIT tools */
 
 llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {

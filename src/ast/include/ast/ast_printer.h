@@ -105,6 +105,7 @@ class AstPrinter {
     void print_expr(Ast_Pod_Literal& pod);
     void print_expr(Ast_As_Cast& as_cast);
     void print_expr(Ast_Array_Repeat& array_repeat);
+    void print_expr(Ast_Spawn& spawn);
 
     DepthUpdate operator -> () {
       return DepthUpdate(this);

@@ -73,7 +73,8 @@ struct BaseAstVisitor: public AstVisitor<
   Ast_Tuple_Literal,
   Ast_Pod_Literal,
   Ast_As_Cast,
-  Ast_Array_Repeat
+  Ast_Array_Repeat,
+  Ast_Spawn
 > {
   void operator()(Ast_File& file) override;
   void operator()(Ast_Function_Declaration& func) override;
@@ -104,4 +105,5 @@ struct BaseAstVisitor: public AstVisitor<
   void operator()(Ast_Pod_Literal& pod) override;
   void operator()(Ast_As_Cast& as_cast) override;
   void operator()(Ast_Array_Repeat& array_repeat) override;
+  void operator()(Ast_Spawn& spawn) override;
 };

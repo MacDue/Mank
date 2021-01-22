@@ -223,3 +223,10 @@ void BaseAstVisitor::operator()(Ast_Array_Repeat& array_repeat) {
   std::visit(recur, array_repeat.repetitions->v);
   after(array_repeat);
 }
+
+void BaseAstVisitor::operator()(Ast_Spawn& spawn){
+  before(spawn);
+  visit(spawn);
+  std::visit(recur, spawn.initializer->v);
+  after(spawn);
+}

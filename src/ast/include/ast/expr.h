@@ -85,6 +85,10 @@ DEF_EXPR(Ast_Array_Repeat) {
   Expr_Ptr repetitions; // constant expr
 };
 
+DEF_EXPR(Ast_Spawn) {
+  Expr_Ptr initializer;
+};
+
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
 
@@ -104,7 +108,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Tuple_Literal,
   Ast_Pod_Literal,
   Ast_As_Cast,
-  Ast_Array_Repeat>;
+  Ast_Array_Repeat,
+  Ast_Spawn>;
 
 class Ast_Expression {
   template<typename Expr>

@@ -591,6 +591,10 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
     return this->parse_array_literal();
   } else if (peek(TokenType::BACKSLASH)) {
     return this->parse_lambda();
+  } else if (consume(TokenType::SPAWN)) {
+    Ast_Spawn spawn;
+    spawn.initializer = this->parse_expression();
+    return ctx->new_expr(spawn);
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }

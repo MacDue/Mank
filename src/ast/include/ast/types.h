@@ -21,6 +21,10 @@ DEF_TYPE(ReferenceType) {
   Type_Ptr references;
 };
 
+DEF_TYPE(CellType) {
+  Type_Ptr contains;
+};
+
 template <typename T>
 T remove_reference(T type) {
   static_assert(std::is_same_v<std::decay_t<T>, Type_Ptr>);
@@ -48,7 +52,8 @@ using Type_Type = std::variant<
   LambdaType,
   TypeFieldConstraint,
   TypeIndexConstraint,
-  TypeCastConstraint>;
+  TypeCastConstraint,
+  CellType>;
 
 class Type {
   Type(Type_Type v)

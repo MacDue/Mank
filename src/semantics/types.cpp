@@ -168,6 +168,12 @@ static std::pair<Type_Ptr,int> get_field_type(
           return PrimativeType::int_ty();
         };
       },
+      pattern(as<CellType>(arg)) = [&](auto& cell_type){
+        WHEN(field.name == "value") {
+          value_type = Expression_Meta::LVALUE;
+          return cell_type.ref;
+        };
+      },
       pattern(as<TypeVar>(_)) = [&]() -> Type_Ptr {
         throw_sema_error_at(object, TYPE_MUST_BE_KNOWN);
         return nullptr;

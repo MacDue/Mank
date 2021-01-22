@@ -177,6 +177,9 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
       return all_paths_return(*array_repeat.initializer, unreachable_stmt)
         || all_paths_return(*array_repeat.repetitions, unreachable_stmt);
     },
+    pattern(as<Ast_Spawn>(arg)) = [&](auto& spawn) {
+      return all_paths_return(*spawn.initializer, unreachable_stmt);
+    },
     pattern(_) = []{
       assert(false && "fix me! unknown expression in reachability checking");
       return false;

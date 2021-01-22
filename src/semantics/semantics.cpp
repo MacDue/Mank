@@ -911,6 +911,13 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         throw_sema_error_at(array_repeat.repetitions, "repetitions must be constant");
       }
     },
+    pattern(as<Ast_Spawn>(arg)) = [&](auto& spawn){
+      auto init_type = analyse_expression(*spawn.initializer, scope);
+      CellType cell_type;
+      cell_type.contains = remove_reference(init_type);
+      cell_type.ref = builder->make_reference(cell_type.contains);
+      return ctx->new_type(cell_type);
+    },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
       return Type_Ptr(nullptr);

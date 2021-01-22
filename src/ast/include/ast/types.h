@@ -22,7 +22,7 @@ DEF_TYPE(ReferenceType) {
 };
 
 DEF_TYPE(CellType) {
-  Type_Ptr contains;
+  Type_Ptr contains, ref;
 };
 
 template <typename T>

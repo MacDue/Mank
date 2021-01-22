@@ -916,6 +916,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       CellType cell_type;
       cell_type.contains = remove_reference(init_type);
       cell_type.ref = builder->make_reference(cell_type.contains);
+      expr.set_value_type(Expression_Meta::LVALUE);
       return ctx->new_type(cell_type);
     },
     pattern(_) = [&]{

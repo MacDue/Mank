@@ -299,6 +299,9 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
         [&](auto const & element_type){ return map_type_to_llvm(element_type.get(), scope); });
       return llvm::StructType::get(llvm_context, element_types);
     },
+    pattern(as<CellType>(arg)) = [&](auto const & cell_type) -> llvm::Type* {
+      return map_type_to_llvm(cell_type.ref.get(), scope);
+    },
     pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");
       return nullptr;
@@ -962,6 +965,9 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_Unary_Operation>(arg)) = [&](auto& ref_unary) -> llvm::Value* {
       return address_of(*ref_unary.operand, scope);
+    },
+    pattern(as<Ast_Spawn>(arg)) = [&](auto& spawn) -> llvm::Value* {
+      return nullptr; // todo
     },
     pattern(_) = []() -> llvm::Value* {
       assert(false && "fix me! address_of not implemented for lvalue");
@@ -1774,7 +1780,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Array_Repeat& array_repeat, Sco
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Spawn& spawn, Scope& scope) {
-  assert(false && "todo! spawn");
+  auto& cell_type = std::get<CellType>(spawn.get_type()->v);
+  llvm::Type* llvm_type = map_type_to_llvm(cell_type.contains.get(), scope);
+
+  llvm::Value* spawn_ptr = create_heap_alloc(llvm_type, "spawn");
+
+  //TODO: init
+
+  return spawn_ptr;
 }
 
 /* JIT tools */

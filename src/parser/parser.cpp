@@ -993,6 +993,19 @@ Type_Ptr Parser::parse_base_type(bool default_tvar) {
   }
 }
 
+Type_Ptr Parser::parse_list_type(Type_Ptr base_type) {
+  // i32[][]
+  expect(TokenType::RIGHT_SQUARE_BRACKET);
+  ListType list_type;
+  if (peek(TokenType::LEFT_SQUARE_BRACKET)) {
+    list_type.element_type = parse_array_type(base_type);
+  } else {
+    list_type.element_type = base_type;
+  }
+  return ctx->new_type(list_type);
+}
+
+
 Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
   // TODO: Array sizes should be 64bit
   // Maybe this should not parse to a fixed array type but some more abstract type
@@ -1009,6 +1022,11 @@ Type_Ptr Parser::parse_array_type(Type_Ptr base_type) {
   expect(TokenType::LEFT_SQUARE_BRACKET);
   while (true) {
     auto& token = lexer.peek_next_token();
+    if (token.type != TokenType::LITERAL) {
+      // i32[]
+      //     ^-- You are here (if this is a valid parse)
+      return parse_list_type(base_type);
+    }
     if (token.literal_type != PrimativeType::INTEGER) {
       throw_error_here("expected array size");
     }

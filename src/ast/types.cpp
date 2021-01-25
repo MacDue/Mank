@@ -91,6 +91,9 @@ std::string type_to_string(Type const & type, bool hide_details) {
     pattern(as<GenericType>(arg)) = [&](auto const & generic) {
       return formatxx::format_string("generic type {}", generic.identifier.name);
     },
+    pattern(as<ListType>(arg)) = [&](auto const & list_type) {
+      return formatxx::format_string("{}[]", type_to_string(list_type.element_type.get()));
+    },
     pattern(_) = []{
       return "???"s;
     });

@@ -534,8 +534,9 @@ std::vector<Expr_Ptr> Parser::parse_expression_list(
 
 Expr_Ptr Parser::parse_call(Expr_Ptr target) {
   /*
-    call = expression, "(", [expression_list], ")" ;
+    call = expression, [specializations], "(", [expression_list], ")" ;
     expression_list = expression, {",", expression} ;
+    specializations = "@, "(", [type_list], ")" ;
   */
   Ast_Call parsed_call;
   parsed_call.callee = std::move(target);
@@ -575,12 +576,30 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
       Ast_Macro_Identifier macro_ident;
       *static_cast<Ast_Identifier*>(macro_ident.get_raw_self()) = ident;
       return ctx->new_expr(macro_ident);
-    } else if (!brace_delimited && peek(TokenType::LEFT_BRACE)) {
+    }
+
+    std::optional<Ast_Specialized_Identifier> special_ident;
+    // @([types])
+    if (this->consume(TokenType::AT)) {
+      Ast_Specialized_Identifier s_ident;
+      *static_cast<Ast_Identifier*>(s_ident.get_raw_self()) = ident;
+      s_ident.specializations = this->parse_type_list(
+        TokenType::LEFT_PAREN, TokenType::RIGHT_PAREN);
+      special_ident = s_ident;
+    }
+
+    if (!brace_delimited && peek(TokenType::LEFT_BRACE)) {
       // Only valid in non-brace limited places (could be wrapped in parens)
       // e.g. not valid if cond or for loop ranges
-      return this->parse_pod_literal(ident);
+      return this->parse_pod_literal(ident,
+          special_ident ? special_ident->specializations : std::vector<Type_Ptr>{});
     }
-    return ctx->new_expr(ident);
+
+    if (special_ident) {
+      return ctx->new_expr(*special_ident);
+    } else {
+      return ctx->new_expr(ident);
+    }
   } else if (peek(TokenType::LEFT_PAREN)) {
     return this->parse_parenthesised_expression();
   } else if (peek(TokenType::IF)) {
@@ -600,12 +619,15 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
   }
 }
 
-Expr_Ptr Parser::parse_pod_literal(Ast_Identifier pod_name) {
+Expr_Ptr Parser::parse_pod_literal(
+  Ast_Identifier pod_name, std::vector<Type_Ptr> specializations
+) {
   /*
     pod_literal = identifier "{" pod_field_initializer {"," pod_field_initializer} "}" ;
     pod_field_initializer = "." identifier "=" expression  ;
   */
   Ast_Pod_Literal parsed_pod;
+  parsed_pod.specializations = specializations;
   parsed_pod.pod = ctx->new_type(UncheckedType(pod_name));
   expect(TokenType::LEFT_BRACE);
   while (!peek(TokenType::RIGHT_BRACE)) {

@@ -230,3 +230,9 @@ void BaseAstVisitor::operator()(Ast_Spawn& spawn){
   std::visit(recur, spawn.initializer->v);
   after(spawn);
 }
+
+void BaseAstVisitor::operator()(Ast_Specialized_Identifier& special_ident){
+  before(special_ident);
+  visit(special_ident);
+  after(special_ident);
+}

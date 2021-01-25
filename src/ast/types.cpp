@@ -88,6 +88,9 @@ std::string type_to_string(Type const & type, bool hide_details) {
     pattern(as<CellType>(arg)) = [&](auto const & cell) {
       return formatxx::format_string("cell containing {}", type_to_string(cell.contains.get()));
     },
+    pattern(as<GenericType>(arg)) = [&](auto const & generic) {
+      return formatxx::format_string("generic type {}", generic.identifier.name);
+    },
     pattern(_) = []{
       return "???"s;
     });

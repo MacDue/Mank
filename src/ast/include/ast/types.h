@@ -8,6 +8,7 @@
 #include "ast/construct.h"
 #include "ast/array_type.h"
 #include "ast/tuple_type.h"
+#include "ast/generic_type.h"
 #include "ast/primative_types.h"
 #include "ast/type_constraints.h"
 
@@ -53,7 +54,8 @@ using Type_Type = std::variant<
   TypeFieldConstraint,
   TypeIndexConstraint,
   TypeCastConstraint,
-  CellType>;
+  CellType,
+  GenericType>;
 
 class Type {
   Type(Type_Type v)

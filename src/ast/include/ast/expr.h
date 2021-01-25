@@ -73,6 +73,7 @@ struct PodFieldInitializer {
 DEF_EXPR(Ast_Pod_Literal) {
   Type_Ptr pod; // could just be ident
   std::vector<PodFieldInitializer> fields;
+  std::vector<Type_Ptr> specializations;
 };
 
 DEF_EXPR(Ast_As_Cast) {
@@ -92,6 +93,10 @@ DEF_EXPR(Ast_Spawn) {
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
 
+struct Ast_Specialized_Identifier: Ast_Identifier {
+  std::vector<Type_Ptr> specializations;
+};
+
 using Ast_Expression_Type = std::variant<
   Ast_Block,
   Ast_If_Expr,
@@ -109,7 +114,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Pod_Literal,
   Ast_As_Cast,
   Ast_Array_Repeat,
-  Ast_Spawn>;
+  Ast_Spawn,
+  Ast_Specialized_Identifier>;
 
 class Ast_Expression {
   template<typename Expr>

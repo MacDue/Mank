@@ -919,6 +919,10 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       expr.set_value_type(Expression_Meta::LVALUE);
       return ctx->new_type(cell_type);
     },
+    pattern(anyof(as<Ast_Macro_Identifier>(_), as<Ast_Specialized_Identifier>(_))) = [&]{
+      throw_sema_error_at(expr, "this is not valid here!");
+      return Type_Ptr(nullptr);
+    },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
       return Type_Ptr(nullptr);

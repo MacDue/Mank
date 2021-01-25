@@ -278,6 +278,11 @@ public:
     assert(false && "??? there should not be any macros left at this stage!");
   }
 
+  inline llvm::Value* codegen_expression(Ast_Specialized_Identifier& special_ident, Scope& scope) {
+    (void) special_ident; (void) scope;
+    assert(false && "??? don't think special idents need codegen!");
+  }
+
 public:
   LLVMCodeGen(Ast_File& file_ast);
   /* JIT tools */

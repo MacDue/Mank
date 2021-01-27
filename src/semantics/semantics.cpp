@@ -49,12 +49,13 @@ Ast_Identifier* get_symbol_identifer_if_type(Symbol* symbol) {
   return nullptr;
 }
 
-Symbol make_builtin_func(
+static Symbol make_builtin_func(
   AstContext& ctx,
   std::string name,
   std::vector<Ast_Argument> args,
   Type_Ptr return_type = Type::void_ty(),
-  bool c_decl = false
+  bool c_decl = false,
+  bool generic = false
 ) {
   Ast_Function_Declaration func_decl;
   func_decl.return_type = return_type;
@@ -62,8 +63,15 @@ Symbol make_builtin_func(
   func_decl.arguments = args;
   func_decl.external = true;
   func_decl.c_function = c_decl;
+  func_decl.generic = generic;
   return Symbol(
     SymbolName(name), ctx.new_type(func_decl), Symbol::FUNCTION);
+}
+
+static Type_Ptr make_generic_type(AstContext& ctx, std::string name) {
+  GenericType generic;
+  generic.identifier.name = name;
+  return ctx.new_type(generic);
 }
 
 void Semantics::analyse_file(Ast_File& file) {
@@ -95,6 +103,13 @@ void Semantics::analyse_file(Ast_File& file) {
     PrimativeType::int_ty(),
     PrimativeType::get(PrimativeType::BOOL)
   };
+
+  auto vec_element_type = make_generic_type(*ctx, "E");
+  auto vec_type = [&]{
+    ListType list_type;
+    list_type.element_type = vec_element_type;
+    return ctx->new_type(list_type);
+  }();
 
   std::array builtin_funcs {
     // C stdlib putchar/getchar
@@ -154,6 +169,10 @@ void Semantics::analyse_file(Ast_File& file) {
     make_builtin_func(*ctx, "prompt_int", builder->make_args(
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
       PrimativeType::int_ty()),
+    // vectors
+    make_builtin_func(*ctx, "new_vec3", {}, vec_type, false, true),
+    make_builtin_func(*ctx, "push_back", builder->make_args(
+      builder->make_argument(vec_element_type, "v")), Type::void_ty(), false, true)
   };
 
   for (auto builtin: builtin_funcs) {
@@ -1068,17 +1087,22 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   using namespace mpark::patterns;
   Type_Ptr callee_type;
 
-  auto called_function_ident = std::get_if<Ast_Identifier>(&call.callee->v);
-  if (called_function_ident) {
-    Symbol* called_function = scope.lookup_first_name(*called_function_ident);
-    if (!called_function) {
-      throw_sema_error_at(*called_function_ident, "attempting to call undefined function \"{}\"",
-        called_function_ident->name);
+  Ast_Identifier* called_function_ident = nullptr;
+
+  match(call.callee->v)(
+    pattern(anyof(as<Ast_Identifier>(arg), as<Ast_Specialized_Identifier>(arg))) = [&](auto& ident){
+      Symbol* called_function = scope.lookup_first_name(ident);
+      if (!called_function) {
+        throw_sema_error_at(ident,
+          "attempting to call undefined function \"{}\"", ident.name);
+      }
+      callee_type = called_function->type;
+      called_function_ident = ident.get_raw_self();
+    },
+    pattern(_) = [&]{
+      callee_type = analyse_expression(*call.callee, scope);
     }
-    callee_type = called_function->type;
-  } else {
-    callee_type = analyse_expression(*call.callee, scope);
-  }
+  );
 
   auto deref_callee_type = remove_reference(callee_type);
   infer->generate_call_constraints(deref_callee_type, call);

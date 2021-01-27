@@ -14,7 +14,8 @@ DEF_TYPE(Ast_Function_Declaration), Ast_Node {
   bool external = false,
        c_function = false,
        procedure = false,
-       lambda = false;
+       lambda = false,
+       generic = false;
   Ast_Identifier identifier;
   std::vector<Ast_Argument> arguments;
   std::vector<TypeParam> type_parameters;

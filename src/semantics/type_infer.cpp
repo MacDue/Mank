@@ -478,6 +478,12 @@ void Infer::generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call) {
       "call requires [{1}] but callee is [{0}]"};
     type_constraints.emplace_back(constraint);
     callee_type = call_type_ptr;
+  } else if (auto func_type = std::get_if<Ast_Function_Declaration>(&callee_type->v)) {
+    /* prototype hack */
+    if (!func_type->generic) { return; }
+    auto generic_call_type = *func_type; // copy
+    // ????? - make new type for call
+    // replace_type_recursive...
   }
 }
 

@@ -129,6 +129,11 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
       }
       return std::make_pair(type, null_symbol);
     },
+    pattern(as<ListType>(arg)) = [&](auto& list_type) {
+      auto [base_type, symbol] = resolve_type(scope, list_type.element_type);
+      list_type.element_type = base_type;
+      return std::make_pair(base_type ? type : nullptr, symbol);
+    },
     pattern(_) = [&] {
       // Possible it's already resolved
       // TODO: Make sure code does not recurse over already resolved types.
@@ -250,6 +255,10 @@ Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {
         // lvalue string indexs...?
         return PrimativeType::get(PrimativeType::CHAR);
       };
+    },
+    pattern(as<ListType>(arg)) = [&](auto& list_type) {
+      access.get_meta().value_type = access.object->meta.value_type;
+      return list_type.element_type;
     },
     pattern(_) = [&]() -> Type_Ptr {
       throw_sema_error_at(access.object, "not an indexable type (is {})",

@@ -20,8 +20,6 @@ bool match_types(Type_Ptr a, Type_Ptr b,
   MakeConstraint const & make_constraint = std::nullopt,
   bool ignore_refs = true);
 
-bool replace_type_recursive(Type_Ptr type, Type_Ptr old, Type_Ptr replacement);
-
 inline bool is_tvar(Type_Ptr type) {
   if (!type) return false;
   return std::holds_alternative<TypeVar>(type->v);

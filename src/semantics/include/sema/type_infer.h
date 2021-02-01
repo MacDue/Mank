@@ -143,10 +143,11 @@ private:
  void get_infer_reason_notes(
   int32_t tvar, std::vector<CompilerMessage>& msgs, Infer::Substitution const & subs);
 
+  using PlaceholderType = std::variant<TypeVar, GenericType>;
+
   /* Sub */
   bool substitute(
-    Type_Ptr& current_type, TypeVar tvar, Type_Ptr replacement,
-    Substitution const & subs);
+    Type_Ptr& current_type, PlaceholderType tvar, Type_Ptr replacement);
 
   /* Apply */
   Type_Ptr apply_type(Type_Ptr type, Substitution const & subs);

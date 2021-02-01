@@ -55,7 +55,7 @@ static Symbol make_builtin_func(
   std::vector<Ast_Argument> args,
   Type_Ptr return_type = Type::void_ty(),
   bool c_decl = false,
-  bool generic = false
+  std::vector<TypeParam> type_params = {}
 ) {
   Ast_Function_Declaration func_decl;
   func_decl.return_type = return_type;
@@ -63,7 +63,8 @@ static Symbol make_builtin_func(
   func_decl.arguments = args;
   func_decl.external = true;
   func_decl.c_function = c_decl;
-  func_decl.generic = generic;
+  func_decl.generic = type_params.size() > 0;
+  func_decl.type_parameters = type_params;
   return Symbol(
     SymbolName(name), ctx.new_type(func_decl), Symbol::FUNCTION);
 }
@@ -170,9 +171,10 @@ void Semantics::analyse_file(Ast_File& file) {
       builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
       PrimativeType::int_ty()),
     // vectors
-    make_builtin_func(*ctx, "new_vec3", {}, vec_type, false, true),
+    make_builtin_func(*ctx, "new_vec", {}, vec_type, false, { vec_element_type }),
     make_builtin_func(*ctx, "push_back", builder->make_args(
-      builder->make_argument(vec_element_type, "v")), Type::void_ty(), false, true)
+      builder->make_argument(vec_type, "v"),
+      builder->make_argument(vec_element_type, "e")), Type::void_ty(), false, { vec_element_type })
   };
 
   for (auto builtin: builtin_funcs) {
@@ -1089,15 +1091,32 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
 
   Ast_Identifier* called_function_ident = nullptr;
 
+  auto look_up_function = [&](auto& ident) {
+    Symbol* called_function = scope.lookup_first_name(ident);
+    if (!called_function) {
+      throw_sema_error_at(ident,
+        "attempting to call undefined function \"{}\"", ident.name);
+    }
+    callee_type = called_function->type;
+    called_function_ident = ident.get_raw_self();
+  };
+
   match(call.callee->v)(
-    pattern(anyof(as<Ast_Identifier>(arg), as<Ast_Specialized_Identifier>(arg))) = [&](auto& ident){
-      Symbol* called_function = scope.lookup_first_name(ident);
-      if (!called_function) {
-        throw_sema_error_at(ident,
-          "attempting to call undefined function \"{}\"", ident.name);
+    pattern(as<Ast_Identifier>(arg)) = [&](auto& ident){
+      look_up_function(ident);
+    },
+    pattern(as<Ast_Specialized_Identifier>(arg)) = [&](auto& specialized) {
+      look_up_function(specialized);
+      if (auto generic_func = std::get_if<Ast_Function_Declaration>(&callee_type->v)) {
+        if (specialized.specializations.size() > generic_func->type_parameters.size()) {
+          throw_sema_error_at(specialized, "too many specializations for generic function");
+        }
+      } else {
+        throw_sema_error_at(specialized, "not a generic function");
       }
-      callee_type = called_function->type;
-      called_function_ident = ident.get_raw_self();
+      for (auto& spec: specialized.specializations) {
+        resolve_type_or_fail(scope, spec, "undeclared specialization type");
+      }
     },
     pattern(_) = [&]{
       callee_type = analyse_expression(*call.callee, scope);

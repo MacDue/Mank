@@ -58,6 +58,10 @@ bool match_types(Type_Ptr a, Type_Ptr b,
           return a.size == b.size
             && match_types(a.element_type, b.element_type, make_constraint);
         },
+      pattern(as<ListType>(arg), as<ListType>(arg)) =
+        [&](auto const & a, auto const & b) {
+          return match_types(a.element_type, b.element_type, make_constraint);
+        },
       pattern(as<LambdaType>(arg), as<LambdaType>(arg)) =
         [&](auto const & a, auto const & b) {
           return match_type_lists(a.argument_types, b.argument_types, make_constraint, false)

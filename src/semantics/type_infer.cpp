@@ -23,6 +23,10 @@ using SpecialConstraints = std::vector<SpecialConstraint>;
   as<TypeIndexConstraint>(arg), \
   as<TypeCastConstraint>(arg))
 
+#define TYPE_LIST anyof( \
+  as<FixedSizeArrayType>(arg), \
+  as<ListType>(arg))
+
 static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
   using namespace mpark::patterns;
   match(type->v)(
@@ -43,7 +47,7 @@ static void extract_tvars(Type_Ptr type, std::set<TypeVar>& type_vars) {
       [&](auto const & propety_constraint) {
         extract_tvars(propety_constraint.type, type_vars);
       },
-    pattern(as<FixedSizeArrayType>(arg)) =
+    pattern(TYPE_LIST) =
       [&](auto const & array_type) {
         extract_tvars(array_type.element_type, type_vars);
       },
@@ -69,7 +73,7 @@ static bool occurs(TypeVar tvar, Type_Ptr type) {
       [&](auto const & propety_constraint) {
         return occurs(tvar, propety_constraint.type);
       },
-    pattern(as<FixedSizeArrayType>(arg)) =
+    pattern(TYPE_LIST) =
       [&](auto const & array_type) {
         return occurs(tvar, array_type.element_type);
       },
@@ -87,7 +91,7 @@ void Infer::Constraint::init() {
 
 // array subs + check if new before new type
 bool Infer::substitute(
-  Type_Ptr& current_type, TypeVar tvar, Type_Ptr replacement, Substitution const & subs
+  Type_Ptr& current_type, PlaceholderType tvar, Type_Ptr replacement
 ) {
   using namespace mpark::patterns;
 
@@ -105,33 +109,45 @@ bool Infer::substitute(
       return false;
     },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
-      type_updated |= substitute(lambda_type.return_type, tvar, replacement, subs);
+      type_updated |= substitute(lambda_type.return_type, tvar, replacement);
       for (auto& arg_type: lambda_type.argument_types) {
-        type_updated |= substitute(arg_type, tvar, replacement, subs);
+        type_updated |= substitute(arg_type, tvar, replacement);
       }
       return updated(lambda_type);
     },
     pattern(as<TupleType>(arg)) = [&](auto tuple_type) {
       for (auto& el_type: tuple_type.element_types) {
-        type_updated |= substitute(el_type, tvar, replacement, subs);
+        type_updated |= substitute(el_type, tvar, replacement);
       }
       return updated(tuple_type);
     },
     pattern(TYPE_PROPERTY_CONSTRAINT) = [&](auto propety_constraint) {
-      type_updated |= substitute(propety_constraint.type, tvar, replacement, subs);
+      type_updated |= substitute(propety_constraint.type, tvar, replacement);
       return updated(propety_constraint);
     },
-    pattern(as<FixedSizeArrayType>(arg)) = [&](auto array_type) {
-      type_updated |= substitute(array_type.element_type, tvar, replacement, subs);
+    pattern(TYPE_LIST) = [&](auto array_type) {
+      type_updated |= substitute(array_type.element_type, tvar, replacement);
       return updated(array_type);
     },
     pattern(as<TypeVar>(arg)) = [&](auto const & current_tvar) {
-      // tvar already unified... to be replaced it needs to have already been unified
-      if (current_tvar.id == tvar.id) {
-        current_type = replacement;
-        return true;
-      }
-      return false;
+      WHEN(std::holds_alternative<TypeVar>(tvar)) {
+        // tvar already unified... to be replaced it needs to have already been unified
+        if (current_tvar.id == std::get<TypeVar>(tvar).id) {
+          current_type = replacement;
+          return true;
+        }
+        return false;
+      };
+    },
+    pattern(as<GenericType>(arg)) = [&](auto const & current_generic) {
+      WHEN(std::holds_alternative<GenericType>(tvar)) {
+        // TODO: Replace on name?
+        if (std::get<GenericType>(tvar).get_self() == current_generic.get_self()) {
+          current_type = replacement;
+          return true;
+        }
+        return false;
+      };
     },
     pattern(_) = [&]() -> bool {
       throw UnifyError("unknown type substitution " + type_to_string(current_type.get()));
@@ -141,7 +157,7 @@ bool Infer::substitute(
 
 Type_Ptr Infer::apply_type(Type_Ptr type, Substitution const & subs) {
   for (auto& [tvar, solved_type]: subs) {
-    substitute(type, tvar, solved_type, subs);
+    substitute(type, tvar, solved_type);
   }
   return type;
 }
@@ -224,6 +240,7 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
   };
 
   auto unify_cast_constraint = [&](Type_Ptr other_type, TypeCastConstraint& cast_constraint) {
+    (void) other_type;
     validate_type_cast(cast_constraint.type, *cast_constraint.as_cast);
     return Substitution{};
   };
@@ -277,6 +294,10 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
         Constraint ec{a1.element_type, a2.element_type};
         return try_unify_sub_constraints(c, { ec });
       };
+    },
+    pattern(as<ListType>(arg), as<ListType>(arg)) = [&](auto& v1, auto& v2) {
+      Constraint ec{v1.element_type, v2.element_type};
+      return try_unify_sub_constraints(c, { ec });
     },
     pattern(as<TypeVar>(arg), _) = [&](auto& tvar){
       return unify_var(tvar, c.t2, c.get_note_spot());
@@ -479,11 +500,36 @@ void Infer::generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call) {
     type_constraints.emplace_back(constraint);
     callee_type = call_type_ptr;
   } else if (auto func_type = std::get_if<Ast_Function_Declaration>(&callee_type->v)) {
-    /* prototype hack */
+    /*
+      prototype hack
+      -> make new typevars per generic call
+    */
     if (!func_type->generic) { return; }
     auto generic_call_type = *func_type; // copy
-    // ????? - make new type for call
-    // replace_type_recursive...
+    size_t generic_idx = 0; // should be indexed in the order defined on the function
+    auto specialized_call = std::get_if<Ast_Specialized_Identifier>(&call.callee->v);
+    for (auto generic_type: generic_call_type.type_parameters) {
+      // Not a great solution...
+      auto sub_type = [&]{
+        if (specialized_call) {
+          // TODO: this should probably still be a type var & just another constraint
+          if (generic_idx < specialized_call->specializations.size()) {
+            return specialized_call->specializations.at(generic_idx);
+          }
+        }
+        return ctx.new_tvar();
+      }();
+      // (this obvs does not cover generics in the function body)
+      // (just enough for vectors & testing)
+      substitute(generic_call_type.return_type, *generic_type, sub_type);
+      for (auto& arg: generic_call_type.arguments) {
+        substitute(arg.type, *generic_type, sub_type);
+      }
+      generic_idx += 1;
+    }
+    generic_call_type.generic = false;
+    generic_call_type.type_parameters = {};
+    callee_type = ctx.new_type(generic_call_type);
   }
 }
 

@@ -51,6 +51,28 @@ char* __mank_builtin__str_cast(char c) {
   return new_str;
 }
 
+// Pretty much 32 bytes
+struct __mank_vec {
+  size_t
+    type_size,
+    capacity,
+    length;
+  void* data;
+};
+
+void __mank_builtin__init_vec(struct __mank_vec* vec) {
+  vec->data = __mank_alloc__any(vec->type_size * vec->capacity);
+}
+
+void __mank_builtin__push_back(struct __mank_vec* vec, void* new_element) {
+  vec->length += 1;
+  if (vec->length > vec->capacity) {
+    vec->capacity *= 2;
+    vec->data = GC_REALLOC(vec->data, vec->capacity * vec->type_size);
+  }
+  memcpy(vec->data + (vec->length - 1) * vec->type_size, new_element, vec->type_size);
+}
+
 int main() {
   __mank__main();
 }

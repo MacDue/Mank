@@ -129,6 +129,10 @@ bool Infer::substitute(
       type_updated |= substitute(array_type.element_type, tvar, replacement);
       return updated(array_type);
     },
+    pattern(as<ReferenceType>(arg)) = [&](auto ref_type) {
+      type_updated |= substitute(ref_type.references, tvar, replacement);
+      return updated(ref_type);
+    },
     pattern(as<TypeVar>(arg)) = [&](auto const & current_tvar) {
       WHEN(std::holds_alternative<TypeVar>(tvar)) {
         // tvar already unified... to be replaced it needs to have already been unified
@@ -527,7 +531,7 @@ void Infer::generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call) {
       }
       generic_idx += 1;
     }
-    generic_call_type.generic = false;
+    // generic_call_type.generic = false;
     generic_call_type.type_parameters = {};
     callee_type = ctx.new_type(generic_call_type);
   }

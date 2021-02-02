@@ -98,6 +98,27 @@ llvm::Function* LLVMCodeGen::get_str_concat_internal() {
     });
 }
 
+#define MANK_VEC_INIT "__mank_builtin__init_vec"
+
+llvm::Function* LLVMCodeGen::get_init_vec(Scope& scope) {
+  return get_external(
+    MANK_VEC_INIT,
+    llvm::Type::getVoidTy(llvm_context),
+    { llvm::PointerType::get(get_vector_ty(scope), 0) });
+}
+
+#define MANK_VEC_PUSH_BACK "__mank_builtin__push_back"
+
+llvm::Function* LLVMCodeGen::get_vec_push_back(Scope& scope) {
+  return get_external(
+    MANK_VEC_PUSH_BACK,
+    llvm::Type::getVoidTy(llvm_context),
+    {
+      llvm::PointerType::get(get_vector_ty(scope), 0),
+      llvm::Type::getInt8PtrTy(llvm_context)
+    });
+}
+
 std::pair<llvm::Value*, llvm::Value*>
 LLVMCodeGen::extract_string_info(Ast_Expression& expr, Scope& scope) {
   auto str_type = std::get_if<PrimativeType>(&expr.meta.type->v);
@@ -184,8 +205,6 @@ llvm::Value* LLVMCodeGen::ExpressionExtract::get_bind(
   }
 }
 
-
-
 llvm::Value* LLVMCodeGen::ExpressionExtract::get_bind(
   std::vector<unsigned> const & idx_list, Type_Ptr bound_to, llvm::Twine const & name
 ) {
@@ -260,6 +279,42 @@ llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, S
     pod_type.identifier.name);
 }
 
+#define MANK_VEC_BULTIN "!vec"
+
+llvm::Type* LLVMCodeGen::get_vector_ty(Scope& scope) {
+  /*
+    struct __mank_vec {
+      size_t
+        type_size,
+        capacity,
+        length;
+      void* data;
+    };
+  */
+
+  Symbol& sym = [&]() -> Symbol& {
+    if (auto sym = scope.lookup_first(MANK_VEC_BULTIN)) {
+      return *sym;
+    }
+    // Add to the root scope
+    return file_ast.scope.add(Symbol(
+      SymbolName(MANK_VEC_BULTIN), nullptr, Symbol::TYPE));
+  }();
+
+  llvm::Type* size_t_llvm = llvm::Type::getInt64Ty(llvm_context);
+  if (!sym.meta) {
+    llvm::Type* vec_type = llvm::StructType::create(llvm_context, {
+      size_t_llvm, /* type_size */
+      size_t_llvm, /* capacity */
+      size_t_llvm, /* length */
+      llvm::Type::getInt8PtrTy(llvm_context) /* data */
+    }, MANK_VEC_BULTIN);
+    sym.meta = std::make_shared<SymbolMetaCompoundType>(vec_type);
+  }
+
+  return static_cast<SymbolMetaCompoundType*>(sym.meta.get())->type;
+}
+
 llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
   using namespace mpark::patterns;
   if (!type) {
@@ -301,6 +356,9 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
     },
     pattern(as<CellType>(arg)) = [&](auto const & cell_type) -> llvm::Type* {
       return map_type_to_llvm(cell_type.ref.get(), scope);
+    },
+    pattern(as<ListType>(_)) = [&]() -> llvm::Type* {
+      return get_vector_ty(scope);
     },
     pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");
@@ -1095,6 +1153,67 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope,
   return nullptr;
 }
 
+llvm::Value* LLVMCodeGen::codegen_generic_call(
+  Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope
+) {
+  /* Pretty much just some prototype vector stuff */
+  using namespace mpark::patterns;
+  return match(func_type.identifier.name)(
+    pattern("new_vec") = [&]() -> llvm::Value* {
+      auto& vec_type = std::get<ListType>(call.get_meta().type->v);
+      llvm::Type* llvm_vec_type = get_vector_ty(scope);
+      llvm::Type* el_type = map_type_to_llvm(vec_type.element_type.get(), scope);
+
+      llvm::Value* element_size = llvm::ConstantExpr::getSizeOf(el_type);
+      llvm::Value* vec = ir_builder.CreateInsertValue(
+        llvm::UndefValue::get(llvm_vec_type), element_size, {0});
+      // start with an initial capacity of 10
+      vec = ir_builder.CreateInsertValue(vec,
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_context), 10), {1});
+      // length of 0
+      vec = ir_builder.CreateInsertValue(vec,
+         llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_context), 0), {2});
+
+      // Don't think there's any way to get an address from a llvm::Value* :(
+      llvm::Value* vec_ptr = create_entry_alloca(
+        get_current_function(), llvm_vec_type, "vec_temp");
+      ir_builder.CreateStore(vec, vec_ptr);
+
+      llvm::Function* vec_init = get_init_vec(scope);
+      ir_builder.CreateCall(vec_init, { vec_ptr });
+
+      // dumb dumb dumb
+      return ir_builder.CreateLoad(vec_ptr, "new_vec");
+    },
+    pattern("push_back") = [&]() -> llvm::Value* {
+      auto vec = call.arguments.at(0);
+      auto element_to_insert = call.arguments.at(1);
+
+      llvm::Value* to_insert_ptr = nullptr;
+      if (element_to_insert->is_lvalue()) {
+        to_insert_ptr = address_of(*element_to_insert, scope);
+      } else {
+        to_insert_ptr = create_entry_alloca(
+          get_current_function(), scope, element_to_insert->meta.type.get(), "to_insert");
+        ir_builder.CreateStore(
+          codegen_expression(*element_to_insert, scope), to_insert_ptr);
+      }
+
+      to_insert_ptr = ir_builder.CreateBitCast(
+        to_insert_ptr, llvm::Type::getInt8PtrTy(llvm_context));
+
+      llvm::Function* vec_push_back = get_vec_push_back(scope);
+      return ir_builder.CreateCall(vec_push_back,
+        { address_of(*vec, scope), to_insert_ptr });
+    },
+    pattern(_) = []() -> llvm::Value* {
+      // llvm create_entry_alloca()
+      assert(false && "todo! Only hack special case generics done");
+      return nullptr;
+    }
+  );
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
   auto callee_type = remove_reference(call.callee->meta.type);
   LambdaType* lambda_type = std::get_if<LambdaType>(&callee_type->v);
@@ -1104,6 +1223,9 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
   llvm::Value* env_ptr = nullptr;
   if (!lambda_type) {
     function_type = std::get<Ast_Function_Declaration>(callee_type->v).get_raw_self();
+    if (function_type->generic) {
+      return codegen_generic_call(call, *function_type, scope);
+    }
     callee = this->get_function(*function_type);
   } else {
     auto expr_result = get_value_extractor(*call.callee, scope);

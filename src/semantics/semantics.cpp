@@ -173,7 +173,7 @@ void Semantics::analyse_file(Ast_File& file) {
     // vectors
     make_builtin_func(*ctx, "new_vec", {}, vec_type, false, { vec_element_type }),
     make_builtin_func(*ctx, "push_back", builder->make_args(
-      builder->make_argument(vec_type, "v"),
+      builder->make_argument(builder->make_reference(vec_type), "v"),
       builder->make_argument(vec_element_type, "e")), Type::void_ty(), false, { vec_element_type })
   };
 

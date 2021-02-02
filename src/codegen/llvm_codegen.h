@@ -132,6 +132,9 @@ class LLVMCodeGen: public CodeGenerator {
   llvm::Function* get_gc_malloc();
   llvm::Function* get_str_concat_internal();
 
+  llvm::Function* get_init_vec(Scope& scope);
+  llvm::Function* get_vec_push_back(Scope& scope);
+
   llvm::Type* get_string_ty(Scope& scope);
 
   llvm::Value* create_string_concat(
@@ -179,6 +182,8 @@ public:
   /* Types */
   std::vector<llvm::Type*> map_arg_types_to_llvm(
     std::vector<Ast_Argument> const & args, Scope& scope);
+
+  llvm::Type* get_vector_ty(Scope& scope);
 
   llvm::Type* map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope);
   llvm::Type* map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope);
@@ -254,6 +259,9 @@ public:
   Expr_Ptr simplify_short_circuit(Ast_Binary_Operation& short_circuit);
 
   Expr_Ptr mank_builtin_array_set(Type_Ptr array_type, Expr_Ptr initializer, Scope& scope);
+
+  llvm::Value* codegen_generic_call(
+    Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);

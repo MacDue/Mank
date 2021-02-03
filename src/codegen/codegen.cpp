@@ -913,12 +913,20 @@ void LLVMCodeGen::codegen_pod_bindings(
         field_type = pod_type.get_field_type(field_bind.field_index);
         field_is_ref = is_reference_type(field_type);
       },
-      pattern(as<PrimativeType>(arg)) = [&](auto& str_type){
-        assert(str_type.is_string_type());
-        idxs.back() = Builtin::String::LENGTH; // the string's length is in the first offset.
+      pattern(anyof(as<PrimativeType>(arg), as<ListType>(arg))) = [&](auto& vec_like){
+        using T = std::decay_t<decltype(vec_like)>;
+        uint length_offset;
+        if constexpr (std::is_same_v<T, ListType>) {
+          length_offset = Builtin::Vector::LENGTH;
+        } else {
+          // strings
+          assert(vec_like.is_string_type());
+          length_offset = Builtin::String::LENGTH;
+        }
+        idxs.back() = length_offset;
         // Type passed to get_bind() does not matter (just needs to not be a ref)
-        value_override = pod.get_bind(idxs, PrimativeType::int_ty(), "str_length");
-        value_override = fix_string_length(value_override);
+        value_override = pod.get_bind(idxs, PrimativeType::int_ty(), "length");
+        value_override = fix_string_length(value_override); // also works for vectors
       }, pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
         value_override = create_llvm_idx(array_type.size);
       }
@@ -1538,6 +1546,11 @@ llvm::Value* LLVMCodeGen::get_special_field_value(
     pattern(as<PrimativeType>(_)) = [&]() -> llvm::Value* {
       auto [str_length, _] = extract_string_info(agg, scope);
       return fix_string_length(str_length);
+    },
+    pattern(as<ListType>(_)) = [&]() -> llvm::Value* {
+      llvm::Value* vec_length = get_value_extractor(agg, scope)
+        .get_value({Builtin::Vector::LENGTH}, "length");
+      return fix_string_length(vec_length);
     },
     pattern(_) = []() -> llvm::Value* { return nullptr; });
 }

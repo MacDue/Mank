@@ -254,6 +254,8 @@ public:
   llvm::Value* create_lambda(llvm::Type* lambda_type, llvm::Function* body, llvm::Value* env_ptr);
   llvm::Value* create_string(llvm::Value* raw_str_ptr, llvm::Value* length, Scope& scope);
 
+  llvm::Value* index_vector(Ast_Index_Access vector_index, Scope& scope);
+
   llvm::Value* do_cast(llvm::Value* value, Type_Ptr source_type, Type_Ptr target_type, Scope& scope);
 
   Expr_Ptr simplify_short_circuit(Ast_Binary_Operation& short_circuit);

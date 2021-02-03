@@ -1006,12 +1006,16 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
       return dereference(field_value, type);
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
-      std::vector<llvm::Value*> idx_list;
-      idx_list.push_back(create_llvm_idx(0));
-      auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
-      llvm::Value* source_address = address_of(source_object, scope);
-      return ir_builder.CreateGEP(
-        source_address, idx_list, "index_access");
+      if (std::holds_alternative<ListType>(remove_reference(index.object->meta.type)->v)) {
+        return index_vector(index, scope);
+      } else {
+        std::vector<llvm::Value*> idx_list;
+        idx_list.push_back(create_llvm_idx(0));
+        auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
+        llvm::Value* source_address = address_of(source_object, scope);
+        return ir_builder.CreateGEP(
+          source_address, idx_list, "index_access");
+      }
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) -> llvm::Value* {
       // Must be a reference returned (so that is an address)
@@ -1646,35 +1650,53 @@ Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
   return *base_expr;
 }
 
+llvm::Value* LLVMCodeGen::index_vector(Ast_Index_Access vector_index, Scope& scope) {
+  // Will explode if not a vector index.
+  auto& vec_type = std::get<ListType>(remove_reference(vector_index.object->meta.type)->v);
+  llvm::Value* vec_data_ptr = get_value_extractor(
+    *vector_index.object, scope).get_value({3}, "vec_data_ptr");
+  llvm::Type* el_type = map_type_to_llvm(vec_type.element_type.get(), scope);
+  vec_data_ptr = ir_builder.CreateBitCast(
+    vec_data_ptr, llvm::PointerType::get(el_type, 0));
+  return ir_builder.CreateGEP(
+    vec_data_ptr, { codegen_expression(*vector_index.index, scope) }, "vec_index");
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& scope) {
-  llvm::Value* element_ptr = nullptr;
-  if (auto str_type = std::get_if<PrimativeType>(
-    &remove_reference(index.object->meta.type)->v)
-  ) {
-    // string indexes -- special case :(
-    assert(str_type->is_string_type());
-    // TODO: bounds check
-    llvm::Value* raw_str_pointer = get_value_extractor(
-      *index.object, scope).get_value({1}, "str_ptr");
-    element_ptr = ir_builder.CreateGEP(
-      raw_str_pointer, { codegen_expression(*index.index, scope) }, "str_index");
-  } else {
-    std::vector<llvm::Value*> idx_list;
-    idx_list.push_back(create_llvm_idx(0));
-    auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
+  using namespace mpark::patterns;
+  llvm::Value* element_ptr = match(remove_reference(index.object->meta.type)->v)(
+    pattern(as<PrimativeType>(arg)) = [&](auto& str_type) -> llvm::Value* {
+      // string indexes -- special case :(
+      assert(str_type.is_string_type());
+      // TODO: bounds check
+      llvm::Value* raw_str_pointer = get_value_extractor(
+        *index.object, scope).get_value({1}, "str_ptr");
+      return ir_builder.CreateGEP(
+        raw_str_pointer, { codegen_expression(*index.index, scope) }, "str_index");
+    },
+    pattern(as<ListType>(_)) = [&]() -> llvm::Value* {
+      // Pretty much the same as strings :(
+      return index_vector(index, scope);
+    },
+    pattern(_) = [&]() -> llvm::Value* {
+      std::vector<llvm::Value*> idx_list;
+      idx_list.push_back(create_llvm_idx(0));
+      auto& source_object = flatten_nested_array_indexes(index, scope, idx_list);
 
-    llvm::Value* source_address = nullptr;
-    if (source_object.is_lvalue()) {
-      source_address = address_of(source_object, scope);
-    } else {
-      // TODO: Find better way?
-      source_address = create_entry_alloca(
-        get_current_function(), scope, source_object.meta.type.get(), "index_temp");
-      ir_builder.CreateStore(codegen_expression(source_object, scope), source_address);
+      llvm::Value* source_address = nullptr;
+      if (source_object.is_lvalue()) {
+        source_address = address_of(source_object, scope);
+      } else {
+        // TODO: Find better way?
+        source_address = create_entry_alloca(
+          get_current_function(), scope, source_object.meta.type.get(), "index_temp");
+        ir_builder.CreateStore(codegen_expression(source_object, scope), source_address);
+      }
+
+      return ir_builder.CreateGEP(source_address, idx_list, "index_access");
     }
+  );
 
-    element_ptr = ir_builder.CreateGEP(source_address, idx_list, "index_access");
-  }
   return ir_builder.CreateLoad(element_ptr, "load_element");
 }
 

@@ -80,15 +80,15 @@ void __mank_builtin__push_back(struct __mank_vec* vec, void* new_element) {
 }
 
 int main(int argc, char* argv[]) {
-    struct __mank_vec mank_args;
-    mank_args.type_size = sizeof(struct __mank_str);
-    mank_args.capacity = 10;
-    __mank_builtin__init_vec(&mank_args);
-    for (size_t i = 0; i < argc; i++) {
-      char* raw_str = argv[i];
-      struct __mank_str str = { .length = strlen(raw_str), .data = raw_str };
-      __mank_builtin__push_back(&mank_args, &str);
-    }
+  struct __mank_vec mank_args;
+  mank_args.type_size = sizeof(struct __mank_str);
+  mank_args.capacity = 10;
+  __mank_builtin__init_vec(&mank_args);
+  for (size_t i = 0; i < argc; i++) {
+    char* raw_str = argv[i];
+    struct __mank_str str = { .length = strlen(raw_str), .data = raw_str };
+    __mank_builtin__push_back(&mank_args, &str);
+  }
   // LLVM codegens passing struct by value as passing as a bunch of params
   __mank__main(
     mank_args.type_size,

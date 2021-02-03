@@ -20,7 +20,7 @@ cat << EOF > ./main.c
 #include <unistd.h>
 #include <string.h>
 
-extern void __mank__main(void);
+extern void __mank__main(size_t, size_t, size_t, void*);
 
 int stderr_putchar(char c) {
   if (write(STDERR_FILENO, &c, 1) == -1) {
@@ -60,8 +60,14 @@ struct __mank_vec {
   void* data;
 };
 
+struct __mank_str {
+  size_t length;
+  char* data;
+};
+
 void __mank_builtin__init_vec(struct __mank_vec* vec) {
   vec->data = __mank_alloc__any(vec->type_size * vec->capacity);
+  vec->length = 0;
 }
 
 void __mank_builtin__push_back(struct __mank_vec* vec, void* new_element) {
@@ -73,8 +79,22 @@ void __mank_builtin__push_back(struct __mank_vec* vec, void* new_element) {
   memcpy(vec->data + (vec->length - 1) * vec->type_size, new_element, vec->type_size);
 }
 
-int main() {
-  __mank__main();
+int main(int argc, char* argv[]) {
+    struct __mank_vec mank_args;
+    mank_args.type_size = sizeof(struct __mank_str);
+    mank_args.capacity = 10;
+    __mank_builtin__init_vec(&mank_args);
+    for (size_t i = 0; i < argc; i++) {
+      char* raw_str = argv[i];
+      struct __mank_str str = { .length = strlen(raw_str), .data = raw_str };
+      __mank_builtin__push_back(&mank_args, &str);
+    }
+  // LLVM codegens passing struct by value as passing as a bunch of params
+  __mank__main(
+    mank_args.type_size,
+    mank_args.capacity,
+    mank_args.length,
+    mank_args.data);
 }
 EOF
 

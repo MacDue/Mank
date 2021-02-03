@@ -296,6 +296,20 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     resolve_type_or_fail(parent_scope, arg.type, "undeclared arg type {}");
   }
+  // Special case main function
+  if (func.identifier.name == "main") {
+    ListType _args_type;
+    _args_type.element_type = PrimativeType::get(PrimativeType::STRING);
+    auto args_type = ctx->new_type(_args_type);
+
+    auto args_count = func.arguments.size();
+    if (args_count == 0) {
+      // Add args parameter (for compatibility with C boostrap)
+      func.arguments.push_back(builder->make_argument(args_type, "args"));
+    } else if (args_count != 1 || !match_types(func.arguments.at(0).type, args_type)) {
+      throw_sema_error_at(func.identifier, "invalid main function declaration");
+    }
+  }
 }
 
 Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {

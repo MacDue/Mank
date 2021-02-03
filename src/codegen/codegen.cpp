@@ -6,11 +6,13 @@
 #include <formatxx/std_string.h>
 
 #include "sema/types.h"
-#include "llvm_codegen.h"
-#include "codegen/codegen.h"
-#include "codegen/mangle.h"
 #include "ast/ast_builder.h"
 #include "parser/token_helpers.h"
+
+#include "llvm_codegen.h"
+#include "codegen/codegen.h"
+#include "codegen/builtins.h"
+#include "codegen/mangle.h"
 
 CodeGen::CodeGen(Ast_File& file_ast)
   : impl{std::make_unique<LLVMCodeGen>(file_ast)} {}
@@ -35,7 +37,6 @@ void LLVMCodeGen::create_module() {
   /* TODO: set up optimizations */
 }
 
-
 llvm::Function* LLVMCodeGen::get_external(
   llvm::StringRef name,
   llvm::Type* return_type,
@@ -57,8 +58,6 @@ llvm::Function* LLVMCodeGen::get_external(
 
   return func;
 }
-
-#define GC_MALLOC "__mank_alloc__any"
 
 llvm::Function* LLVMCodeGen::get_gc_malloc() {
   return get_external(GC_MALLOC,
@@ -83,8 +82,6 @@ llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
   }
 }
 
-#define MANK_STR_CONCAT_INTERNAL "__mank_builtin__str_concat"
-
 llvm::Function* LLVMCodeGen::get_str_concat_internal() {
   return get_external(
     MANK_STR_CONCAT_INTERNAL,
@@ -98,16 +95,12 @@ llvm::Function* LLVMCodeGen::get_str_concat_internal() {
     });
 }
 
-#define MANK_VEC_INIT "__mank_builtin__init_vec"
-
 llvm::Function* LLVMCodeGen::get_init_vec(Scope& scope) {
   return get_external(
     MANK_VEC_INIT,
     llvm::Type::getVoidTy(llvm_context),
     { llvm::PointerType::get(get_vector_ty(scope), 0) });
 }
-
-#define MANK_VEC_PUSH_BACK "__mank_builtin__push_back"
 
 llvm::Function* LLVMCodeGen::get_vec_push_back(Scope& scope) {
   return get_external(
@@ -125,8 +118,8 @@ LLVMCodeGen::extract_string_info(Ast_Expression& expr, Scope& scope) {
   assert(str_type && str_type->is_string_type());
   auto str_extract = get_value_extractor(expr, scope);
   return std::make_pair(
-    str_extract.get_value({0}, "str_length"),
-    str_extract.get_value({1}, "str_ptr"));
+    str_extract.get_value({Builtin::String::LENGTH}, "str_length"),
+    str_extract.get_value({Builtin::String::DATA}, "str_ptr"));
 }
 
 llvm::Value* LLVMCodeGen::fix_string_length(llvm::Value* length) {
@@ -151,8 +144,6 @@ llvm::Value* LLVMCodeGen::create_string_concat(
   return create_string(new_str,
     ir_builder.CreateLoad(str_concat_len_ptr, "str_concat_len"), scope);
 }
-
-#define MANK_STR_CAST_INTERNAL "__mank_builtin__str_cast"
 
 llvm::Value* LLVMCodeGen::create_char_string_cast(llvm::Value* char_value, Scope& scope) {
   auto get_str_cast = [&]{
@@ -423,8 +414,6 @@ llvm::Function* LLVMCodeGen::get_current_function() {
   return ir_builder.GetInsertBlock()->getParent();
 }
 
-
-
 llvm::Function* LLVMCodeGen::get_function(Ast_Function_Declaration& func) {
   if (auto llvm_func = llvm_module->getFunction(ABI::mangle(func))) {
     return llvm_func;
@@ -691,7 +680,7 @@ void LLVMCodeGen::codegen_statement(Ast_Variable_Declaration& var_decl, Scope& s
   }
 }
 
-#define LOOP_RANGE_END   "!end_range"
+#define LOOP_RANGE_END "!end_range"
 
 // TODO: Turn into simpler loop before codegen
 void LLVMCodeGen::codegen_statement(Ast_For_Loop& for_loop, Scope& scope) {
@@ -870,7 +859,6 @@ void LLVMCodeGen::codegen_value_bind(
   ir_builder.CreateStore(value, alloca);
 }
 
-
 void LLVMCodeGen::codegen_tuple_bindings(
   Ast_Tuple_Binds& tuple_binds, ExpressionExtract& tuple,
   std::vector<unsigned> idxs, Scope& scope
@@ -927,7 +915,7 @@ void LLVMCodeGen::codegen_pod_bindings(
       },
       pattern(as<PrimativeType>(arg)) = [&](auto& str_type){
         assert(str_type.is_string_type());
-        idxs.back() = 0; // the string's length is in the first offset.
+        idxs.back() = Builtin::String::LENGTH; // the string's length is in the first offset.
         // Type passed to get_bind() does not matter (just needs to not be a ref)
         value_override = pod.get_bind(idxs, PrimativeType::int_ty(), "str_length");
         value_override = fix_string_length(value_override);
@@ -1163,6 +1151,7 @@ llvm::Value* LLVMCodeGen::codegen_generic_call(
   Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope
 ) {
   /* Pretty much just some prototype vector stuff */
+  using namespace Builtin;
   using namespace mpark::patterns;
   return match(func_type.identifier.name)(
     pattern("new_vec") = [&]() -> llvm::Value* {
@@ -1172,14 +1161,10 @@ llvm::Value* LLVMCodeGen::codegen_generic_call(
 
       llvm::Value* element_size = llvm::ConstantExpr::getSizeOf(el_type);
       llvm::Value* vec = ir_builder.CreateInsertValue(
-        llvm::UndefValue::get(llvm_vec_type), element_size, {0});
+        llvm::UndefValue::get(llvm_vec_type), element_size, {Vector::TYPE_SIZE});
       // start with an initial capacity of 10
       vec = ir_builder.CreateInsertValue(vec,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_context), 10), {1});
-      // length of 0
-      vec = ir_builder.CreateInsertValue(vec,
-         llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_context), 0), {2});
-
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_context), 10), {Vector::CAPACITY});
       // Don't think there's any way to get an address from a llvm::Value* :(
       llvm::Value* vec_ptr = create_entry_alloca(
         get_current_function(), llvm_vec_type, "vec_temp");
@@ -1656,7 +1641,7 @@ llvm::Value* LLVMCodeGen::index_vector(Ast_Index_Access vector_index, Scope& sco
   // Will explode if not a vector index.
   auto& vec_type = std::get<ListType>(remove_reference(vector_index.object->meta.type)->v);
   llvm::Value* vec_data_ptr = get_value_extractor(
-    *vector_index.object, scope).get_value({3}, "vec_data_ptr");
+    *vector_index.object, scope).get_value({Builtin::Vector::DATA}, "vec_data_ptr");
   llvm::Type* el_type = map_type_to_llvm(vec_type.element_type.get(), scope);
   vec_data_ptr = ir_builder.CreateBitCast(
     vec_data_ptr, llvm::PointerType::get(el_type, 0));
@@ -1672,7 +1657,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& sco
       assert(str_type.is_string_type());
       // TODO: bounds check
       llvm::Value* raw_str_pointer = get_value_extractor(
-        *index.object, scope).get_value({1}, "str_ptr");
+        *index.object, scope).get_value({Builtin::String::DATA}, "str_ptr");
       return ir_builder.CreateGEP(
         raw_str_pointer, { codegen_expression(*index.index, scope) }, "str_index");
     },
@@ -1717,8 +1702,8 @@ llvm::Value* LLVMCodeGen::create_string(
 ) {
   // size, ptr
   llvm::Value* string = ir_builder.CreateInsertValue(
-    llvm::UndefValue::get(get_string_ty(scope)), length, {0});
-  string = ir_builder.CreateInsertValue(string, raw_str_ptr, {1});
+    llvm::UndefValue::get(get_string_ty(scope)), length, {Builtin::String::LENGTH});
+  string = ir_builder.CreateInsertValue(string, raw_str_ptr, {Builtin::String::DATA});
   return string;
 }
 

@@ -1006,7 +1006,9 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
       return dereference(field_value, type);
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
-      if (std::holds_alternative<ListType>(remove_reference(index.object->meta.type)->v)) {
+      if (index.object->meta.type
+        && std::holds_alternative<ListType>(remove_reference(index.object->meta.type)->v)
+      ) {
         return index_vector(index, scope);
       } else {
         std::vector<llvm::Value*> idx_list;

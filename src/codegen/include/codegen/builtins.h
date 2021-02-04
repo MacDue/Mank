@@ -2,11 +2,13 @@
 
 namespace Builtin {
   /* Buitin functions */
-  #define GC_MALLOC                 "__mank_alloc__any"
-  #define MANK_STR_CONCAT_INTERNAL  "__mank_builtin__str_concat"
-  #define MANK_STR_CAST_INTERNAL    "__mank_builtin__str_cast"
-  #define MANK_VEC_INIT             "__mank_builtin__init_vec"
-  #define MANK_VEC_PUSH_BACK        "__mank_builtin__push_back"
+  auto constexpr
+    GC_MALLOC                =  "__mank_alloc__any",
+    MANK_STR_CONCAT_INTERNAL =  "__mank_builtin__str_concat",
+    MANK_STR_CAST_INTERNAL   =  "__mank_builtin__str_cast",
+    MANK_VEC_INIT            =  "__mank_builtin__init_vec",
+    MANK_VEC_PUSH_BACK       =  "__mank_builtin__push_back",
+    MANK_VEC_POP_BACK        =  "__mank_builtin__pop_back";
 
   namespace String {
     enum Offsets: uint {

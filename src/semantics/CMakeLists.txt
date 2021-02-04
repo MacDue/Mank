@@ -11,6 +11,7 @@ add_library(MankSemantics
   print_macro.cpp
   assert_macro.cpp
   vector_literal_macro.cpp
+  builtin_functions.cpp
 )
 
 target_link_libraries(MankSemantics

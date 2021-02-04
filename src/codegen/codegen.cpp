@@ -60,7 +60,7 @@ llvm::Function* LLVMCodeGen::get_external(
 }
 
 llvm::Function* LLVMCodeGen::get_gc_malloc() {
-  return get_external(GC_MALLOC,
+  return get_external(Builtin::GC_MALLOC,
     llvm::Type::getInt8PtrTy(llvm_context),
     { llvm::Type::getInt64Ty(llvm_context) });
 }
@@ -84,7 +84,7 @@ llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
 
 llvm::Function* LLVMCodeGen::get_str_concat_internal() {
   return get_external(
-    MANK_STR_CONCAT_INTERNAL,
+    Builtin::MANK_STR_CONCAT_INTERNAL,
     llvm::Type::getInt8PtrTy(llvm_context),
     {
       llvm::Type::getInt64Ty(llvm_context),
@@ -97,19 +97,26 @@ llvm::Function* LLVMCodeGen::get_str_concat_internal() {
 
 llvm::Function* LLVMCodeGen::get_init_vec(Scope& scope) {
   return get_external(
-    MANK_VEC_INIT,
+    Builtin::MANK_VEC_INIT,
     llvm::Type::getVoidTy(llvm_context),
     { llvm::PointerType::get(get_vector_ty(scope), 0) });
 }
 
 llvm::Function* LLVMCodeGen::get_vec_push_back(Scope& scope) {
   return get_external(
-    MANK_VEC_PUSH_BACK,
+    Builtin::MANK_VEC_PUSH_BACK,
     llvm::Type::getVoidTy(llvm_context),
     {
       llvm::PointerType::get(get_vector_ty(scope), 0),
       llvm::Type::getInt8PtrTy(llvm_context)
     });
+}
+
+llvm::Function* LLVMCodeGen::get_vec_pop_back(Scope& scope) {
+  return get_external(
+    Builtin::MANK_VEC_POP_BACK,
+    llvm::Type::getVoidTy(llvm_context),
+    { llvm::PointerType::get(get_vector_ty(scope), 0) });
 }
 
 std::pair<llvm::Value*, llvm::Value*>
@@ -148,7 +155,7 @@ llvm::Value* LLVMCodeGen::create_string_concat(
 llvm::Value* LLVMCodeGen::create_char_string_cast(llvm::Value* char_value, Scope& scope) {
   auto get_str_cast = [&]{
     return get_external(
-      MANK_STR_CAST_INTERNAL,
+      Builtin::MANK_STR_CAST_INTERNAL,
       llvm::Type::getInt8PtrTy(llvm_context),
       { llvm::Type::getInt8Ty(llvm_context) });
   };
@@ -1205,6 +1212,11 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
       llvm::Function* vec_push_back = get_vec_push_back(scope);
       return ir_builder.CreateCall(vec_push_back,
         { address_of(*vec, scope), to_insert_ptr });
+    },
+    pattern("pop_back") = [&]() -> llvm::Value* {
+      auto vec = call.arguments.at(0);
+      llvm::Function* vec_pop_back = get_vec_pop_back(scope);
+      return ir_builder.CreateCall(vec_pop_back, { address_of(*vec, scope) });
     },
     pattern(_) = []() -> llvm::Value* {
       // llvm create_entry_alloca()

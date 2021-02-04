@@ -167,7 +167,7 @@ static std::pair<Type_Ptr,int> get_field_type(
         return field_type;
       },
       // FIXME: Hardcoded .length
-      pattern(as<FixedSizeArrayType>(_)) = [&]{
+      pattern(anyof(as<FixedSizeArrayType>(_), as<ListType>(_))) = [&]{
         WHEN(field.name == "length") {
           return PrimativeType::int_ty();
         };

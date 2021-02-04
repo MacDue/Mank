@@ -16,6 +16,7 @@
 #include "macros/curry_macro.h"
 #include "macros/print_macro.h"
 #include "macros/assert_macro.h"
+#include "macros/vector_literal_macro.h"
 
 Semantics::Semantics() {
   static bool macros_loaded = false;
@@ -27,6 +28,7 @@ Semantics::Semantics() {
     Macros::register_macro("eprint", Macros::builtin_print);
     Macros::register_macro("eprintln", Macros::builtin_print);
     Macros::register_macro("assert", Macros::builtin_assert);
+    Macros::register_macro("vec", Macros::builtin_vec_literal);
     macros_loaded = true;
   }
 }
@@ -34,6 +36,10 @@ Semantics::Semantics() {
 Symbol* Semantics::emit_warning_if_shadows(
   Ast_Identifier& ident, Scope& scope, std::string warning
 ) {
+  if (ident.name.at(0) == '^') {
+    // HACK: Don't warn for things we add in macros & such by prefixing with '^'.
+    return nullptr;
+  }
   Symbol* pior_symbol = scope.lookup_first_name(ident);
   if (pior_symbol) {
     emit_warning_at(ident, warning);

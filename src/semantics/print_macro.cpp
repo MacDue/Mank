@@ -1,4 +1,3 @@
-#include <iostream>
 #include <mpark/patterns.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 

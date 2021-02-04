@@ -10,6 +10,7 @@ add_library(MankSemantics
   type_infer.cpp
   print_macro.cpp
   assert_macro.cpp
+  vector_literal_macro.cpp
 )
 
 target_link_libraries(MankSemantics

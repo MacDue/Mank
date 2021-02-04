@@ -232,6 +232,14 @@ inline Expr_Ptr make_macro_ident(std::string name) {
   return to_expr_ptr(ident);
 }
 
+template <typename... T>
+Expr_Ptr make_sp_ident(std::string name, T && ... types) {
+  Ast_Specialized_Identifier ident;
+  ident.name = name;
+  ident.specializations = std::vector<Type_Ptr> { types... };
+  return to_expr_ptr(ident);
+}
+
 /* Calls */
 
 template <typename... TArgs>

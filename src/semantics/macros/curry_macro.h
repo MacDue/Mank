@@ -1,3 +1,4 @@
+#pragma once
 #include "sema/macros.h"
 
 namespace Macros {

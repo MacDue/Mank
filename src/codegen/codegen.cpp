@@ -1155,7 +1155,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_If_Expr& if_expr, Scope& scope,
   return nullptr;
 }
 
-llvm::Value* LLVMCodeGen::codegen_generic_call(
+llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
   Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope
 ) {
   /* Pretty much just some prototype vector stuff */
@@ -1189,6 +1189,7 @@ llvm::Value* LLVMCodeGen::codegen_generic_call(
       auto element_to_insert = call.arguments.at(1);
 
       llvm::Value* to_insert_ptr = nullptr;
+      // Passed as a pointer (so must have an address)
       if (element_to_insert->is_lvalue()) {
         to_insert_ptr = address_of(*element_to_insert, scope);
       } else {
@@ -1207,7 +1208,7 @@ llvm::Value* LLVMCodeGen::codegen_generic_call(
     },
     pattern(_) = []() -> llvm::Value* {
       // llvm create_entry_alloca()
-      assert(false && "todo! Only hack special case generics done");
+      assert(false && "todo! Only hack special case vector generics done");
       return nullptr;
     }
   );
@@ -1223,7 +1224,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
   if (!lambda_type) {
     function_type = std::get<Ast_Function_Declaration>(callee_type->v).get_raw_self();
     if (function_type->generic) {
-      return codegen_generic_call(call, *function_type, scope);
+      /*
+        We special case the vector stuff and handle it here.
+        Vectors are fake generic as they're type erased at runtime.
+      */
+      return codegen_builtin_vector_calls(call, *function_type, scope);
     }
     callee = this->get_function(*function_type);
   } else {

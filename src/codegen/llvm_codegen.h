@@ -262,7 +262,7 @@ public:
 
   Expr_Ptr mank_builtin_array_set(Type_Ptr array_type, Expr_Ptr initializer, Scope& scope);
 
-  llvm::Value* codegen_generic_call(
+  llvm::Value* codegen_builtin_vector_calls(
     Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope);
 
   /* Expressions */

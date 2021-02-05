@@ -8,7 +8,8 @@ namespace Builtin {
     MANK_STR_CAST_INTERNAL   =  "__mank_builtin__str_cast",
     MANK_VEC_INIT            =  "__mank_builtin__init_vec",
     MANK_VEC_PUSH_BACK       =  "__mank_builtin__push_back",
-    MANK_VEC_POP_BACK        =  "__mank_builtin__pop_back";
+    MANK_VEC_POP_BACK        =  "__mank_builtin__pop_back",
+    MANK_VEC_FILL            =  "__mank_builtin__vector_fill";
 
   namespace String {
     enum Offsets: uint {

@@ -112,7 +112,10 @@ void add_builtins_to_scope(Scope& scope, AstContext& ctx, AstBuilder& builder) {
     make_builtin_func(ctx, "new_vec", {}, vec_type, false, { vec_element_type }),
     make_builtin_func(ctx, "push_back", builder.make_args(vec_ref,
       builder.make_argument(vec_element_type, "e")), Type::void_ty(), false, { vec_element_type }),
-    make_builtin_func(ctx, "pop_back", builder.make_args(vec_ref), Type::void_ty(), false, { vec_element_type })
+    make_builtin_func(ctx, "pop_back", builder.make_args(vec_ref), Type::void_ty(), false, { vec_element_type }),
+    make_builtin_func(ctx, "fill_vec", builder.make_args(vec_ref,
+      builder.make_argument(vec_element_type, "e"),
+      builder.make_argument(PrimativeType::int_ty(), "c")), Type::void_ty(), false, { vec_element_type })
   };
 
   for (auto builtin: builtin_funcs) {

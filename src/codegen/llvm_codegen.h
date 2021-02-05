@@ -135,6 +135,7 @@ class LLVMCodeGen: public CodeGenerator {
   llvm::Function* get_init_vec(Scope& scope);
   llvm::Function* get_vec_push_back(Scope& scope);
   llvm::Function* get_vec_pop_back(Scope& scope);
+  llvm::Function* get_vec_fill(Scope& scope);
 
   llvm::Type* get_string_ty(Scope& scope);
 

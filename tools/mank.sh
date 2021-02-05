@@ -70,13 +70,37 @@ void __mank_builtin__init_vec(struct __mank_vec* vec) {
   vec->length = 0;
 }
 
+static inline void resize_vector(struct __mank_vec* vec) {
+  vec->data = GC_REALLOC(vec->data, vec->capacity * vec->type_size);
+}
+
 void __mank_builtin__push_back(struct __mank_vec* vec, void* new_element) {
   vec->length += 1;
   if (vec->length > vec->capacity) {
     vec->capacity *= 2;
-    vec->data = GC_REALLOC(vec->data, vec->capacity * vec->type_size);
+    resize_vector(vec);
   }
   memcpy(vec->data + (vec->length - 1) * vec->type_size, new_element, vec->type_size);
+}
+
+void __mank_builtin__pop_back(struct __mank_vec* vec) {
+  if (vec->length <= 0) {
+    return;
+  }
+  vec->length -= 1; // good enough
+}
+
+void __mank_builtin__vector_fill(struct __mank_vec* vec, void* fill, size_t count) {
+  if (count > vec->capacity) {
+    vec->capacity = count;
+    resize_vector(vec);
+  }
+  vec->length = count;
+  void* el = vec->data;
+  for (size_t i = 0; i < count; i++) {
+    memcpy(el, fill, vec->type_size);
+    el += vec->type_size;
+  }
 }
 
 int main(int argc, char* argv[]) {

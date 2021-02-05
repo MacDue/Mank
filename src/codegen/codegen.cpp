@@ -119,6 +119,18 @@ llvm::Function* LLVMCodeGen::get_vec_pop_back(Scope& scope) {
     { llvm::PointerType::get(get_vector_ty(scope), 0) });
 }
 
+llvm::Function* LLVMCodeGen::get_vec_fill(Scope& scope) {
+  return get_external(
+    Builtin::MANK_VEC_FILL,
+    llvm::Type::getVoidTy(llvm_context),
+    {
+      llvm::PointerType::get(get_vector_ty(scope), 0),
+      llvm::Type::getInt8PtrTy(llvm_context),
+      llvm::Type::getInt64Ty(llvm_context)
+    });
+}
+
+
 std::pair<llvm::Value*, llvm::Value*>
 LLVMCodeGen::extract_string_info(Ast_Expression& expr, Scope& scope) {
   auto str_type = std::get_if<PrimativeType>(&expr.meta.type->v);
@@ -1168,6 +1180,25 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
   /* Pretty much just some prototype vector stuff */
   using namespace Builtin;
   using namespace mpark::patterns;
+
+  auto expr_to_void_pointer = [&](Expr_Ptr expr, auto name) {
+    llvm::Value* expr_ptr = nullptr;
+    // Passed as a pointer (so must have an address)
+    if (expr->is_lvalue()) {
+      expr_ptr = address_of(*expr, scope);
+    } else {
+      expr_ptr = create_entry_alloca(
+        get_current_function(), scope, expr->meta.type.get(), name);
+      ir_builder.CreateStore(
+        codegen_expression(*expr, scope), expr_ptr);
+    }
+
+    expr_ptr = ir_builder.CreateBitCast(
+      expr_ptr, llvm::Type::getInt8PtrTy(llvm_context));
+
+    return expr_ptr;
+  };
+
   return match(func_type.identifier.name)(
     pattern("new_vec") = [&]() -> llvm::Value* {
       auto& vec_type = std::get<ListType>(call.get_meta().type->v);
@@ -1195,20 +1226,7 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
       auto vec = call.arguments.at(0);
       auto element_to_insert = call.arguments.at(1);
 
-      llvm::Value* to_insert_ptr = nullptr;
-      // Passed as a pointer (so must have an address)
-      if (element_to_insert->is_lvalue()) {
-        to_insert_ptr = address_of(*element_to_insert, scope);
-      } else {
-        to_insert_ptr = create_entry_alloca(
-          get_current_function(), scope, element_to_insert->meta.type.get(), "to_insert");
-        ir_builder.CreateStore(
-          codegen_expression(*element_to_insert, scope), to_insert_ptr);
-      }
-
-      to_insert_ptr = ir_builder.CreateBitCast(
-        to_insert_ptr, llvm::Type::getInt8PtrTy(llvm_context));
-
+      llvm::Value* to_insert_ptr = expr_to_void_pointer(element_to_insert, "to_insert");
       llvm::Function* vec_push_back = get_vec_push_back(scope);
       return ir_builder.CreateCall(vec_push_back,
         { address_of(*vec, scope), to_insert_ptr });
@@ -1217,6 +1235,20 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
       auto vec = call.arguments.at(0);
       llvm::Function* vec_pop_back = get_vec_pop_back(scope);
       return ir_builder.CreateCall(vec_pop_back, { address_of(*vec, scope) });
+    },
+    pattern("fill_vec") = [&]() -> llvm::Value* {
+      auto vec = call.arguments.at(0);
+      auto fill = call.arguments.at(1);
+      auto count = call.arguments.at(2);
+
+      llvm::Value* fill_ptr = expr_to_void_pointer(fill, "fill");
+      llvm::Value* count_value = codegen_expression(*count, scope);
+      count_value = ir_builder.CreateIntCast(
+        count_value, llvm::Type::getInt64Ty(llvm_context), false);
+
+      llvm::Function* vec_fill = get_vec_fill(scope);
+      return ir_builder.CreateCall(vec_fill,
+        { address_of(*vec, scope), fill_ptr, count_value});
     },
     pattern(_) = []() -> llvm::Value* {
       // llvm create_entry_alloca()

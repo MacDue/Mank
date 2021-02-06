@@ -180,3 +180,9 @@ Type_Ptr TypeCastConstraint::get(AstContext& ctx, Ast_As_Cast& as_cast) {
   cc.as_cast = &as_cast;
   return ctx.new_type(cc);
 }
+
+Type_Ptr LValueConstraint::get(AstContext& ctx, Expr_Ptr expected_lvalue) {
+  LValueConstraint lc;
+  lc.expected_lvalue = expected_lvalue;
+  return ctx.new_type(lc);
+}

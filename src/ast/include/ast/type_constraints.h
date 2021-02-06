@@ -63,3 +63,9 @@ DEF_TYPE(TypeCastConstraint) {
 
   static Type_Ptr get(AstContext& ctx, Ast_As_Cast& as_cast);
 };
+
+DEF_TYPE(LValueConstraint) {
+  Expr_Ptr expected_lvalue;
+
+  static Type_Ptr get(AstContext& ctx, Expr_Ptr expected_lvalue);
+};

@@ -22,7 +22,8 @@ bool match_types(Type_Ptr a, Type_Ptr b,
 
 inline bool is_tvar(Type_Ptr type) {
   if (!type) return false;
-  return std::holds_alternative<TypeVar>(type->v);
+  // Should ref TVar = TVar????
+  return std::holds_alternative<TypeVar>(remove_reference(type)->v);
 }
 
 template <typename T>

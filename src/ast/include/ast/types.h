@@ -56,7 +56,8 @@ using Type_Type = std::variant<
   TypeCastConstraint,
   CellType,
   GenericType,
-  ListType>;
+  ListType,
+  LValueConstraint>;
 
 class Type {
   Type(Type_Type v)

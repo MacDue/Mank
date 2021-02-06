@@ -125,6 +125,7 @@ bool Infer::substitute(
       type_updated |= substitute(propety_constraint.type, tvar, replacement);
       return updated(propety_constraint);
     },
+    pattern(as<LValueConstraint>(_)) = []{ return false; }, // types not important
     pattern(TYPE_LIST) = [&](auto array_type) {
       type_updated |= substitute(array_type.element_type, tvar, replacement);
       return updated(array_type);
@@ -297,6 +298,12 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
       WHEN(a1.size == a2.size) {
         Constraint ec{a1.element_type, a2.element_type};
         return try_unify_sub_constraints(c, { ec });
+      };
+    },
+    pattern(as<LValueConstraint>(arg), _) = [&](auto& lc){
+      WHEN(lc.expected_lvalue->is_lvalue()) {
+        /* life is good */
+        return Substitution{};
       };
     },
     pattern(as<ListType>(arg), as<ListType>(arg)) = [&](auto& v1, auto& v2) {
@@ -489,6 +496,17 @@ bool Infer::match_or_constrain_types_at(
       type_to_string(t1.get()), type_to_string(t2.get()));
   }
   return true;
+}
+
+void Infer::assert_lvalue(Expr_Ptr expr, char const* error_template) {
+  if (is_tvar(expr->meta.type)) {
+    auto lc = LValueConstraint::get(ctx, expr);
+    add_constraint(AstHelper::extract_location(expr), lc, expr->meta.type, error_template);
+  } else {
+    if (!expr->is_lvalue()) {
+      throw_sema_error_at(expr, error_template);
+    }
+  }
 }
 
 void Infer::generate_call_constraints(Type_Ptr& callee_type, Ast_Call& call) {

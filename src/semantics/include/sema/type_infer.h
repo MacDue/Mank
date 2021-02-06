@@ -112,6 +112,8 @@ public:
       AstHelper::extract_location(ast), t1, t2, error_template, note_spot);
   }
 
+  void assert_lvalue(Expr_Ptr expr, char const * error_template);
+
   using ConstraintSet = std::vector<Constraint>;
   using Substitution = std::map<TypeVar, Type_Ptr>;
 

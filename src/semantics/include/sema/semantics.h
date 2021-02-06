@@ -61,13 +61,13 @@ private:
     SourceLocation bind_location,
     Type_Ptr type,
     Type_Ptr to_bind,
-    Ast_Expression const * expression,
+    Expr_Ptr const expression,
     Infer::ConstraintOrigin = std::nullopt);
 
   bool assert_valid_binding(
     Ast_Identifier const & lvalue,
     Type_Ptr type,
-    Ast_Expression const * expression);
+    Expr_Ptr const expression);
 
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);

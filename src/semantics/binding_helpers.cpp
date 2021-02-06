@@ -14,7 +14,7 @@ bool Semantics::assert_valid_binding(
   SourceLocation bind_location,
   Type_Ptr type,
   Type_Ptr to_bind,
-  Ast_Expression const * expression,
+  Expr_Ptr const expression,
   Infer::ConstraintOrigin note_spot
 ) {
   if (expression) {
@@ -25,10 +25,8 @@ bool Semantics::assert_valid_binding(
   if (is_reference_type(type)) {
     if (!to_bind) {
       throw_sema_error_at(lvalue, "reference must be initialized");
-    } else if (!expression->is_lvalue()) {
-      // References can only be bound to lvalues (that have addresses)
-      throw_sema_error_at(*expression, "cannot bind rvalue to lvalue reference");
     }
+    infer->assert_lvalue(expression, "cannot bind rvalue to lvalue reference");
   }
 
   return true;
@@ -37,7 +35,7 @@ bool Semantics::assert_valid_binding(
 bool Semantics::assert_valid_binding(
   Ast_Identifier const & lvalue,
   Type_Ptr type,
-  Ast_Expression const * expression
+  Expr_Ptr const expression
 ) {
   return assert_valid_binding(lvalue,
     expression

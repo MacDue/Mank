@@ -249,7 +249,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr && !body_type->is_void()) {
-    assert_valid_binding({}, expected_return, final_expr.get());
+    assert_valid_binding({}, expected_return, final_expr);
     /* Desugar implict return for codegen + return checking ease */
     func.body.has_final_expr = false;
     Ast_Return_Statement implicit_return;
@@ -271,7 +271,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       Ast_Return_Statement void_return;
       void_return.expression = make_void_expr(*ctx, func.location);
       void_return.location = AstHelper::extract_location(void_return.expression);
-      assert_valid_binding({}, expected_return, void_return.expression.get());
+      assert_valid_binding({}, expected_return, void_return.expression);
       func.body.statements.emplace_back(ctx->new_stmt(void_return));
       func.body.has_final_expr = false;
       func.return_type = Type::void_ty(); // quick fix
@@ -361,10 +361,7 @@ void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
   // is not used it's justed used as a (nested) list of lvalue idents.
   // (the types of the contained lvaues is what matters)
   auto target_type = analyse_expression(*assign.target, scope);
-  if (!assign.target->is_lvalue()) {
-    throw_sema_error_at(assign.target,
-      "target is not an lvalue");
-  }
+  infer->assert_lvalue(assign.target, "target is not an lvalue");
 
   auto expr_type = analyse_expression(*assign.expression, scope);
 
@@ -411,7 +408,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       if (expr_type->is_void() && !expected_return->is_void() && !is_tvar(expected_return)) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
-      assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get());
+      assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression);
     },
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto& var_decl) {
       if (var_decl.type) {
@@ -433,7 +430,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       } else {
         throw_sema_error_at(var_decl, "uninitialized variable declaration");
       }
-      assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer.get());
+      assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer);
       emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
       scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
@@ -533,7 +530,7 @@ void Semantics::check_tuple_bindings(
           assert_valid_binding(
             bind.name,
             bind.name.location,
-            bind.type, el_type, init.get());
+            bind.type, el_type, init);
             emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
             scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
         },
@@ -575,7 +572,7 @@ void Semantics::check_pod_bindings(
         assert_valid_binding(
           field_bind.field,
           field_bind.field.location,
-          bind.type, field_type, init.get());
+          bind.type, field_type, init);
         field_bind.bound_name = (!bind.name.empty() ? bind.name : field_bind.field).get_raw_self();
         emit_warning_if_shadows(*field_bind.bound_name, scope, "pod binding shadows existing symbol");
         scope.add(Symbol(*field_bind.bound_name, bind.type, Symbol::LOCAL));
@@ -813,7 +810,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         auto [expected_type, field_index] = pod_info.get_field_or_fail(init.field);
         auto init_type = analyse_expression(*init.initializer, scope);
         assert_valid_binding({}, AstHelper::extract_location(init.initializer),
-           expected_type, init_type, init.initializer.get());
+           expected_type, init_type, init.initializer);
 
         init.field_index = field_index;
         seen_fields.insert(init.field.name);
@@ -905,9 +902,7 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
   auto operand_type = remove_reference(analyse_expression(*unary.operand, scope));
 
   if (unary.operation == Ast_Operator::REF) {
-    if (!operand_type || !unary.operand->is_lvalue()) {
-      throw_sema_error_at(unary.operand, "cannot take reference to non-lvalue expression");
-    }
+    infer->assert_lvalue(unary.operand, "cannot take reference to non-lvalue expression");
     unary.get_meta().value_type = Expression_Meta::LVALUE;
     return builder->make_reference(operand_type);
   }
@@ -1064,12 +1059,12 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
       }
 
       for (uint arg_idx = 0; arg_idx < expected_arg_count; arg_idx++) {
-        auto& argument = *call.arguments.at(arg_idx);
-        (void) analyse_expression(argument, scope);
+        auto argument = call.arguments.at(arg_idx);
+        (void) analyse_expression(*argument, scope);
 
         if constexpr (!is_lambda) {
           auto& expected = function_type.arguments.at(arg_idx);
-          assert_valid_binding(expected.name, expected.type, &argument);
+          assert_valid_binding(expected.name, expected.type, argument);
         } else {
           // Lambda args are not named (will need a better error reporting method...)
           auto& expected = function_type.argument_types.at(arg_idx);
@@ -1091,8 +1086,8 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
           assert_valid_binding(
             called_function_ident ? *called_function_ident : lvalue,
             lvalue.location,
-            expected, argument.meta.type,
-            &argument, infer_note);
+            expected, argument->meta.type,
+            argument, infer_note);
         }
       }
 

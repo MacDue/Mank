@@ -247,6 +247,8 @@ public:
   void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
   void initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope);
 
+  llvm::Value* get_vector_length(llvm::Value* data_ptr);
+
   llvm::Value* get_special_field_value(Type_Ptr agg_type, Ast_Expression& agg, Scope& scope);
 
   llvm::Value* dereference(llvm::Value* value, Type_Ptr type);

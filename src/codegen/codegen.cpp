@@ -99,7 +99,10 @@ llvm::Function* LLVMCodeGen::get_init_vec(Scope& scope) {
   return get_external(
     Builtin::MANK_VEC_INIT,
     llvm::Type::getVoidTy(llvm_context),
-    { llvm::PointerType::get(get_vector_ty(scope), 0) });
+    {
+      llvm::PointerType::get(get_vector_ty(scope), 0),
+      llvm::Type::getInt64Ty(llvm_context)
+    });
 }
 
 llvm::Function* LLVMCodeGen::get_vec_push_back(Scope& scope) {
@@ -293,12 +296,15 @@ llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, S
 
 llvm::Type* LLVMCodeGen::get_vector_ty(Scope& scope) {
   /*
-    struct __mank_vec {
+    struct __mank_vec_header {
       size_t
         type_size,
         capacity,
         length;
-      void* data;
+    };
+
+    struct __mank_vec {
+      void* data; // negative indexed header
     };
   */
 
@@ -311,12 +317,12 @@ llvm::Type* LLVMCodeGen::get_vector_ty(Scope& scope) {
       SymbolName(MANK_VEC_BULTIN), nullptr, Symbol::TYPE));
   }();
 
-  llvm::Type* size_t_llvm = llvm::Type::getInt64Ty(llvm_context);
+  // llvm::Type* size_t_llvm = llvm::Type::getInt64Ty(llvm_context);
   if (!sym.meta) {
     llvm::Type* vec_type = llvm::StructType::create(llvm_context, {
-      size_t_llvm, /* type_size */
-      size_t_llvm, /* capacity */
-      size_t_llvm, /* length */
+      // size_t_llvm, /* type_size */
+      // size_t_llvm, /* capacity */
+      // size_t_llvm, /* length */
       llvm::Type::getInt8PtrTy(llvm_context) /* data */
     }, MANK_VEC_BULTIN);
     sym.meta = std::make_shared<SymbolMetaCompoundType>(vec_type);
@@ -935,8 +941,9 @@ void LLVMCodeGen::codegen_pod_bindings(
       pattern(anyof(as<PrimativeType>(arg), as<ListType>(arg))) = [&](auto& vec_like){
         using T = std::decay_t<decltype(vec_like)>;
         uint length_offset;
-        if constexpr (std::is_same_v<T, ListType>) {
-          length_offset = Builtin::Vector::LENGTH;
+        auto constexpr is_vec = std::is_same_v<T, ListType>;
+        if constexpr (is_vec) {
+          length_offset = Builtin::Vector::DATA;
         } else {
           // strings
           assert(vec_like.is_string_type());
@@ -945,7 +952,9 @@ void LLVMCodeGen::codegen_pod_bindings(
         idxs.back() = length_offset;
         // Type passed to get_bind() does not matter (just needs to not be a ref)
         value_override = pod.get_bind(idxs, PrimativeType::int_ty(), "length");
-        value_override = fix_string_length(value_override); // also works for vectors
+        value_override = is_vec
+          ? get_vector_length(value_override)
+          : fix_string_length(value_override);
       }, pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
         value_override = create_llvm_idx(array_type.size);
       }
@@ -1046,6 +1055,7 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
       return address_of(*ref_unary.operand, scope);
     },
     pattern(as<Ast_Spawn>(arg)) = [&](auto& spawn) -> llvm::Value* {
+      (void) spawn;
       return nullptr; // todo
     },
     pattern(_) = []() -> llvm::Value* {
@@ -1206,20 +1216,12 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
       llvm::Type* el_type = map_type_to_llvm(vec_type.element_type.get(), scope);
 
       llvm::Value* element_size = llvm::ConstantExpr::getSizeOf(el_type);
-      llvm::Value* vec = ir_builder.CreateInsertValue(
-        llvm::UndefValue::get(llvm_vec_type), element_size, {Vector::TYPE_SIZE});
-      // start with an initial capacity of 10
-      vec = ir_builder.CreateInsertValue(vec,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_context), 10), {Vector::CAPACITY});
-      // Don't think there's any way to get an address from a llvm::Value* :(
       llvm::Value* vec_ptr = create_entry_alloca(
         get_current_function(), llvm_vec_type, "vec_temp");
-      ir_builder.CreateStore(vec, vec_ptr);
 
       llvm::Function* vec_init = get_init_vec(scope);
-      ir_builder.CreateCall(vec_init, { vec_ptr });
+      ir_builder.CreateCall(vec_init, { vec_ptr, element_size });
 
-      // dumb dumb dumb
       return ir_builder.CreateLoad(vec_ptr, "new_vec");
     },
     pattern("push_back") = [&]() -> llvm::Value* {
@@ -1584,6 +1586,15 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
   return llvm_idx_list;
 }
 
+llvm::Value* LLVMCodeGen::get_vector_length(llvm::Value* data_ptr) {
+  data_ptr = ir_builder.CreateBitCast(data_ptr,
+    llvm::Type::getInt64PtrTy(llvm_context));
+  llvm::Value* length_ptr = ir_builder.CreateConstInBoundsGEP1_32(
+    llvm::Type::getInt64Ty(llvm_context), data_ptr, static_cast<uint>(Builtin::Vector::LENGTH));
+  llvm::Value* vec_length = ir_builder.CreateLoad(length_ptr, "length");
+  return fix_string_length(vec_length);
+}
+
 llvm::Value* LLVMCodeGen::get_special_field_value(
   Type_Ptr agg_type, Ast_Expression& agg, Scope& scope
 ) {
@@ -1597,9 +1608,9 @@ llvm::Value* LLVMCodeGen::get_special_field_value(
       return fix_string_length(str_length);
     },
     pattern(as<ListType>(_)) = [&]() -> llvm::Value* {
-      llvm::Value* vec_length = get_value_extractor(agg, scope)
-        .get_value({Builtin::Vector::LENGTH}, "length");
-      return fix_string_length(vec_length);
+      llvm::Value* vec_data = get_value_extractor(agg, scope)
+        .get_value({static_cast<uint>(Builtin::Vector::DATA)}, "data");
+      return get_vector_length(vec_data);
     },
     pattern(_) = []() -> llvm::Value* { return nullptr; });
 }

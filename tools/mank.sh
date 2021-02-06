@@ -19,8 +19,9 @@ cat << EOF > ./main.c
 #include <gc/gc.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
 
-extern void __mank__main(size_t, size_t, size_t, void*);
+extern void __mank__main(void*);
 
 int stderr_putchar(char c) {
   if (write(STDERR_FILENO, &c, 1) == -1) {
@@ -51,13 +52,16 @@ char* __mank_builtin__str_cast(char c) {
   return new_str;
 }
 
-// Pretty much 32 bytes
-struct __mank_vec {
+// Pretty much 24 bytes
+struct __mank_vec_header {
   size_t
     type_size,
     capacity,
     length;
-  void* data;
+};
+
+struct __mank_vec {
+  void* data; //-3 <> -2<> -1<> 0 1 2
 };
 
 struct __mank_str {
@@ -65,60 +69,74 @@ struct __mank_str {
   char* data;
 };
 
-void __mank_builtin__init_vec(struct __mank_vec* vec) {
-  vec->data = __mank_alloc__any(vec->type_size * vec->capacity);
-  vec->length = 0;
+#define MANK_VEC_INIT_CAPACITY 10
+
+inline static struct __mank_vec_header* get_vec_header(struct __mank_vec vec, bool offset) {
+  if (offset) {
+    vec.data -= sizeof(struct __mank_vec_header);
+  }
+  struct __mank_vec_header* header = (struct __mank_vec_header*)(vec.data);
 }
 
-static inline void resize_vector(struct __mank_vec* vec) {
-  vec->data = GC_REALLOC(vec->data, vec->capacity * vec->type_size);
+void __mank_builtin__init_vec(struct __mank_vec* vec, size_t type_size) {
+  vec->data = __mank_alloc__any(sizeof(struct __mank_vec_header) + type_size * MANK_VEC_INIT_CAPACITY);
+  struct __mank_vec_header* header = get_vec_header(*vec, false);
+  header->type_size = type_size;
+  header->capacity = MANK_VEC_INIT_CAPACITY;
+  header->length = 0;
+  vec->data += sizeof(struct __mank_vec_header);
+}
+
+static inline struct __mank_vec_header* resize_vector(struct __mank_vec* vec) {
+  struct __mank_vec_header* header = get_vec_header(*vec, true);
+  void* data = vec->data - sizeof(struct __mank_vec_header);
+  data = GC_REALLOC(data, sizeof(struct __mank_vec_header) + header->capacity * header->type_size);
+  vec->data = data + sizeof(struct __mank_vec_header);
+  return get_vec_header(*vec, true);
 }
 
 void __mank_builtin__push_back(struct __mank_vec* vec, void* new_element) {
-  vec->length += 1;
-  if (vec->length > vec->capacity) {
-    vec->capacity *= 2;
-    resize_vector(vec);
+  struct __mank_vec_header* header = get_vec_header(*vec, true);
+  header->length += 1;
+  if (header->length > header->capacity) {
+    header->capacity *= 2;
+    header = resize_vector(vec);
   }
-  memcpy(vec->data + (vec->length - 1) * vec->type_size, new_element, vec->type_size);
+  memcpy(vec->data + (header->length - 1) * header->type_size, new_element, header->type_size);
 }
 
 void __mank_builtin__pop_back(struct __mank_vec* vec) {
-  if (vec->length <= 0) {
+  struct __mank_vec_header* header = get_vec_header(*vec, true);
+  if (header->length <= 0) {
     return;
   }
-  vec->length -= 1; // good enough
+  header->length -= 1; // good enough
 }
 
 void __mank_builtin__vector_fill(struct __mank_vec* vec, void* fill, size_t count) {
-  if (count > vec->capacity) {
-    vec->capacity = count;
-    resize_vector(vec);
+  struct __mank_vec_header* header = get_vec_header(*vec, true);
+  if (count > header->capacity) {
+    header->capacity = count;
+    header = resize_vector(vec);
   }
-  vec->length = count;
+  header->length = count;
   void* el = vec->data;
   for (size_t i = 0; i < count; i++) {
-    memcpy(el, fill, vec->type_size);
-    el += vec->type_size;
+    memcpy(el, fill, header->type_size);
+    el += header->type_size;
   }
 }
 
 int main(int argc, char* argv[]) {
   struct __mank_vec mank_args;
-  mank_args.type_size = sizeof(struct __mank_str);
-  mank_args.capacity = 10;
-  __mank_builtin__init_vec(&mank_args);
+  __mank_builtin__init_vec(&mank_args, sizeof(struct __mank_str));
   for (size_t i = 0; i < argc; i++) {
     char* raw_str = argv[i];
     struct __mank_str str = { .length = strlen(raw_str), .data = raw_str };
     __mank_builtin__push_back(&mank_args, &str);
   }
   // LLVM codegens passing struct by value as passing as a bunch of params
-  __mank__main(
-    mank_args.type_size,
-    mank_args.capacity,
-    mank_args.length,
-    mank_args.data);
+  __mank__main(mank_args.data);
 }
 EOF
 

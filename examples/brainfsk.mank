@@ -1,4 +1,3 @@
-
 pod ProgramState {
   cells: char[],
   current_cell: i32

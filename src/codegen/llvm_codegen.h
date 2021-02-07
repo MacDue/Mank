@@ -132,6 +132,11 @@ class LLVMCodeGen: public CodeGenerator {
   llvm::Function* get_gc_malloc();
   llvm::Function* get_str_concat_internal();
 
+  llvm::Function* get_init_vec(Scope& scope);
+  llvm::Function* get_vec_push_back(Scope& scope);
+  llvm::Function* get_vec_pop_back(Scope& scope);
+  llvm::Function* get_vec_fill(Scope& scope);
+
   llvm::Type* get_string_ty(Scope& scope);
 
   llvm::Value* create_string_concat(
@@ -179,6 +184,8 @@ public:
   /* Types */
   std::vector<llvm::Type*> map_arg_types_to_llvm(
     std::vector<Ast_Argument> const & args, Scope& scope);
+
+  llvm::Type* get_vector_ty(Scope& scope);
 
   llvm::Type* map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope);
   llvm::Type* map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope);
@@ -240,6 +247,8 @@ public:
   void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
   void initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope);
 
+  llvm::Value* get_vector_length(llvm::Value* data_ptr);
+
   llvm::Value* get_special_field_value(Type_Ptr agg_type, Ast_Expression& agg, Scope& scope);
 
   llvm::Value* dereference(llvm::Value* value, Type_Ptr type);
@@ -249,11 +258,16 @@ public:
   llvm::Value* create_lambda(llvm::Type* lambda_type, llvm::Function* body, llvm::Value* env_ptr);
   llvm::Value* create_string(llvm::Value* raw_str_ptr, llvm::Value* length, Scope& scope);
 
+  llvm::Value* index_vector(Ast_Index_Access vector_index, Scope& scope);
+
   llvm::Value* do_cast(llvm::Value* value, Type_Ptr source_type, Type_Ptr target_type, Scope& scope);
 
   Expr_Ptr simplify_short_circuit(Ast_Binary_Operation& short_circuit);
 
   Expr_Ptr mank_builtin_array_set(Type_Ptr array_type, Expr_Ptr initializer, Scope& scope);
+
+  llvm::Value* codegen_builtin_vector_calls(
+    Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);
@@ -276,6 +290,11 @@ public:
   inline llvm::Value* codegen_expression(Ast_Macro_Identifier& macro, Scope& scope) {
     (void) macro; (void) scope;
     assert(false && "??? there should not be any macros left at this stage!");
+  }
+
+  inline llvm::Value* codegen_expression(Ast_Specialized_Identifier& special_ident, Scope& scope) {
+    (void) special_ident; (void) scope;
+    assert(false && "??? don't think special idents need codegen!");
   }
 
 public:

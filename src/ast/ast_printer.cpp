@@ -27,9 +27,16 @@ void AstPrinter::print_file(Ast_File& file) {
   }
 }
 
-void AstPrinter::print_args(std::vector<Ast_Argument> args) {
+void AstPrinter::print_args(std::vector<Ast_Argument> const & args) {
   for (auto& arg: args) {
     indent(); putf(" {} : {}", arg.name.name, type_to_string(arg.type));
+  }
+}
+
+void AstPrinter::print_types(std::vector<Type_Ptr> const & types) {
+  for (auto type: types) {
+    indent();
+    putf("{}", type_to_string(type));
   }
 }
 
@@ -343,6 +350,10 @@ void AstPrinter::print_expr(Ast_Tuple_Literal& tuple) {
 void AstPrinter::print_expr(Ast_Pod_Literal& pod) {
   putf("* Pod literal");
   putf("- Pod: {}", type_to_string(pod.pod));
+  if (pod.specializations.size() > 0) {
+    putf("- Speilizations:");
+    self->print_types(pod.specializations);
+  }
   for (auto field: pod.fields) {
     indent();
     putf(".{}:", field.field.name);
@@ -369,4 +380,11 @@ void AstPrinter::print_expr(Ast_Spawn& spawn) {
   putf("* Spawn");
   putf("- Initializer:");
   self->print_expr(*spawn.initializer);
+}
+
+void AstPrinter::print_expr(Ast_Specialized_Identifier& special_ident) {
+  putf("* Specialized identifier");
+  putf("- {}", special_ident.name);
+  putf("- Types:");
+  self->print_types(special_ident.specializations);
 }

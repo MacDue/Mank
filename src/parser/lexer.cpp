@@ -221,6 +221,7 @@ void Lexer::next_token() {
     || match("[", TokenType::LEFT_SQUARE_BRACKET)
     || match("]", TokenType::RIGHT_SQUARE_BRACKET)
     || match("=", TokenType::ASSIGN)
+    || match("@", TokenType::AT)
     || match("\\", TokenType::BACKSLASH)
   ) {
     /* Simple token is now matched (last_token updated in match) */

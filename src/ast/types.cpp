@@ -88,6 +88,12 @@ std::string type_to_string(Type const & type, bool hide_details) {
     pattern(as<CellType>(arg)) = [&](auto const & cell) {
       return formatxx::format_string("cell containing {}", type_to_string(cell.contains.get()));
     },
+    pattern(as<GenericType>(arg)) = [&](auto const & generic) {
+      return formatxx::format_string("generic type {}", generic.identifier.name);
+    },
+    pattern(as<ListType>(arg)) = [&](auto const & list_type) {
+      return formatxx::format_string("{}[]", type_to_string(list_type.element_type.get()));
+    },
     pattern(_) = []{
       return "???"s;
     });
@@ -173,4 +179,10 @@ Type_Ptr TypeCastConstraint::get(AstContext& ctx, Ast_As_Cast& as_cast) {
   cc.type = as_cast.object->meta.type;
   cc.as_cast = &as_cast;
   return ctx.new_type(cc);
+}
+
+Type_Ptr LValueConstraint::get(AstContext& ctx, Expr_Ptr expected_lvalue) {
+  LValueConstraint lc;
+  lc.expected_lvalue = expected_lvalue;
+  return ctx.new_type(lc);
 }

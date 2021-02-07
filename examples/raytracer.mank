@@ -4,7 +4,7 @@
 fun trace: Vec3f (
   ray_origin: Vec3f,
   ray_dir: Vec3f,
-  spheres: ref Sphere[6], # hardcode for now
+  spheres: Sphere[],
   depth: i32
 ) {
   bind (INF, MAX_RAY_DEPTH) = (10000000000.0, 10);
@@ -110,7 +110,7 @@ fun trace: Vec3f (
   vec3_add(hit_colour, hit_sphere.emission_colour)
 }
 
-proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[6]) {
+proc ray_trace(image_width: i32, image_height: i32, spheres: Sphere[]) {
   # image pixel array not needed... if we just print pixels on the fly
   # (vectors still very needed!)
   # TODO: Vectors! Can only handle tiny images with stack memory :(
@@ -153,7 +153,7 @@ proc ray_trace(image_width: i32, image_height: i32, spheres: ref Sphere[6]) {
 }
 
 proc main {
-  spheres := [
+  spheres := vec!([
     # Middle sphere
     make_sphere(
       vec3f_from_xyz(0., 0., -20.), 4., vec3f_from_xyz(1., 0.32, 0.36), 1., 0.5, new_vec3f()),
@@ -172,7 +172,7 @@ proc main {
     # Light (behind view plane)
     make_sphere(
       vec3f_from_xyz(0., 20., -30.), 3., new_vec3f(), 0.0, 0.0, vec3f_from_f64(3.))
-  ];
+  ]);
 
   bind (WIDTH, HEIGHT) = (1920, 1080); # fine for my PC -- adjust as needed
   eprintln("Tracing...");

@@ -58,6 +58,10 @@ bool match_types(Type_Ptr a, Type_Ptr b,
           return a.size == b.size
             && match_types(a.element_type, b.element_type, make_constraint);
         },
+      pattern(as<ListType>(arg), as<ListType>(arg)) =
+        [&](auto const & a, auto const & b) {
+          return match_types(a.element_type, b.element_type, make_constraint);
+        },
       pattern(as<LambdaType>(arg), as<LambdaType>(arg)) =
         [&](auto const & a, auto const & b) {
           return match_type_lists(a.argument_types, b.argument_types, make_constraint, false)
@@ -129,6 +133,11 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
       }
       return std::make_pair(type, null_symbol);
     },
+    pattern(as<ListType>(arg)) = [&](auto& list_type) {
+      auto [base_type, symbol] = resolve_type(scope, list_type.element_type);
+      list_type.element_type = base_type;
+      return std::make_pair(base_type ? type : nullptr, symbol);
+    },
     pattern(_) = [&] {
       // Possible it's already resolved
       // TODO: Make sure code does not recurse over already resolved types.
@@ -158,7 +167,7 @@ static std::pair<Type_Ptr,int> get_field_type(
         return field_type;
       },
       // FIXME: Hardcoded .length
-      pattern(as<FixedSizeArrayType>(_)) = [&]{
+      pattern(anyof(as<FixedSizeArrayType>(_), as<ListType>(_))) = [&]{
         WHEN(field.name == "length") {
           return PrimativeType::int_ty();
         };
@@ -250,6 +259,10 @@ Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {
         // lvalue string indexs...?
         return PrimativeType::get(PrimativeType::CHAR);
       };
+    },
+    pattern(as<ListType>(arg)) = [&](auto& list_type) {
+      access.get_meta().value_type = access.object->meta.value_type;
+      return list_type.element_type;
     },
     pattern(_) = [&]() -> Type_Ptr {
       throw_sema_error_at(access.object, "not an indexable type (is {})",

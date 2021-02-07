@@ -9,6 +9,7 @@
 #include "sema/semantics.h"
 #include "sema/sema_errors.h"
 #include "sema/const_propagate.h"
+#include "sema/builtin_functions.h"
 #include "sema/return_reachability.h"
 
 // Macros
@@ -16,6 +17,7 @@
 #include "macros/curry_macro.h"
 #include "macros/print_macro.h"
 #include "macros/assert_macro.h"
+#include "macros/vector_literal_macro.h"
 
 Semantics::Semantics() {
   static bool macros_loaded = false;
@@ -27,6 +29,7 @@ Semantics::Semantics() {
     Macros::register_macro("eprint", Macros::builtin_print);
     Macros::register_macro("eprintln", Macros::builtin_print);
     Macros::register_macro("assert", Macros::builtin_assert);
+    Macros::register_macro("vec", Macros::builtin_vec_literal);
     macros_loaded = true;
   }
 }
@@ -34,6 +37,10 @@ Semantics::Semantics() {
 Symbol* Semantics::emit_warning_if_shadows(
   Ast_Identifier& ident, Scope& scope, std::string warning
 ) {
+  if (ident.name.at(0) == '^') {
+    // HACK: Don't warn for things we add in macros & such by prefixing with '^'.
+    return nullptr;
+  }
   Symbol* pior_symbol = scope.lookup_first_name(ident);
   if (pior_symbol) {
     emit_warning_at(ident, warning);
@@ -49,23 +56,6 @@ Ast_Identifier* get_symbol_identifer_if_type(Symbol* symbol) {
   return nullptr;
 }
 
-Symbol make_builtin_func(
-  AstContext& ctx,
-  std::string name,
-  std::vector<Ast_Argument> args,
-  Type_Ptr return_type = Type::void_ty(),
-  bool c_decl = false
-) {
-  Ast_Function_Declaration func_decl;
-  func_decl.return_type = return_type;
-  func_decl.identifier.name = name;
-  func_decl.arguments = args;
-  func_decl.external = true;
-  func_decl.c_function = c_decl;
-  return Symbol(
-    SymbolName(name), ctx.new_type(func_decl), Symbol::FUNCTION);
-}
-
 void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
@@ -76,6 +66,7 @@ void Semantics::analyse_file(Ast_File& file) {
 
   Scope& global_scope = file.scope;
 
+  // Add builtin types
   static std::array primative_types {
     std::make_pair("f32", PrimativeType::get(PrimativeType::FLOAT32)),
     std::make_pair("f64", PrimativeType::get(PrimativeType::FLOAT64)),
@@ -90,77 +81,8 @@ void Semantics::analyse_file(Ast_File& file) {
       Symbol(SymbolName(type_name), type, Symbol::TYPE));
   }
 
-  TupleType parse_int_ret;
-  parse_int_ret.element_types = {
-    PrimativeType::int_ty(),
-    PrimativeType::get(PrimativeType::BOOL)
-  };
-
-  std::array builtin_funcs {
-    // C stdlib putchar/getchar
-    make_builtin_func(*ctx, "putchar", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
-      PrimativeType::int_ty(), true),
-    make_builtin_func(*ctx, "stderr_putchar", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
-      PrimativeType::int_ty(), true),
-    make_builtin_func(*ctx, "getchar", {}, PrimativeType::int_ty(), true),
-    make_builtin_func(*ctx, "abort", {}, Type::void_ty(), true),
-    make_builtin_func(*ctx, "sqrt", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
-    make_builtin_func(*ctx, "pow", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "x"),
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "y")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
-    make_builtin_func(*ctx, "sin", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
-    make_builtin_func(*ctx, "cos", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
-    make_builtin_func(*ctx, "tan", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
-    make_builtin_func(*ctx, "asin", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
-    make_builtin_func(*ctx, "atan2", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "x"),
-      builder->make_argument(PrimativeType::get(PrimativeType::FLOAT64), "y")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
-    // builtin mank functions
-    make_builtin_func(*ctx, "eprint", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
-    make_builtin_func(*ctx, "eprintln", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
-    make_builtin_func(*ctx, "print", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
-    make_builtin_func(*ctx, "println", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
-    make_builtin_func(*ctx, "fail", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
-    make_builtin_func(*ctx, "input", {}, PrimativeType::get(PrimativeType::STRING)),
-    make_builtin_func(*ctx, "prompt", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
-      PrimativeType::get(PrimativeType::STRING)),
-    make_builtin_func(*ctx, "parse_int", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
-      ctx->new_type(parse_int_ret)),
-    make_builtin_func(*ctx, "int_to_string", builder->make_args(
-      builder->make_argument(PrimativeType::int_ty(), "i")),
-      PrimativeType::get(PrimativeType::STRING)),
-    make_builtin_func(*ctx, "input_int", {}, PrimativeType::int_ty()),
-    make_builtin_func(*ctx, "prompt_int", builder->make_args(
-      builder->make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
-      PrimativeType::int_ty()),
-  };
-
-  for (auto builtin: builtin_funcs) {
-    // Needed for some decl types
-    std::get<Ast_Function_Declaration>(builtin.type->v).body.scope.set_parent(global_scope);
-    global_scope.add(builtin);
-  }
+  // Add builtin function declartions
+  Builtin::add_builtins_to_scope(global_scope, *ctx, *builder);
 
   auto check_top_level_decl = [&](
     char const * decl_name, Symbol::Kind sym_kind, Ast_Identifier& ident,
@@ -275,6 +197,20 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
   for (auto& arg: func.arguments) {
     resolve_type_or_fail(parent_scope, arg.type, "undeclared arg type {}");
   }
+  // Special case main function
+  if (func.identifier.name == "main") {
+    ListType _args_type;
+    _args_type.element_type = PrimativeType::get(PrimativeType::STRING);
+    auto args_type = ctx->new_type(_args_type);
+
+    auto args_count = func.arguments.size();
+    if (args_count == 0) {
+      // Add args parameter (for compatibility with C boostrap)
+      func.arguments.push_back(builder->make_argument(args_type, "args"));
+    } else if (args_count != 1 || !match_types(func.arguments.at(0).type, args_type)) {
+      throw_sema_error_at(func.identifier, "invalid main function declaration");
+    }
+  }
 }
 
 Type_Ptr Semantics::analyse_block(Ast_Block& block, Scope& scope) {
@@ -313,7 +249,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
 
   auto final_expr = func.body.get_final_expr();
   if (final_expr && !body_type->is_void()) {
-    assert_valid_binding({}, expected_return, final_expr.get());
+    assert_valid_binding({}, expected_return, final_expr);
     /* Desugar implict return for codegen + return checking ease */
     func.body.has_final_expr = false;
     Ast_Return_Statement implicit_return;
@@ -335,7 +271,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       Ast_Return_Statement void_return;
       void_return.expression = make_void_expr(*ctx, func.location);
       void_return.location = AstHelper::extract_location(void_return.expression);
-      assert_valid_binding({}, expected_return, void_return.expression.get());
+      assert_valid_binding({}, expected_return, void_return.expression);
       func.body.statements.emplace_back(ctx->new_stmt(void_return));
       func.body.has_final_expr = false;
       func.return_type = Type::void_ty(); // quick fix
@@ -425,10 +361,7 @@ void Semantics::analyse_assignment(Ast_Assign& assign, Scope& scope) {
   // is not used it's justed used as a (nested) list of lvalue idents.
   // (the types of the contained lvaues is what matters)
   auto target_type = analyse_expression(*assign.target, scope);
-  if (!assign.target->is_lvalue()) {
-    throw_sema_error_at(assign.target,
-      "target is not an lvalue");
-  }
+  infer->assert_lvalue(assign.target, "target is not an lvalue");
 
   auto expr_type = analyse_expression(*assign.expression, scope);
 
@@ -475,7 +408,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       if (expr_type->is_void() && !expected_return->is_void() && !is_tvar(expected_return)) {
         throw_sema_error_at(return_stmt, "a function needs to return a value");
       }
-      assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression.get());
+      assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression);
     },
     pattern(as<Ast_Variable_Declaration>(arg)) = [&](auto& var_decl) {
       if (var_decl.type) {
@@ -497,7 +430,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       } else {
         throw_sema_error_at(var_decl, "uninitialized variable declaration");
       }
-      assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer.get());
+      assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer);
       emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
       scope.add(
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
@@ -597,7 +530,7 @@ void Semantics::check_tuple_bindings(
           assert_valid_binding(
             bind.name,
             bind.name.location,
-            bind.type, el_type, init.get());
+            bind.type, el_type, init);
             emit_warning_if_shadows(bind.name, scope, "tuple binding shadows existing symbol");
             scope.add(Symbol(bind.name, bind.type, Symbol::LOCAL));
         },
@@ -639,7 +572,7 @@ void Semantics::check_pod_bindings(
         assert_valid_binding(
           field_bind.field,
           field_bind.field.location,
-          bind.type, field_type, init.get());
+          bind.type, field_type, init);
         field_bind.bound_name = (!bind.name.empty() ? bind.name : field_bind.field).get_raw_self();
         emit_warning_if_shadows(*field_bind.bound_name, scope, "pod binding shadows existing symbol");
         scope.add(Symbol(*field_bind.bound_name, bind.type, Symbol::LOCAL));
@@ -877,7 +810,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
         auto [expected_type, field_index] = pod_info.get_field_or_fail(init.field);
         auto init_type = analyse_expression(*init.initializer, scope);
         assert_valid_binding({}, AstHelper::extract_location(init.initializer),
-           expected_type, init_type, init.initializer.get());
+           expected_type, init_type, init.initializer);
 
         init.field_index = field_index;
         seen_fields.insert(init.field.name);
@@ -918,6 +851,10 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       cell_type.ref = builder->make_reference(cell_type.contains);
       expr.set_value_type(Expression_Meta::LVALUE);
       return ctx->new_type(cell_type);
+    },
+    pattern(anyof(as<Ast_Macro_Identifier>(_), as<Ast_Specialized_Identifier>(_))) = [&]{
+      throw_sema_error_at(expr, "this is not valid here!");
+      return Type_Ptr(nullptr);
     },
     pattern(_) = [&]{
       throw_sema_error_at(expr, "fix me! unknown expression type!");
@@ -965,9 +902,7 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
   auto operand_type = remove_reference(analyse_expression(*unary.operand, scope));
 
   if (unary.operation == Ast_Operator::REF) {
-    if (!operand_type || !unary.operand->is_lvalue()) {
-      throw_sema_error_at(unary.operand, "cannot take reference to non-lvalue expression");
-    }
+    infer->assert_lvalue(unary.operand, "cannot take reference to non-lvalue expression");
     unary.get_meta().value_type = Expression_Meta::LVALUE;
     return builder->make_reference(operand_type);
   }
@@ -1064,17 +999,39 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   using namespace mpark::patterns;
   Type_Ptr callee_type;
 
-  auto called_function_ident = std::get_if<Ast_Identifier>(&call.callee->v);
-  if (called_function_ident) {
-    Symbol* called_function = scope.lookup_first_name(*called_function_ident);
+  Ast_Identifier* called_function_ident = nullptr;
+
+  auto look_up_function = [&](auto& ident) {
+    Symbol* called_function = scope.lookup_first_name(ident);
     if (!called_function) {
-      throw_sema_error_at(*called_function_ident, "attempting to call undefined function \"{}\"",
-        called_function_ident->name);
+      throw_sema_error_at(ident,
+        "attempting to call undefined function \"{}\"", ident.name);
     }
     callee_type = called_function->type;
-  } else {
-    callee_type = analyse_expression(*call.callee, scope);
-  }
+    called_function_ident = ident.get_raw_self();
+  };
+
+  match(call.callee->v)(
+    pattern(as<Ast_Identifier>(arg)) = [&](auto& ident){
+      look_up_function(ident);
+    },
+    pattern(as<Ast_Specialized_Identifier>(arg)) = [&](auto& specialized) {
+      look_up_function(specialized);
+      if (auto generic_func = std::get_if<Ast_Function_Declaration>(&callee_type->v)) {
+        if (specialized.specializations.size() > generic_func->type_parameters.size()) {
+          throw_sema_error_at(specialized, "too many specializations for generic function");
+        }
+      } else {
+        throw_sema_error_at(specialized, "not a generic function");
+      }
+      for (auto& spec: specialized.specializations) {
+        resolve_type_or_fail(scope, spec, "undeclared specialization type");
+      }
+    },
+    pattern(_) = [&]{
+      callee_type = analyse_expression(*call.callee, scope);
+    }
+  );
 
   auto deref_callee_type = remove_reference(callee_type);
   infer->generate_call_constraints(deref_callee_type, call);
@@ -1102,12 +1059,12 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
       }
 
       for (uint arg_idx = 0; arg_idx < expected_arg_count; arg_idx++) {
-        auto& argument = *call.arguments.at(arg_idx);
-        (void) analyse_expression(argument, scope);
+        auto argument = call.arguments.at(arg_idx);
+        (void) analyse_expression(*argument, scope);
 
         if constexpr (!is_lambda) {
           auto& expected = function_type.arguments.at(arg_idx);
-          assert_valid_binding(expected.name, expected.type, &argument);
+          assert_valid_binding(expected.name, expected.type, argument);
         } else {
           // Lambda args are not named (will need a better error reporting method...)
           auto& expected = function_type.argument_types.at(arg_idx);
@@ -1129,8 +1086,8 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
           assert_valid_binding(
             called_function_ident ? *called_function_ident : lvalue,
             lvalue.location,
-            expected, argument.meta.type,
-            &argument, infer_note);
+            expected, argument->meta.type,
+            argument, infer_note);
         }
       }
 

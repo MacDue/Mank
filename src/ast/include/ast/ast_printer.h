@@ -65,7 +65,8 @@ class AstPrinter {
       return ::type_to_string(type.get(), hide_lex_details);
     }
 
-    void print_args(std::vector<Ast_Argument> args);
+    void print_args(std::vector<Ast_Argument> const & args);
+    void print_types(std::vector<Type_Ptr> const & types);
 
     void print_file(Ast_File& file);
     void print_pod(Ast_Pod_Declaration& pod);
@@ -106,6 +107,7 @@ class AstPrinter {
     void print_expr(Ast_As_Cast& as_cast);
     void print_expr(Ast_Array_Repeat& array_repeat);
     void print_expr(Ast_Spawn& spawn);
+    void print_expr(Ast_Specialized_Identifier& special_ident);
 
     DepthUpdate operator -> () {
       return DepthUpdate(this);

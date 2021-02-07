@@ -1,0 +1,106 @@
+pod ProgramState {
+  cells: char[],
+  current_cell: i32
+}
+
+proc bf_interpret(program: str, state: ref ProgramState) {
+  bind { .cells: ref, .current_cell: ref } = state;
+  bracket_map := make_bracket_map(program);
+
+  pc := 0;
+  loop {
+    if pc >= program.length {
+      break;
+    }
+
+    instr := program[pc];
+    if instr == '+' {
+      cells[current_cell] += 1 as char;
+    } else if instr == '-' {
+      cells[current_cell] -= 1 as char;
+    } else if instr == '>' {
+      current_cell += 1;
+      if current_cell >= cells.length {
+        current_cell = 0;
+      }
+    } else if instr == '<' {
+      current_cell -= 1;
+      if current_cell < 0 {
+        current_cell = cells.length - 1;
+      }
+    } else if instr == '.' {
+      putchar(cells[current_cell]);
+    } else if instr == ',' {
+      cells[current_cell] = getchar() as char;
+    } else if instr == '[' {
+      if cells[current_cell] == 0 as char {
+        pc = bracket_map[pc];
+      }
+    } else if instr == ']' {
+      if cells[current_cell] != 0 as char {
+        pc = bracket_map[pc] - 1;
+      }
+    }
+    pc += 1;
+  }
+}
+
+fun make_bracket_map: i32[] (program: str) {
+  bracket_map := new_vec@(i32)();
+  # Kinda a waste of space (but we don't have maps yet)
+  fill_vec(bracket_map, 0, program.length);
+  open_brackets := new_vec@(i32)();
+
+  for i in 0 .. program.length {
+    instr := program[i];
+    if instr == '[' {
+      push_back(open_brackets, i);
+    } else if instr == ']' {
+      start := open_brackets[open_brackets.length - 1];
+      pop_back(open_brackets);
+      bracket_map[start] = i;
+      bracket_map[i] = start;
+    }
+  }
+
+  assert!(open_brackets.length == 0, "program should not contain unmatched brackets");
+  bracket_map
+}
+
+fun new_program_state: ProgramState (cell_count: i32) {
+  ProgramState {
+    .cells = {
+      cells := new_vec@(char)();
+      fill_vec(cells, 0 as char, cell_count);
+      cells
+    },
+    .current_cell = 0
+  }
+}
+
+proc reset_program_state (state: ref ProgramState) {
+  state.current_cell = 0;
+  fill_vec(state.cells, 0 as char, state.cells.length);
+}
+
+proc bf_repl(cell_count: i32) {
+  state := new_program_state(cell_count);
+  loop {
+    bf := prompt(">");
+    bf_interpret(bf, state);
+    reset_program_state(state);
+  }
+}
+
+proc main (args: str[]) {
+  cell_count := if args.length > 1 {
+    bind (cell_count, success) = parse_int(args[1]);
+    if (!success) {
+      fail("expected integer cell count");
+    }
+    cell_count
+  } else {
+    30000
+  }
+  bf_repl(cell_count);
+}

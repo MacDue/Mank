@@ -12,6 +12,7 @@ LEFT_SQUARE_BRACKET = '[',
 RIGHT_SQUARE_BRACKET = ']',
 BACKSLASH = '\\',
 EXCLAMATION_MARK = '!',
+AT = '@',
 
 /* Operators */
 #include "operators.def"

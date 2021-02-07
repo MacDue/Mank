@@ -53,6 +53,7 @@ private:
   Type_Ptr parse_type(bool default_tvar = false);
   Type_Ptr parse_base_type(bool default_tvar = false);
   Type_Ptr parse_array_type(Type_Ptr base_type);
+  Type_Ptr parse_list_type(Type_Ptr base_type);
   std::vector<Type_Ptr> parse_type_list(TokenType left_delim, TokenType right_delim);
   Type_Ptr parse_lambda_type();
   Type_Ptr parse_pod();
@@ -100,7 +101,8 @@ private:
   Expr_Ptr parse_array_literal();
   Expr_Ptr parse_lambda();
   Expr_Ptr parse_tuple_literal(Expr_Ptr first_element);
-  Expr_Ptr parse_pod_literal(Ast_Identifier pod_name);
+  Expr_Ptr parse_pod_literal(
+    Ast_Identifier pod_name, std::vector<Type_Ptr> specializations = {});
 
   /* Simple helpers */
   bool consume(TokenType token_type);

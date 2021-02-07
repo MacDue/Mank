@@ -51,12 +51,13 @@ Ast_File Parser::parse_file() {
   while (!this->peek(TokenType::LEX_EOF, next_token)) {
     if (next_token.type == TokenType::FUNCTION
       || next_token.type == TokenType::PROCEDURE
+      || next_token.type == TokenType::TEST
     ) {
       parsed_file.functions.emplace_back(this->parse_function());
     } else if (next_token.type == TokenType::POD) {
       parsed_file.pods.emplace_back(this->parse_pod());
     } else {
-      throw_error_here("unexpected \"{}\", expecting a function, procedure or pod type");
+      throw_error_here("unexpected \"{}\", expecting a function, procedure, test or pod type");
     }
   }
   return parsed_file;
@@ -88,28 +89,35 @@ Type_Ptr Parser::parse_function() {
   */
   auto fun_start = this->current_location();
   Ast_Function_Declaration parsed_function;
-  if (consume(TokenType::FUNCTION) || (parsed_function.procedure = consume(TokenType::PROCEDURE))) {
+  if (consume(TokenType::FUNCTION)
+    || (parsed_function.procedure = consume(TokenType::PROCEDURE))
+    || (parsed_function.test = consume(TokenType::TEST))
+  ) {
 
     auto ident = this->parse_identifier();
     if (!ident) {
       throw_error_here("\"{}\" is not a valid function name");
     }
     parsed_function.identifier = *ident;
-    if (!parsed_function.procedure) {
-      /* return type */
-      expect(TokenType::COLON);
-      auto return_type = this->parse_type();
-      if (!return_type) {
-        throw_error_here("function return type expected");
-      } else {
+
+
+    if (!parsed_function.test) { // tests have no params/returns
+      if (!parsed_function.procedure) {
+        /* return type */
+        expect(TokenType::COLON);
+        auto return_type = this->parse_type();
+        if (!return_type) {
+          throw_error_here("function return type expected");
+        }
         parsed_function.return_type = return_type;
       }
-    } else {
-      parsed_function.return_type = Type::void_ty();
+      if (peek(TokenType::LEFT_PAREN)) {
+        parsed_function.arguments = this->parse_arguments();
+      }
     }
 
-    if (peek(TokenType::LEFT_PAREN)) {
-      parsed_function.arguments = this->parse_arguments();
+    if (!parsed_function.return_type) {
+      parsed_function.return_type = Type::void_ty();
     }
 
     auto body = this->parse_block();
@@ -121,7 +129,7 @@ Type_Ptr Parser::parse_function() {
     return ctx->new_type(parsed_function);
   } else {
     // Should be unreachable
-    throw_error_here("unexpected \"{}\"m expecting function or procedure");
+    throw_error_here("unexpected \"{}\"m expecting function, procedure or test");
   }
 }
 

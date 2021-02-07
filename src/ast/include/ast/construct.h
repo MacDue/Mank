@@ -11,11 +11,12 @@
 using TypeParam = SpAstPtr<Type, GenericType>;
 
 DEF_TYPE(Ast_Function_Declaration), Ast_Node {
-  bool external = false,
-       c_function = false,
-       procedure = false,
-       lambda = false,
-       generic = false;
+  bool external   :1 = false,
+       c_function :1 = false,
+       procedure  :1 = false,
+       lambda     :1 = false,
+       generic    :1 = false,
+       test       :1 = false;
   Ast_Identifier identifier;
   std::vector<Ast_Argument> arguments;
   std::vector<TypeParam> type_parameters;

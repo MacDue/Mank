@@ -18,7 +18,7 @@ TEST_CASE("Inferring lambda types passed to functions", "[Infer]") {
       }
     }
 
-    proc test {
+    proc my_test {
       a := [1, 2, 3, 4, 5];
       apply(a, \x -> { x * 2 });
     }
@@ -44,7 +44,7 @@ TEST_CASE("Inferring lambda types passed to functions", "[Infer]") {
 TEST_CASE("Inferring types of local lambdas from usage", "[Infer]") {
   Semantics sema;
   auto code = Parser::parse_from_string(R"(
-    proc test {
+    proc my_test {
       # takes a lambda 'y' can passes y another lambda that takes p and t and adds + returns them
       x := \y -> { y(\p,t -> { p + t }) }
       # call x with with a lambda that takes a lambda z and calls it with 1 and 3 and returns the result
@@ -87,7 +87,7 @@ TEST_CASE("Inference enforces special constraints on operations", "[Infer]") {
   Semantics sema;
   SECTION("Two unknown types inferred to be bools can't be used with +") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         # Do thing takes to unknown types and adds them
         # It should enforce a special constraint that x and y are numeric types
         # (e.g. an integer for floating point type)
@@ -114,7 +114,7 @@ TEST_CASE("Inferred void lambda returns", "[Infer]") {
   Semantics sema;
   SECTION("A void return is fine as long as that return is not used as value") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         func := \ -> {
           # do something...
         }
@@ -137,7 +137,7 @@ TEST_CASE("Inferred void lambda returns", "[Infer]") {
 
   SECTION("An infered void return is still allowed if the lambda's return is used") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         func := \ -> {};
         a := func();
       }
@@ -147,7 +147,7 @@ TEST_CASE("Inferred void lambda returns", "[Infer]") {
 
   SECTION("A return tvar cannot be switched to null if bound to another tvar") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         func := \x -> {
           if x > 2 {
             return x;   # return x which is a tvar (unknown type)
@@ -171,7 +171,7 @@ TEST_CASE("Incomplete substitution", "[Infer]") {
   Semantics sema;
   SECTION("Lambda that takes some unknown params and never uses/binds them") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := \x -> {}
       }
     )");
@@ -181,7 +181,7 @@ TEST_CASE("Incomplete substitution", "[Infer]") {
 
   SECTION("Same but within a nested lambda") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := \y -> {
           \x -> {}
         }
@@ -202,7 +202,7 @@ TEST_CASE("Field constraints", "[Infer]") {
         bar: i32
       }
 
-      proc test {
+      proc my_test {
         a := \ -> {
           foo := Foo {.bar = 42};
           foo # Binds T0 (return) to Foo
@@ -237,7 +237,7 @@ TEST_CASE("Field constraints", "[Infer]") {
         baz: i32
       }
 
-      proc test {
+      proc my_test {
         a := \ -> {
           foo := Foo {.bar = Bar{ .baz = 666 }};
           foo
@@ -266,7 +266,7 @@ TEST_CASE("Field constraints", "[Infer]") {
         bar: i32
       }
 
-      proc test {
+      proc my_test {
         a := \x -> { x.bar } # requires infering Foo type earlier in code
         my_foo := Foo {.bar = 42};
         bar := a(my_foo);

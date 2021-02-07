@@ -277,31 +277,31 @@ TEST_CASE("Getting and setting in nested pods", "[Codegen]") {
     }
 
     pod Three {
-      test: i32
+      cool: i32
     }
 
     fun make_nested_pod: One {
-      my_pod := One {.two = Two{.three = Three{.test = 0}}};
-      my_pod.two.three.test = 42;
+      my_pod := One {.two = Two{.three = Three{.cool = 0}}};
+      my_pod.two.three.cool = 42;
       my_pod
     }
 
     # Extracting field from local
     fun test_1: i32 {
       my_pod := make_nested_pod();
-      my_pod.two.three.test
+      my_pod.two.three.cool
     }
 
     # Extracting field from rvalue
     fun test_2: i32 {
-      make_nested_pod().two.three.test
+      make_nested_pod().two.three.cool
     }
 
     # Setting a field of a local
     fun test_3: i32 {
       my_pod := make_nested_pod();
-      my_pod.two.three.test = 1337;
-      my_pod.two.three.test
+      my_pod.two.three.cool = 1337;
+      my_pod.two.three.cool
     }
   )");
 
@@ -611,7 +611,7 @@ TEST_CASE("Closures", "[Codegen]") {
         op(x)
       }
 
-      fun test: i32 {
+      fun my_test: i32 {
         a := [1, 2];
         b := 3;
 
@@ -622,8 +622,8 @@ TEST_CASE("Closures", "[Codegen]") {
       }
     )");
 
-    auto test = codegen.extract_function_from_jit<int()>("test");
-    REQUIRE(test() + (1 + 2 + 3) * 2);
+    auto my_test = codegen.extract_function_from_jit<int()>("my_test");
+    REQUIRE(my_test() + (1 + 2 + 3) * 2);
   }
 }
 

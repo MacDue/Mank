@@ -789,7 +789,7 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
   SECTION("Correctly accessing nested pod fields") {
     auto code = Parser::parse_from_string(R"(
       pod A {
-        test: i32
+        cool: i32
       }
 
       pod B {
@@ -804,11 +804,11 @@ TEST_CASE("Pod types and field access semantics", "[Sema]") {
         cee := C{
           .bee = B{
             .ayy = A{
-              .test = -5
+              .cool = -5
             }
           }
         };
-        cee.bee.ayy.test = 10;
+        cee.bee.ayy.cool = 10;
       }
     )");
 
@@ -1082,7 +1082,7 @@ TEST_CASE("Array literal semantics", "[Sema]") {
 
   SECTION("All elements in an array must have the same type") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := [1,2,3,4];
       }
     )");
@@ -1099,7 +1099,7 @@ TEST_CASE("Array literal semantics", "[Sema]") {
 
     NEW_SEMA();
     auto bad_code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := [1,2,3,4.0];
       }
     )");
@@ -1109,7 +1109,7 @@ TEST_CASE("Array literal semantics", "[Sema]") {
 
   SECTION("Nested arrays must have the same size") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := [[1,2],[1,2]];
       }
     )");
@@ -1127,7 +1127,7 @@ TEST_CASE("Array literal semantics", "[Sema]") {
 
     NEW_SEMA();
     auto bad_code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := [[1,2],[1,2,3]];
       }
     )");
@@ -1143,7 +1143,7 @@ TEST_CASE("Tuple literal semantics", "[Sema]") {
 
   SECTION("Tuples can have mixed types") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := (true, 1, 3.0);
       }
     )");
@@ -1164,7 +1164,7 @@ TEST_CASE("Tuple literal semantics", "[Sema]") {
 
   SECTION("Tuples can be nested") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := (true, (1, 3.0));
       }
     )");
@@ -1194,7 +1194,7 @@ TEST_CASE("Array indexing semantics", "[Sema]") {
 
   SECTION("Indexes must be integers (and 1D indexing)") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := [1,2,3][2];
       }
     )");
@@ -1206,7 +1206,7 @@ TEST_CASE("Array indexing semantics", "[Sema]") {
 
     NEW_SEMA();
     auto bad_code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := [1,2,3][3.0];
       }
     )");
@@ -1216,7 +1216,7 @@ TEST_CASE("Array indexing semantics", "[Sema]") {
 
   SECTION("Indexing in nested arrays") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         a := [[1,2],[1,2]];
         b := a[0];
         c := b[0];
@@ -1244,7 +1244,7 @@ TEST_CASE("Tuple binding semantics", "[Sema]") {
 
   SECTION("Can bind to simple tuple, with correct shape") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         bind (x, y, z) = (1, 2, 3);
       }
     )");
@@ -1260,7 +1260,7 @@ TEST_CASE("Tuple binding semantics", "[Sema]") {
 
     NEW_SEMA();
     auto bad_code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         bind (a, b) = [1,2];
       }
     )");
@@ -1272,12 +1272,12 @@ TEST_CASE("Tuple binding semantics", "[Sema]") {
 
     std::array wrong_shapes {
       R"(
-        proc test {
+        proc my_test {
           bind (a, b) = (1, 2, 3);
         }
       )",
       R"(
-        proc test {
+        proc my_test {
           bind (a, (b,c)) = (1, 2, 3);
         }
       )",
@@ -1294,7 +1294,7 @@ TEST_CASE("Tuple binding semantics", "[Sema]") {
 
   SECTION("Can bind to nested tuple") {
     auto code = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
         bind (a, (b, c)) = (1, (2, 3));
       }
     )");
@@ -1325,7 +1325,7 @@ TEST_CASE("Pod literal semantics", "[Sema]") {
         baz: bool
       }
 
-      proc test {
+      proc my_test {
         foo := Foo { .baz = true, .bar = 2 };
       }
     )");
@@ -1344,7 +1344,7 @@ TEST_CASE("Pod literal semantics", "[Sema]") {
           baz: bool
         }
 
-        proc test {
+        proc my_test {
           foo := Foo { .baz = true, .baz = false };
         }
       )");
@@ -1360,7 +1360,7 @@ TEST_CASE("Pod literal semantics", "[Sema]") {
           baz: bool
         }
 
-        proc test {
+        proc my_test {
           foo := Foo { .bar = 1 };
         }
       )");

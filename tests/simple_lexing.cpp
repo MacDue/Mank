@@ -181,7 +181,7 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
 TEST_CASE("Lexing simple function header", "[Lexer]") {
   Lexer lexer;
 
-  lexer.set_input_to_string("proc main(argc: int, test: int) { 1 }");
+  lexer.set_input_to_string("proc main(argc: int, yeet: int) { 1 }");
 
   std::array expected_token_stream {
     TokenType::PROCEDURE,

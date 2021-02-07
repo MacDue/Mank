@@ -14,12 +14,13 @@
 struct CompilerOptions {
   std::vector<std::string> input_files;
   bool
-    success = true,
-    show_help = false,
-    print_ast = false,
-    check_sema = false,
-    code_gen = false,
-    suppress_warnings = false;
+    success     :1 = true,
+    show_help   :1 = false,
+    print_ast   :1 = false,
+    check_sema  :1 = false,
+    code_gen    :1 = false,
+    build_tests :1 = false,
+    suppress_warnings:1 = false;
 };
 
 #define ARG_GIVEN(name) vm.count(name)
@@ -35,6 +36,7 @@ static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
     ("check-sema", "check the semantics of the input")
     ("codegen", "generate LLVM IR")
     ("suppress-warnings", "don't output warnings")
+    ("tests", "build tests and test runner")
     ("input-file", po::value<std::vector<std::string>>(), "input file");
 
   po::positional_options_description p;
@@ -55,6 +57,7 @@ static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
   selected_options.code_gen = ARG_GIVEN("codegen");
   selected_options.check_sema = selected_options.code_gen || ARG_GIVEN("check-sema");
   selected_options.suppress_warnings = ARG_GIVEN("suppress-warnings");
+  selected_options.build_tests = ARG_GIVEN("tests");
 
   if (vm.count("input-file")) {
     selected_options.input_files = vm["input-file"].as<std::vector<std::string>>();
@@ -210,6 +213,10 @@ static bool compile(std::string program, CompilerOptions options, bool path = tr
   }
 
   Semantics sema;
+  if (options.build_tests) {
+    sema.build_test_runner();
+  }
+
   std::optional<Ast_File> parsed_file;
   std::optional<CompilerError> sema_error;
   try {

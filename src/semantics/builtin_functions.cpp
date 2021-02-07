@@ -1,3 +1,5 @@
+#include <vector>
+
 #include "ast/ast_builder.h"
 #include "sema/builtin_functions.h"
 
@@ -123,6 +125,59 @@ void add_builtins_to_scope(Scope& scope, AstContext& ctx, AstBuilder& builder) {
     std::get<Ast_Function_Declaration>(builtin.type->v).body.scope.set_parent(scope);
     scope.add(builtin);
   }
+}
+
+void add_test_runner_main(Ast_File& file) {
+  std::vector<Function_Ptr> tests;
+
+  // Ugh.... Just collecting tests & deleting the old main
+  size_t idx = 0;
+  std::optional<size_t> main_idx;
+  for (auto func: file.functions) {
+    if (func->test) {
+      func->procedure = true;
+      tests.push_back(func);
+    }
+    if (func->identifier.name == "main") {
+      main_idx = idx;
+    }
+    idx += 1;
+  }
+
+  if (tests.empty()) {
+    return;
+  }
+
+  if (main_idx) {
+    file.functions.erase(file.functions.begin() + *main_idx);
+  }
+
+  AstBuilder builder(file);
+  auto main_body = builder.make_body(false);
+
+  size_t test_num = 1;
+  for (auto test: tests) {
+    main_body.statements.push_back(
+      builder.make_expr_stmt(
+        builder.make_block(false,
+          builder.make_expr_stmt(
+            builder.make_call(
+              builder.make_macro_ident("println"),
+              builder.make_string("[{n}/{total}] running test `{test}'"),
+              builder.make_string(std::to_string(test_num)),
+              builder.make_string(std::to_string(tests.size())),
+              builder.make_string(test->identifier.name))
+          ),
+          builder.make_expr_stmt(
+            builder.make_call(test->identifier.name)))));
+    test_num += 1;
+  }
+
+  auto tests_main = builder.make_procedure("main", std::move(main_body));
+  tests_main.return_type = Type::void_ty();
+  tests_main.procedure = true;
+
+  builder.add_functions(tests_main);
 }
 
 }

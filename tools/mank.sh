@@ -140,16 +140,27 @@ int main(int argc, char* argv[]) {
 }
 EOF
 
+bin_name=$(basename $1 .mank)
+
+if [[ "$2" == "--tests" ]]; then
+  LLC_ARGS=""
+  MANK_ARGS="--tests"
+  bin_name+="_tests"
+else
+  LLC_ARGS="$2"
+  MANK_ARGS=""
+fi
+
+
 gcc ./main.c -c -o main.o
-$MANK_HOME/mankc $output_dir/$1 --codegen > mank_dump.ll.packed
+$MANK_HOME/mankc $output_dir/$1 --codegen $MANK_ARGS > mank_dump.ll.packed
 csplit --quiet -b "%d.ll" ./mank_dump.ll.packed "/;--fin/"
 
 for llvm_ir in ./*.ll
 do
-  llc $2 -relocation-model=pic "$llvm_ir"
+  llc $LLC_ARGS -relocation-model=pic "$llvm_ir"
 done
 
-bin_name=$(basename $1 .mank)
 gcc ./main.o ./*.s -o ./$bin_name -lgc -lm
 
 mv ./$bin_name $output_dir/$bin_name

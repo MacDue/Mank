@@ -56,6 +56,13 @@ Ast_Identifier* get_symbol_identifer_if_type(Symbol* symbol) {
   return nullptr;
 }
 
+#define SKIP_TESTS_IF_NOT_TESTING()      \
+  if (!building_tests() && func->test) { \
+    continue;                            \
+  }
+
+#define MAIN_FUNCTION_IDENT "main"
+
 void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
@@ -119,6 +126,13 @@ void Semantics::analyse_file(Ast_File& file) {
   /* Check pods */
   for (auto pod: file.pods) {
     analyse_pod(*pod, global_scope);
+  }
+
+  if (building_tests()) {
+    Builtin::add_test_runner_main(file);
+  } else {
+    // Remove tests
+    std::erase_if(file.functions, [](auto func){ return func->test; });
   }
 
   /* Add function headers into scope, resolve function return/param types */
@@ -198,13 +212,13 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
     resolve_type_or_fail(parent_scope, arg.type, "undeclared arg type {}");
   }
   // Special case main function
-  if (func.identifier.name == "main") {
+  if (func.identifier.name == MAIN_FUNCTION_IDENT) {
     ListType _args_type;
     _args_type.element_type = PrimativeType::get(PrimativeType::STRING);
     auto args_type = ctx->new_type(_args_type);
 
     auto args_count = func.arguments.size();
-    if (args_count == 0) {
+    if (args_count == 0 && !func.test) {
       // Add args parameter (for compatibility with C boostrap)
       func.arguments.push_back(builder->make_argument(args_type, "args"));
     } else if (args_count != 1 || !match_types(func.arguments.at(0).type, args_type)) {

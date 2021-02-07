@@ -1,0 +1,38 @@
+test adding_to_vectors {
+  v := new_vec@(i32)();
+  assert!(v.length == 0);
+  push_back(v, 20);
+  assert!(v.length == 1);
+  assert!(v[0] == 20);
+}
+
+test pushing_back_till_internal_resize {
+  v := new_vec@(i32)(); # has capacity of 10
+
+  for i in 0 .. 15 {
+    # will resize at i == 10
+    push_back(v, i);
+  }
+
+  for i in 0 .. 15 {
+    assert!(v[i] == i);
+  }
+}
+
+test removing_from_vectors {
+  v := new_vec@(i32)();
+  # Pop back from empty vector
+  assert!(v.length == 0);
+  pop_back(v);
+  assert!(v.length == 0);
+
+  # Pop back from vector with element
+  push_back(v, 10);
+  assert!(v.length == 1);
+  pop_back(v);
+  assert!(v.length == 0);
+}
+
+# test indexing_vectors {
+
+# }

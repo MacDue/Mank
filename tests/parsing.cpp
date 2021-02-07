@@ -17,7 +17,7 @@
 
   There's corresponding wrap_stmt/expr functions in the AST builder.
 */
-#define WPS "proc test { "
+#define WPS "proc my_test { "
 #define WPE "}"
 
 /*
@@ -105,28 +105,28 @@ TEST_CASE("Procedures", "[Parser]") {
 
   SECTION("procedure without any parameters") {
     auto parsed_proc = Parser::parse_from_string(R"(
-      proc test {
+      proc my_test {
 
       }
     )");
 
     NEW_FILE(file);
     auto& expected_proc = f.add_functions(
-      f.make_procedure("test", f.make_stmt_body()));
+      f.make_procedure("my_test", f.make_stmt_body()));
 
     MATCH_AST(parsed_proc, expected_proc);
   }
 
   SECTION("procedure one argument") {
     auto parsed_proc = Parser::parse_from_string(R"(
-      proc test (foo: i32) {
+      proc my_test (foo: i32) {
 
       }
     )");
 
     NEW_FILE(file);
     auto& expected_proc = f.add_functions(
-      f.make_procedure("test", f.make_args(
+      f.make_procedure("my_test", f.make_args(
       f.make_argument(f.make_unchecked_type("i32"), "foo")),
         f.make_stmt_body()));
 
@@ -135,14 +135,14 @@ TEST_CASE("Procedures", "[Parser]") {
 
   SECTION("procedure with multiple arguments") {
     auto parsed_proc = Parser::parse_from_string(R"(
-      proc test (foo: i32, bar: bool, baz: float) {
+      proc my_test (foo: i32, bar: bool, baz: float) {
 
       }
     )");
 
     NEW_FILE(file);
     auto& expected_proc = f.add_functions(
-      f.make_procedure("test", f.make_args(
+      f.make_procedure("my_test", f.make_args(
       f.make_argument(f.make_unchecked_type("i32"), "foo"),
       f.make_argument(f.make_unchecked_type("bool"), "bar"),
       f.make_argument(f.make_unchecked_type("float"), "baz")),
@@ -220,7 +220,7 @@ TEST_CASE("Expressions", "[Parser]") {
     )" WPE);
 
     NEW_FILE(file);
-    auto& expected_literals = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+    auto& expected_literals = f.add_functions(f.make_procedure("my_test", f.make_stmt_body(
       f.make_expr_stmt(f.make_string("What is a computer?")),
       f.make_expr_stmt(f.make_integer(1337)),
       f.make_expr_stmt(f.make_float64(1.323000)),
@@ -239,7 +239,7 @@ TEST_CASE("Expressions", "[Parser]") {
     )" WPE);
 
     NEW_FILE(file);
-    auto& expected_idents = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+    auto& expected_idents = f.add_functions(f.make_procedure("my_test", f.make_stmt_body(
       f.make_expr_stmt(f.make_ident("fooBar")),
       f.make_expr_stmt(f.make_ident("foo_bar")),
       f.make_expr_stmt(f.make_ident("i_1")),
@@ -256,7 +256,7 @@ TEST_CASE("Expressions", "[Parser]") {
     )" WPE);
 
     NEW_FILE(file);
-    auto& expected_unaries = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+    auto& expected_unaries = f.add_functions(f.make_procedure("my_test", f.make_stmt_body(
       f.make_expr_stmt(f.make_unary(Ast_Operator::PLUS, f.make_integer(1))),
       f.make_expr_stmt(f.make_unary(Ast_Operator::MINUS, f.make_integer(1))),
       f.make_expr_stmt(f.make_unary(Ast_Operator::LOGICAL_NOT, f.make_boolean(true))))));
@@ -274,7 +274,7 @@ TEST_CASE("Expressions", "[Parser]") {
       )" WPE);
 
       NEW_FILE(file);
-      auto& expected_binaries = f.add_functions(f.make_procedure("test", f.make_stmt_body(
+      auto& expected_binaries = f.add_functions(f.make_procedure("my_test", f.make_stmt_body(
         f.make_expr_stmt(f.make_binary(Ast_Operator::PLUS,
           f.make_integer(1), f.make_integer(2))),
         f.make_expr_stmt(f.make_binary(Ast_Operator::MINUS,

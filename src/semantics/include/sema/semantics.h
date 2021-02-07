@@ -22,6 +22,10 @@ struct Semantics {
     this->source_file = &lexer;
   }
 
+  inline void build_test_runner() {
+    build_tests = true;
+  }
+
   CompilerWarnings const & get_warnings() { return warnings; }
 
   inline void disable_type_inference_for_testing() {
@@ -40,11 +44,15 @@ private:
 
   ResolvedPodInfoMap resolved_pods;
 
+  bool build_tests = false;
+
   // Only used for testing allows to seperate sema + infer
   bool disable_type_infer = false;
 
   // Simply because it's a pain to pass this around (top of stack == current function)
   std::stack<Type_Ptr> expected_returns;
+
+  inline bool building_tests() { return build_tests; }
 
   std::stack<Stmt_Ptr> active_loops;
   inline void enter_loop(Stmt_Ptr loop) { active_loops.push(loop); }

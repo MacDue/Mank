@@ -460,7 +460,7 @@ inline Stmt_Ptr make_bind(
 /* Test helpers */
 
 inline Ast_File& wrap_stmt(Stmt_Ptr stmt, bool has_final_expr = false) {
-  add_functions(make_procedure("test", make_body(has_final_expr, stmt)));
+  add_functions(make_procedure("my_test", make_body(has_final_expr, stmt)));
   return file;
 }
 

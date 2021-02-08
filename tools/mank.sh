@@ -13,6 +13,13 @@ fi
 
 build_dir=$(mktemp --directory)
 output_dir=$(pwd)
+
+source_dir_base=$output_dir
+
+if [[ "${ABS_SOURCE_PATH}" == "1" ]]; then
+  source_dir_base=""
+fi
+
 cd $build_dir
 
 cat << EOF > ./main.c
@@ -141,7 +148,6 @@ int main(int argc, char* argv[]) {
 EOF
 
 bin_name=$(basename $1 .mank)
-
 if [[ "$2" == "--tests" ]]; then
   LLC_ARGS=""
   MANK_ARGS="--tests"
@@ -151,9 +157,8 @@ else
   MANK_ARGS=""
 fi
 
-
 gcc ./main.c -c -o main.o
-$MANK_HOME/mankc $output_dir/$1 --codegen $MANK_ARGS > mank_dump.ll.packed
+$MANK_HOME/mankc $source_dir_base/$1 --codegen $MANK_ARGS > mank_dump.ll.packed
 csplit --quiet -b "%d.ll" ./mank_dump.ll.packed "/;--fin/"
 
 for llvm_ir in ./*.ll

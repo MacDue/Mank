@@ -1,0 +1,74 @@
+
+pod Other {
+  apple: f64
+}
+
+pod Example {
+  thing: i32,
+  goo: f64,
+  other_value: Other,
+}
+
+pod ExampleWithRef {
+  thing: i32,
+  goo: f64,
+  other_ref: Other
+}
+
+pod ExampleWithTuples {
+  foo: i32,
+  bar: (f64, bool, str)
+}
+
+fun make_example_pod: Example {
+  Example {
+    .thing = 12,
+    .goo = 1.3,
+    .other_value = Other { .apple = 100. }
+  }
+}
+
+test binding_single_level_pod_fields {
+  bind { .thing, .goo } = make_example_pod();
+  assert!(thing == 12);
+  assert!(goo == 1.3);
+}
+
+test binding_and_renaming_single_level_pod_fields {
+  bind { .thing/nice_thing, .goo/foo } = make_example_pod();
+  assert!(nice_thing == 12);
+  assert!(foo == 1.3);
+}
+
+test nesting_pod_field_bindings {
+  bind { .thing, .other_value/{.apple} } = make_example_pod();
+  assert!(thing == 12);
+  assert!(apple == 100.);
+}
+
+test binding_pod_fields_through_references {
+  other := Other { .apple = 666. };
+  example := ExampleWithRef {
+    .thing = 213,
+    .goo = -12.,
+    .other_ref = ref other
+  };
+  # .apple is now indirectly accessed
+  bind { .other_ref/{.apple} } = example;
+  assert!(apple == 666.);
+}
+
+test tuple_binding_within_pod_binding {
+  example := ExampleWithTuples {
+    .bar = (332.,false,"Hello World"),
+    .foo = -1
+  };
+
+  bind { .foo, .bar/(a,b,c) } = example;
+  assert!(foo == -1);
+  assert!(a == 332.);
+  assert!(!b);
+  assert!(c[0] == 'H'); # TODO strcmp :)
+}
+
+# todo more tests (for tuples and mixed binds), ref binds, etc

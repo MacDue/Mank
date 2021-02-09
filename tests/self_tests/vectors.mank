@@ -33,6 +33,109 @@ test removing_from_vectors {
   assert!(v.length == 0);
 }
 
-# test indexing_vectors {
+test indexing_vectors {
+  # Boring kinda already tested
+  v := vec!([13,21,-43,5]);
+  assert!(v[2] == -43);
+}
 
-# }
+test indexing_nested_vectors {
+  v := vec!([
+    vec!([4,1,2]),
+    vec!([1,2])
+  ]);
+
+  assert!(v[0][0] == 4);
+  assert!(v[1][0] == 1);
+
+  # refs should be no issue
+  v_ref := ref v;
+  assert!(v_ref[0][0] == 4);
+  assert!(v_ref[1][0] == 1);
+}
+
+test copying_a_vector_only_copies_its_internal_pointer_meta_consistant {
+  v := vec!([1,2,3]);
+  v_ref_copy := v; # a vector really is just a pointer to some internal data
+  assert!(v.length == v_ref_copy.length);
+
+  push_back(v_ref_copy, 99);
+  # meta stays consistent
+  assert!(v.length == v_ref_copy.length);
+}
+
+test creating_huge_vectors_without_crashing {
+  big_v := new_vec@(i32)();
+  for i in 0 .. 1000000 {
+    push_back(big_v, 42);
+  }
+
+  for i in 0 .. 1000000 {
+    assert!(big_v[i] == 42);
+  }
+}
+
+test assigning_vector_indexes {
+  v := vec!([1,2,3,4]);
+
+  assert!(v[0] == 1);
+  v[0] = 99;
+  assert!(v[0] == 99);
+
+  v_ref := ref v;
+  assert!(v_ref[1] == 2);
+  v_ref[1] = -42;
+
+  assert!(v_ref[1] == -42);
+}
+
+pod Foo {
+  bar: char,
+  baz: i32
+}
+
+test vectors_of_aggregate_types {
+  # tuples
+  v := vec!([(true, 21, -1.),(false, 12, 42.9)]);
+
+  bind (a1,b1,c1) = v[0];
+  assert!(a1);
+  assert!(b1 == 21);
+  assert!(c1 == -1.);
+
+  bind (a2,b2,c2) = v[1];
+  assert!(!a2);
+  assert!(b2 == 12);
+  assert!(c2 == 42.9);
+
+  # Pods
+  v2 := vec!([
+    Foo { .bar = 'A', .baz = 666 },
+    Foo { .bar = 'J', .baz = -123 }]);
+
+  bind { .bar/d1, .baz/e1 } = v2[0];
+  assert!(d1 == 'A');
+  assert!(e1 == 666);
+
+  bind { .bar/d2, .baz/e2 } = v2[1];
+  assert!(d2 == 'J');
+  assert!(e2 == -123);
+}
+
+test filling_vectors {
+  v := new_vec@(i32)();
+  assert!(v.length == 0);
+  fill_vec(v, 42, 100);
+
+  assert!(v.length == 100);
+  for i in 0 .. v.length {
+    assert!(v[i] == 42);
+  }
+
+  # Filling a vector again overwrites existing elements
+  fill_vec(v, 10, 20);
+  assert!(v.length == 20);
+  for i in 0 .. v.length {
+    assert!(v[i] == 10);
+  }
+}

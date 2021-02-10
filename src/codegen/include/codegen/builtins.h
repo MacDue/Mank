@@ -9,7 +9,9 @@ namespace Builtin {
     MANK_VEC_INIT            =  "__mank_builtin__init_vec",
     MANK_VEC_PUSH_BACK       =  "__mank_builtin__push_back",
     MANK_VEC_POP_BACK        =  "__mank_builtin__pop_back",
-    MANK_VEC_FILL            =  "__mank_builtin__vector_fill";
+    MANK_VEC_FILL            =  "__mank_builtin__vector_fill",
+    MANK_BOUNDS_ERROR        =  "__mank_builtin__bounds_error",
+    MANK_BOUNDSCHECK         =  "%boundscheck";
 
   namespace String {
     enum Offsets: uint {

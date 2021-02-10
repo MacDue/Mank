@@ -35,10 +35,9 @@
 class LLVMCodeGen: public CodeGenerator {
 
   struct SymbolMetaLocal: SymbolMeta {
-    llvm::AllocaInst* alloca;
+    llvm::Value* alloca;
 
-    SymbolMetaLocal(llvm::AllocaInst* alloca)
-      : alloca{alloca} {}
+    SymbolMetaLocal(llvm::Value* alloca): alloca{alloca} {}
   };
 
   struct SymbolMetaReturn: SymbolMetaLocal {
@@ -48,14 +47,27 @@ class LLVMCodeGen: public CodeGenerator {
       : SymbolMetaLocal(return_value), return_block{return_block} {}
   };
 
-  struct SymbolMetaCompoundType : SymbolMeta {
+  struct SymbolMetaCompoundType: SymbolMeta {
     llvm::Type* type;
 
     SymbolMetaCompoundType(llvm::Type* type)
       : type{type} {}
   };
 
+  struct SymbolMetaBoundsCheck: SymbolMeta {
+    // Hack to insert bounds checking code into the AST
+    SourceLocation location;
+    llvm::Value *length, *index;
+
+    SymbolMetaBoundsCheck(SourceLocation location,
+      llvm::Value* length, llvm::Value* index
+    ): location{location}, length{length}, index{index} {}
+  };
+
   Ast_File& file_ast;
+  llvm::Value* source_filename = nullptr;
+
+  llvm::Value* get_source_filename();
 
   /*
     Owns mank datastructures.
@@ -136,6 +148,8 @@ class LLVMCodeGen: public CodeGenerator {
   llvm::Function* get_vec_push_back(Scope& scope);
   llvm::Function* get_vec_pop_back(Scope& scope);
   llvm::Function* get_vec_fill(Scope& scope);
+
+  llvm::Function* get_bounds_error();
 
   llvm::Type* get_string_ty(Scope& scope);
 
@@ -265,6 +279,14 @@ public:
   Expr_Ptr simplify_short_circuit(Ast_Binary_Operation& short_circuit);
 
   Expr_Ptr mank_builtin_array_set(Type_Ptr array_type, Expr_Ptr initializer, Scope& scope);
+
+  void raise_mank_builtin_bounds_error(
+    llvm::Value* length, llvm::Value* index,
+    SourceLocation const & location);
+
+  void insert_bounds_check(
+    llvm::Value* length, llvm::Value* index,
+    Ast_Index_Access const & access, Scope& scope);
 
   llvm::Value* codegen_builtin_vector_calls(
     Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope);

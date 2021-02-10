@@ -37,6 +37,14 @@ void LLVMCodeGen::create_module() {
   /* TODO: set up optimizations */
 }
 
+llvm::Value* LLVMCodeGen::get_source_filename() {
+  if (this->source_filename) {
+    return this->source_filename;
+  }
+  return this->source_filename = ir_builder.CreateGlobalStringPtr(
+    file_ast.filename.c_str(), "!mank_source");
+}
+
 llvm::Function* LLVMCodeGen::get_external(
   llvm::StringRef name,
   llvm::Type* return_type,
@@ -133,6 +141,18 @@ llvm::Function* LLVMCodeGen::get_vec_fill(Scope& scope) {
     });
 }
 
+llvm::Function* LLVMCodeGen::get_bounds_error() {
+  return get_external(
+    Builtin::MANK_BOUNDS_ERROR,
+    llvm::Type::getVoidTy(llvm_context),
+    {
+      llvm::Type::getInt64Ty(llvm_context),   // length
+      llvm::Type::getInt64Ty(llvm_context),   // index
+      llvm::Type::getInt8PtrTy(llvm_context), // filename
+      llvm::Type::getInt32Ty(llvm_context),   // line
+      llvm::Type::getInt32Ty(llvm_context)    // col
+    });
+}
 
 std::pair<llvm::Value*, llvm::Value*>
 LLVMCodeGen::extract_string_info(Ast_Expression& expr, Scope& scope) {
@@ -1347,9 +1367,21 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope) {
-  using namespace mpark::patterns;
   Symbol* symbol = scope.lookup_first_name(ident);
   assert(symbol->is_local() && "only locals implemented");
+
+  if (ident.name.at(0) == '%') {
+    // Special pre-codegened values
+    auto* meta_ptr = symbol->meta.get();
+    if (ident.name == Builtin::MANK_BOUNDSCHECK) {
+      // Little hack for adding bounds checks
+      auto& boundscheck = *static_cast<SymbolMetaBoundsCheck*>(meta_ptr);
+      raise_mank_builtin_bounds_error(
+        boundscheck.length, boundscheck.index, boundscheck.location);
+      return nullptr;
+    }
+    return static_cast<SymbolMetaLocal*>(meta_ptr)->alloca;
+  }
 
   llvm::Value* variable_address = address_of(*ident.get_self().class_ptr(), scope);
   return ir_builder.CreateLoad(variable_address,
@@ -1697,6 +1729,81 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression_List& array_like, Sc
   return ir_builder.CreateLoad(agg_alloca, "agg_expr");
 }
 
+void LLVMCodeGen::raise_mank_builtin_bounds_error(
+  llvm::Value* length, llvm::Value* index,
+  SourceLocation const & location
+) {
+  length = ir_builder.CreateIntCast(
+    length, llvm::Type::getInt64Ty(llvm_context), false);
+  index = ir_builder.CreateIntCast(
+    index, llvm::Type::getInt64Ty(llvm_context), true /* for now */);
+
+  llvm::Value* source_line = create_llvm_idx(location.start_line);
+  llvm::Value* source_col = create_llvm_idx(location.start_column);
+
+  ir_builder.CreateCall(
+    get_bounds_error(), { length, index, get_source_filename(), source_line, source_col });
+}
+
+void LLVMCodeGen::insert_bounds_check(
+  llvm::Value* length, llvm::Value* index,
+  Ast_Index_Access const & access, Scope& scope
+) {
+  auto create_precodegend_local = [&](std::string name, llvm::Value* value) {
+    name = '%' + name;
+    auto& sym = scope.add(Symbol(
+      SymbolName(name), nullptr, Symbol::LOCAL));
+    sym.meta = std::make_shared<SymbolMetaLocal>(value);
+    return ast_builder.make_ident(name);
+  };
+
+  auto idx = create_precodegend_local("idx", index);
+  Ast_Binary_Operation _idx_less_than_zero, _idx_greater_than_length;
+  // 0 > idx
+  _idx_less_than_zero.left = ast_builder.make_integer(0, true);
+  _idx_less_than_zero.left->meta.type = PrimativeType::int_ty();
+  _idx_less_than_zero.right = idx;
+  _idx_less_than_zero.operation = Ast_Operator::GREATER_THAN;
+  auto idx_less_than_zero = mank_ctx.new_expr(_idx_less_than_zero);
+  idx_less_than_zero->meta.type = PrimativeType::bool_ty();
+  // ||
+  // idx >= length
+  _idx_greater_than_length.left = idx;
+  _idx_greater_than_length.left->meta.type = PrimativeType::int_ty();
+  _idx_greater_than_length.right = create_precodegend_local("length", length);
+  _idx_greater_than_length.operation = Ast_Operator::GREATER_EQUAL;
+  auto idx_greater_than_length = mank_ctx.new_expr(_idx_greater_than_length);
+
+  auto abort_call = ast_builder.make_call("abort");
+
+  auto block = ast_builder.make_block(false);
+  auto& err_body = std::get<Ast_Block>(block->v);
+
+  // setting up magic %boundscheck "variable"
+  err_body.scope.set_parent(scope);
+  auto builtin_boundscheck = ast_builder.make_ident(Builtin::MANK_BOUNDSCHECK);
+  auto& boundscheck = err_body.scope.add(Symbol(
+    std::get<Ast_Identifier>(builtin_boundscheck->v), nullptr, Symbol::LOCAL));
+  boundscheck.meta = std::make_shared<SymbolMetaBoundsCheck>(
+    AstHelper::extract_location(access), length, index);
+
+  err_body.statements.push_back(
+    ast_builder.make_expr_stmt(builtin_boundscheck));
+
+  /*
+    if (out of bounds) {
+      bounds_error()
+    }
+  */
+  std::get<Ast_Call>(abort_call->v).callee->meta.type = scope.lookup_first("abort")->type;
+  auto bounds_check = ast_builder.make_if_stmt(
+    ast_builder.make_binary(
+      Ast_Operator::LOGICAL_OR, idx_less_than_zero, idx_greater_than_length),
+      block);
+
+  codegen_statement(*bounds_check, scope);
+}
+
 Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
   Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list
 ) {
@@ -1706,7 +1813,12 @@ Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
   } else {
     base_expr = index.object.get();
   }
-  idx_list.push_back(codegen_expression(*index.index, scope));
+  llvm::Value* idx = codegen_expression(*index.index, scope);
+  insert_bounds_check(
+    create_llvm_idx(std::get<FixedSizeArrayType>(
+      remove_reference(index.object->meta.type)->v).size),
+    idx, index, scope);
+  idx_list.push_back(idx);
   return *base_expr;
 }
 
@@ -1715,11 +1827,12 @@ llvm::Value* LLVMCodeGen::index_vector(Ast_Index_Access vector_index, Scope& sco
   auto& vec_type = std::get<ListType>(remove_reference(vector_index.object->meta.type)->v);
   llvm::Value* vec_data_ptr = get_value_extractor(
     *vector_index.object, scope).get_value({Builtin::Vector::DATA}, "vec_data_ptr");
+  llvm::Value* index = codegen_expression(*vector_index.index, scope);
+  insert_bounds_check(get_vector_length(vec_data_ptr), index, vector_index, scope);
   llvm::Type* el_type = map_type_to_llvm(vec_type.element_type.get(), scope);
   vec_data_ptr = ir_builder.CreateBitCast(
     vec_data_ptr, llvm::PointerType::get(el_type, 0));
-  return ir_builder.CreateGEP(
-    vec_data_ptr, { codegen_expression(*vector_index.index, scope) }, "vec_index");
+  return ir_builder.CreateGEP(vec_data_ptr, { index }, "vec_index");
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& scope) {

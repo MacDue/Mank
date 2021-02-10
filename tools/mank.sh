@@ -23,7 +23,10 @@ fi
 cd $build_dir
 
 cat << EOF > ./main.c
+#include <stdio.h>
 #include <gc/gc.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
@@ -132,6 +135,14 @@ void __mank_builtin__vector_fill(struct __mank_vec* vec, void* fill, size_t coun
     memcpy(el, fill, header->type_size);
     el += header->type_size;
   }
+}
+
+void __mank_builtin__bounds_error(
+  size_t length, int64_t index, char* filename, int32_t line, int32_t col
+) {
+  fprintf(stderr, "Index out of bounds: %s:%d:%d: length is %ld, but index was %ld\n",
+     filename, line + 1, col + 1, length, index);
+  abort();
 }
 
 int main(int argc, char* argv[]) {

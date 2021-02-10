@@ -141,7 +141,7 @@ test filling_vectors {
 }
 
 test mixed_array_and_vector_indexing {
-  # Normal fixed arrays well tested
+  # Normal fixed arrays are well tested
   expected := [
     [1,2,3],
     [4,5,6]

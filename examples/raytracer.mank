@@ -399,5 +399,5 @@ fun sample_earth_texture: Vec3f (x: i32, y: i32) {
 
 fun get_earth_texel: Vec3f (normal: Vec3f) {
   bind (u, v) = get_uv(normal);
-  sample_earth_texture(32 - (u * 32.) as i32, (v * 15.) as i32)
+  sample_earth_texture(31 - (u * 32.) as i32, (v * 15.) as i32)
 }

@@ -22,6 +22,11 @@ extern "C" {
   void* __mank_alloc__any(size_t bytes) {
     return GC_MALLOC(bytes);
   }
+  void __mank_builtin__bounds_error(
+    size_t, int64_t, char*, int32_t, int32_t
+  ) {
+    assert(false && "tests should not break bounds");
+  }
 }
 
 TEST_CASE("Simple addition", "[Codegen]") {

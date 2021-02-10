@@ -1808,15 +1808,24 @@ Ast_Expression& LLVMCodeGen::flatten_nested_array_indexes(
   Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list
 ) {
   Ast_Expression* base_expr;
-  if (auto pior_index = std::get_if<Ast_Index_Access>(&index.object->v)) {
+
+  auto pior_access_is_fixed_array = [](Ast_Index_Access& pior_index) {
+    return std::holds_alternative<FixedSizeArrayType>(
+      remove_reference(pior_index.object->meta.type)->v);
+  };
+
+  Ast_Index_Access* pior_index;
+  if ((pior_index = std::get_if<Ast_Index_Access>(&index.object->v))
+    && pior_access_is_fixed_array(*pior_index)
+  ) {
     base_expr = &flatten_nested_array_indexes(*pior_index, scope, idx_list);
   } else {
     base_expr = index.object.get();
   }
   llvm::Value* idx = codegen_expression(*index.index, scope);
+  auto object_type = remove_reference(index.object->meta.type)->v;
   insert_bounds_check(
-    create_llvm_idx(std::get<FixedSizeArrayType>(
-      remove_reference(index.object->meta.type)->v).size),
+    create_llvm_idx(std::get<FixedSizeArrayType>(object_type).size),
     idx, index, scope);
   idx_list.push_back(idx);
   return *base_expr;
@@ -1865,7 +1874,6 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& sco
           get_current_function(), scope, source_object.meta.type.get(), "index_temp");
         ir_builder.CreateStore(codegen_expression(source_object, scope), source_address);
       }
-
       return ir_builder.CreateGEP(source_address, idx_list, "index_access");
     }
   );

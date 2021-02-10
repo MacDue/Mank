@@ -2055,6 +2055,7 @@ Expr_Ptr LLVMCodeGen::mank_builtin_array_set(
   auto idx = ast_builder.make_ident("!i");
   auto array = ast_builder.make_ident("!array");
   auto array_idx = ast_builder.make_index(array, idx);
+  array->meta.type = array_type;
 
   idx->meta.type = PrimativeType::int_ty();
   array_idx->meta.value_type

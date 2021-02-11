@@ -164,3 +164,16 @@ test mixed_array_and_vector_indexing {
     }
   }
 }
+
+test vector_repeat_initializer {
+  const_repeats := vec!([=56; 100]);
+  assert!(const_repeats.length == 100);
+  for i in 0 .. const_repeats.length {
+    assert!(const_repeats[i] == 56);
+  }
+
+  # Mank can't figure out this is always 99
+  bind (non_const_len, _) = parse_int("99");
+  repeats := vec!([=42; non_const_len]);
+  assert!(repeats.length == 99);
+}

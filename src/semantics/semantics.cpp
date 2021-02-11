@@ -847,9 +847,9 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
         || within_macro
       ) {
         FixedSizeArrayType array_type;
-        if (!match_types(repetitions_type, PrimativeType::int_ty())) {
-          throw_sema_error_at(array_repeat.repetitions, "repetitions must be an integer amount");
-        }
+        infer->match_or_constrain_types_at(
+          array_repeat.repetitions, repetitions_type, PrimativeType::int_ty(),
+          "repetitions must be an integer amount");
         // Don't restrict repetitions to constants in macros (good for vec inits)
         if (!within_macro) {
           auto repetitions = std::get<int32_t>(*const_repetitions);

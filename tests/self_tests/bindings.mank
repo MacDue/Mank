@@ -71,4 +71,49 @@ test tuple_binding_within_pod_binding {
   assert!(c[0] == 'H'); # TODO strcmp :)
 }
 
-# todo more tests (for tuples and mixed binds), ref binds, etc
+test binding_pod_fields_as_refs {
+  example := make_example_pod();
+
+  bind { .thing: ref } = example;
+  assert!(thing == 12 && example.thing == 12);
+
+  thing = 42;
+  assert!(thing == 42 && example.thing == 42);
+}
+
+test simple_tuple_bindings {
+  # rvalue tuples
+  bind (a, b, c) = (1, true, 3.);
+  assert!(a == 1 && b && c == 3.);
+
+  # lvalue tuples
+  tuple := (4, false, 6.);
+  bind (d, e, f) = tuple;
+  assert!(d == 4 && !e && f == 6.);
+}
+
+test binding_tuple_members_as_refs {
+  lvalue_tuple := (102,); # just a simple one element tuple
+
+  bind (a: ref) = lvalue_tuple;
+  assert!(a == 102 && { bind (other) = lvalue_tuple; other == 102 });
+
+  a = 42;
+  assert!(a == 42 && { bind (other) = lvalue_tuple; other == 42 });
+}
+
+test tuple_binding_assignment {
+  bind (a, b, c) = (1, true, 3.);
+  assert!(a == 1 && b && c == 3.);
+
+  # binding assignment
+  (a, b, c) = (231, false, 27.);
+  assert!(a == 231 && !b && c == 27.);
+}
+
+test pod_binding_within_tuple_binding {
+  tuple_of_pods := (make_example_pod(), make_example_pod());
+
+  bind (boo, { .thing }) = tuple_of_pods;
+  assert!(thing == 12);
+}

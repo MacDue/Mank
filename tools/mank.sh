@@ -168,16 +168,21 @@ else
   MANK_ARGS=""
 fi
 
-gcc ./main.c -c -o main.o
-$MANK_HOME/mankc $source_dir_base/$1 --codegen $MANK_ARGS > mank_dump.ll.packed
-csplit --quiet -b "%d.ll" ./mank_dump.ll.packed "/;--fin/"
+compile_ir () {
+  for llvm_ir in ./*.ll
+  do
+    llc $LLC_ARGS -relocation-model=pic "$llvm_ir"
+  done
+}
 
-for llvm_ir in ./*.ll
-do
-  llc $LLC_ARGS -relocation-model=pic "$llvm_ir"
-done
+{
+  gcc ./main.c -c -o main.o \
+  && $MANK_HOME/mankc $source_dir_base/$1 --codegen $MANK_ARGS > mank_dump.ll.packed \
+  && csplit --quiet -b "%d.ll" ./mank_dump.ll.packed "/;--fin/" \
+  && compile_ir \
+  && gcc ./main.o ./*.s -o ./$bin_name -lgc -lm \
+  && mv ./$bin_name $output_dir/$bin_name
+}
 
-gcc ./main.o ./*.s -o ./$bin_name -lgc -lm
-
-mv ./$bin_name $output_dir/$bin_name
-
+cd ..
+rm -rf $build_dir

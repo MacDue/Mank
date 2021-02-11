@@ -28,4 +28,6 @@ do
   } || {
     echo -e "${RED}Test ${test_name} FAILED!${NC}"
   }
+  cd ..
+  rm -rf $build_dir
 done

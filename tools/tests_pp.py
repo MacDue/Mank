@@ -25,4 +25,6 @@ if __name__ == "__main__":
         prog_source[idx] = ''.join(copy_source)
 
   for line in prog_source:
+    if line[-1] == '\n':
+      line = line[:-1]
     print(line)

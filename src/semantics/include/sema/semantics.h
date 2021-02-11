@@ -95,7 +95,7 @@ private:
   void analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope);
 
   Type_Ptr analyse_block(Ast_Block& block, Scope& scope);
-  Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope);
+  Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope, bool within_macro = false);
   Type_Ptr analyse_unary_expression(Ast_Unary_Operation& unary, Scope& scope);
   Type_Ptr analyse_binary_expression(Ast_Binary_Operation& expr, Scope& scope);
   Type_Ptr analyse_call(Ast_Call& expr, Scope& scope);

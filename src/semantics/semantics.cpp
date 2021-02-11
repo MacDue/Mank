@@ -656,14 +656,14 @@ void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_
   }
 
   for (auto arg: macro_call.arguments) {
-    (void) analyse_expression(*arg, scope);
+    (void) analyse_expression(*arg, scope, true);
   }
 
   Ast_Expression_Type expansion = (*expander)(macro_call, *builder, *infer, source_file);
   AstHelper::rewrite_expr(target, expansion);
 }
 
-Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
+Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool within_macro) {
   using namespace mpark::patterns;
   auto expr_type = match(expr.v)(
     pattern(as<Ast_Literal>(arg)) = [&](auto& lit) {
@@ -842,17 +842,23 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope) {
       auto repetitions_type = analyse_expression(*array_repeat.repetitions, scope);
       // FIXME: Const eval will happen twice (currently const eval needs types)
       AstHelper::constant_expr_eval(*array_repeat.repetitions);
-      if (auto const_repetitions = array_repeat.repetitions->meta.get_const_value()) {
+      PrimativeValue* const_repetitions;
+      if ((const_repetitions = array_repeat.repetitions->meta.get_const_value())
+        || within_macro
+      ) {
+        FixedSizeArrayType array_type;
         if (!match_types(repetitions_type, PrimativeType::int_ty())) {
           throw_sema_error_at(array_repeat.repetitions, "repetitions must be an integer amount");
         }
-        auto repetitions = std::get<int32_t>(*const_repetitions);
-        if (repetitions < 0) {
-          throw_sema_error_at(array_repeat.repetitions, "cannot have negative repetitions");
+        // Don't restrict repetitions to constants in macros (good for vec inits)
+        if (!within_macro) {
+          auto repetitions = std::get<int32_t>(*const_repetitions);
+          if (repetitions < 0) {
+            throw_sema_error_at(array_repeat.repetitions, "cannot have negative repetitions");
+          }
+          array_type.size = repetitions;
         }
-        FixedSizeArrayType array_type;
         array_type.element_type = init_type;
-        array_type.size = repetitions;
         return ctx->new_type(array_type);
       } else {
         throw_sema_error_at(array_repeat.repetitions, "repetitions must be constant");

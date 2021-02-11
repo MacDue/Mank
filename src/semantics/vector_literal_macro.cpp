@@ -21,29 +21,59 @@ namespace Macros {
         push_back(^vec, 3);
         ^vec
       }
+
+      vec!([=42, 100]);
+      ->
+      {
+        ^vec = new_vec@(i32)();
+        fill_vec(^vec, 42, 100);
+        ^vec
+      }
     */
-
-    auto list = [&]() -> Ast_Array_Literal* {
-      if (vec_literal.arguments.size() != 1) return nullptr;
-      return std::get_if<Ast_Array_Literal>(&vec_literal.arguments.at(0)->v);
-    }();
-
-    if (!list || list->elements.size() <= 0) {
-      throw_sema_error_at(vec_literal, "vec macro expects a single array literal");
-    }
-
-    auto el_type = list->elements.at(0)->meta.type;
     // ^ prefix disables shadowing warnings
-    auto vec_builder = builder.make_body(true,
-      builder.make_var_decl("^vec",
-        builder.make_call(builder.make_sp_ident("new_vec", el_type))));
 
-    for (auto el: list->elements) {
-      vec_builder.statements.push_back(
-        builder.make_expr_stmt(
-          builder.make_call("push_back", builder.make_ident("^vec"), el)));
+    if (vec_literal.arguments.size() != 1) {
+      throw_sema_error_at(vec_literal, "vec macro expects only a single array literal argument");
     }
 
+    auto array_literal = vec_literal.arguments.at(0);
+
+    auto vec_builder = builder.make_body(true);
+    auto vec_ident = builder.make_ident("^vec");
+
+    auto decl_vec = [&](Type_Ptr el_type){
+      vec_builder.statements.push_back(
+        builder.make_var_decl("^vec",
+          builder.make_call(builder.make_sp_ident("new_vec", el_type))));
+    };
+
+    match(array_literal->v)(
+      pattern(as<Ast_Array_Literal>(arg)) = [&](auto& array){
+        if (array.elements.size() <= 0) {
+          throw_sema_error_at(vec_literal, "cannot infer vector type from empty array");
+        }
+        auto el_type = array.elements.at(0)->meta.type;
+        decl_vec(el_type);
+        for (auto el: array.elements) {
+          vec_builder.statements.push_back(
+            builder.make_expr_stmt(
+              builder.make_call("push_back", vec_ident, el)));
+        }
+      },
+      pattern(as<Ast_Array_Repeat>(arg)) = [&](auto& array_repeat) {
+        auto el_type = array_repeat.initializer->meta.type;
+        decl_vec(el_type);
+        vec_builder.statements.push_back(
+          builder.make_expr_stmt(
+            builder.make_call("fill_vec", vec_ident,
+              array_repeat.initializer, array_repeat.repetitions)));
+      },
+      pattern(_) = [&]{
+        throw_sema_error_at(array_literal, "invalid vector initializer");
+      }
+    );
+
+    // ret vec
     vec_builder.statements.push_back(
       builder.make_expr_stmt(builder.make_ident("^vec"), true));
 

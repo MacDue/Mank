@@ -1,0 +1,18 @@
+#!copy ../../examples/brainfsk.mank
+
+test running_brainfsk_helloworld {
+  program_out := new_vec@(char)();
+
+  bf_state := new_program_state(30000,
+    \c -> { putchar(c); push_back(program_out, c) }, \ -> {'A'});
+
+  bf_interpret(
+    "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.",
+    bf_state);
+
+  expected_out := "Hello World!\n";
+
+  for idx in 0 .. expected_out.length {
+    assert!(expected_out[idx] == program_out[idx]);
+  }
+}

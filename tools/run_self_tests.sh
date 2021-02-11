@@ -6,6 +6,7 @@ cd $(dirname $BASH_SOURCE)
 PWD=$(pwd)
 TESTS_DIR="${PWD}/../tests"
 MANKC="${PWD}/mank.sh"
+TEST_PP="${PWD}/tests_pp.py"
 MANK_HOME="${PWD}/../build"
 export MANK_HOME
 
@@ -20,7 +21,8 @@ do
   build_dir=$(mktemp --directory)
   cd $build_dir
   {
-    ABS_SOURCE_PATH=1 $MANKC $tests --tests \
+    $TEST_PP $tests > ./${test_name}.mank \
+    && $MANKC ./${test_name}.mank --tests \
     && echo "Running test ${test_name}.mank:" \
     && ./${test_name}_tests && echo -e "${GREEN}Test ${test_name} PASS!${NC}"
   } || {

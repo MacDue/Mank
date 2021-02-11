@@ -46,11 +46,10 @@ proc bf_interpret(program: str, state: ref ProgramState) {
 }
 
 fun make_bracket_map: i32[] (program: str) {
-  bracket_map := new_vec@(i32)();
   # Kinda a waste of space (but we don't have maps yet)
-  fill_vec(bracket_map, 0, program.length);
-  open_brackets := new_vec@(i32)();
+  bracket_map := vec!([=0; program.length]);
 
+  open_brackets := new_vec@(i32)();
   for i in 0 .. program.length {
     instr := program[i];
     if instr == '[' {
@@ -69,11 +68,7 @@ fun make_bracket_map: i32[] (program: str) {
 
 fun new_program_state: ProgramState (cell_count: i32) {
   ProgramState {
-    .cells = {
-      cells := new_vec@(char)();
-      fill_vec(cells, 0 as char, cell_count);
-      cells
-    },
+    .cells = vec!([=0 as char; cell_count]),
     .current_cell = 0
   }
 }

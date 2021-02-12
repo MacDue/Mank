@@ -68,7 +68,7 @@ test tuple_binding_within_pod_binding {
   assert!(foo == -1);
   assert!(a == 332.);
   assert!(!b);
-  assert!(c[0] == 'H'); # TODO strcmp :)
+  assert!(str_equal(c, "Hello World"));
 }
 
 test binding_pod_fields_as_refs {

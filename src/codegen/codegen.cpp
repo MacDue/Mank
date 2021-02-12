@@ -75,7 +75,7 @@ llvm::Function* LLVMCodeGen::get_gc_malloc() {
 
 llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
   Symbol* str_sym = scope.lookup_first("str");
-  assert(str_sym && match_types(str_sym->type, PrimativeType::get(PrimativeType::STRING)));
+  assert(str_sym && match_types(str_sym->type, PrimativeType::str_ty()));
 
   if (!str_sym->meta) {
     llvm::Type* llvm_str_type = llvm::StructType::create(
@@ -1455,7 +1455,7 @@ Expr_Ptr LLVMCodeGen::simplify_short_circuit(Ast_Binary_Operation& short_circuit
     std::swap(lhs, rhs);
   }
   auto sc_if = ast_builder.make_if(short_circuit.left, lhs, rhs);
-  std::get<Ast_If_Expr>(sc_if->v).get_meta().type = PrimativeType::get(PrimativeType::BOOL);
+  std::get<Ast_If_Expr>(sc_if->v).get_meta().type = PrimativeType::bool_ty();
   return sc_if;
 }
 
@@ -2024,8 +2024,7 @@ llvm::Value* LLVMCodeGen::do_cast(
       } else if (t.is_string_type()) {
         if (s.tag != PrimativeType::CHAR) {
           // FIXME: hack
-          value = do_cast(
-            value, source_type, PrimativeType::get(PrimativeType::CHAR), scope);
+          value = do_cast(value, source_type, PrimativeType::char_ty(), scope);
         }
         return create_char_string_cast(value, scope);
       } else {

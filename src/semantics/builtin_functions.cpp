@@ -40,8 +40,7 @@ void add_builtins_to_scope(Scope& scope, AstContext& ctx, AstBuilder& builder) {
 
   TupleType parse_int_ret;
   parse_int_ret.element_types = {
-    PrimativeType::int_ty(),
-    PrimativeType::get(PrimativeType::BOOL)
+    PrimativeType::int_ty(), PrimativeType::bool_ty()
   };
 
   auto vec_element_type = make_generic_type(ctx, "E");
@@ -55,61 +54,56 @@ void add_builtins_to_scope(Scope& scope, AstContext& ctx, AstBuilder& builder) {
   std::array builtin_funcs {
     // C stdlib putchar/getchar
     make_builtin_func(ctx, "putchar", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
-      PrimativeType::int_ty(), true),
+      builder.make_argument(PrimativeType::char_ty(), "c")), PrimativeType::int_ty(), true),
     make_builtin_func(ctx, "stderr_putchar", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::CHAR), "c")),
-      PrimativeType::int_ty(), true),
+      builder.make_argument(PrimativeType::char_ty(), "c")), PrimativeType::int_ty(), true),
     make_builtin_func(ctx, "getchar", {}, PrimativeType::int_ty(), true),
     make_builtin_func(ctx, "abort", {}, Type::void_ty(), true),
     make_builtin_func(ctx, "sqrt", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
+      builder.make_argument(PrimativeType::f64_ty(), "f")), PrimativeType::f64_ty(), true),
     make_builtin_func(ctx, "pow", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "x"),
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "y")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
+      builder.make_argument(PrimativeType::f64_ty(), "x"),
+      builder.make_argument(PrimativeType::f64_ty(), "y")),
+      PrimativeType::f64_ty(), true),
     make_builtin_func(ctx, "sin", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
+      builder.make_argument(PrimativeType::f64_ty(), "f")), PrimativeType::f64_ty(), true),
     make_builtin_func(ctx, "cos", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
+      builder.make_argument(PrimativeType::f64_ty(), "f")), PrimativeType::f64_ty(), true),
     make_builtin_func(ctx, "tan", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
+      builder.make_argument(PrimativeType::f64_ty(), "f")), PrimativeType::f64_ty(), true),
     make_builtin_func(ctx, "asin", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "f")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
+      builder.make_argument(PrimativeType::f64_ty(), "f")), PrimativeType::f64_ty(), true),
     make_builtin_func(ctx, "atan2", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "x"),
-      builder.make_argument(PrimativeType::get(PrimativeType::FLOAT64), "y")),
-      PrimativeType::get(PrimativeType::FLOAT64), true),
+      builder.make_argument(PrimativeType::f64_ty(), "x"),
+      builder.make_argument(PrimativeType::f64_ty(), "y")),
+      PrimativeType::f64_ty(), true),
     // builtin mank functions
     make_builtin_func(ctx, "eprint", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+      builder.make_argument(PrimativeType::str_ty(), "s"))),
     make_builtin_func(ctx, "eprintln", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+      builder.make_argument(PrimativeType::str_ty(), "s"))),
     make_builtin_func(ctx, "print", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+      builder.make_argument(PrimativeType::str_ty(), "s"))),
     make_builtin_func(ctx, "println", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
+      builder.make_argument(PrimativeType::str_ty(), "s"))),
     make_builtin_func(ctx, "fail", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s"))),
-    make_builtin_func(ctx, "input", {}, PrimativeType::get(PrimativeType::STRING)),
+      builder.make_argument(PrimativeType::str_ty(), "s"))),
+    make_builtin_func(ctx, "input", {}, PrimativeType::str_ty()),
     make_builtin_func(ctx, "prompt", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
-      PrimativeType::get(PrimativeType::STRING)),
+      builder.make_argument(PrimativeType::str_ty(), "s")), PrimativeType::str_ty()),
     make_builtin_func(ctx, "parse_int", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
-      ctx.new_type(parse_int_ret)),
+      builder.make_argument(PrimativeType::str_ty(), "s")), ctx.new_type(parse_int_ret)),
     make_builtin_func(ctx, "int_to_string", builder.make_args(
-      builder.make_argument(PrimativeType::int_ty(), "i")),
-      PrimativeType::get(PrimativeType::STRING)),
+      builder.make_argument(PrimativeType::int_ty(), "i")), PrimativeType::str_ty()),
     make_builtin_func(ctx, "input_int", {}, PrimativeType::int_ty()),
     make_builtin_func(ctx, "prompt_int", builder.make_args(
-      builder.make_argument(PrimativeType::get(PrimativeType::STRING), "s")),
-      PrimativeType::int_ty()),
+      builder.make_argument(PrimativeType::str_ty(), "s")), PrimativeType::int_ty()),
+    make_builtin_func(ctx, "str_compare", builder.make_args(
+      builder.make_argument(PrimativeType::str_ty(), "a"),
+      builder.make_argument(PrimativeType::str_ty(), "b")), PrimativeType::int_ty()),
+    make_builtin_func(ctx, "str_equal", builder.make_args(
+        builder.make_argument(PrimativeType::str_ty(), "a"),
+        builder.make_argument(PrimativeType::str_ty(), "b")), PrimativeType::bool_ty()),
     // vectors
     make_builtin_func(ctx, "new_vec", {}, vec_type, false, { vec_element_type }),
     make_builtin_func(ctx, "push_back", builder.make_args(vec_ref,

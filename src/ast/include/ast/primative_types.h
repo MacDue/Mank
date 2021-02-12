@@ -34,6 +34,10 @@ DEF_TYPE(PrimativeType) {
 
   inline static Type_Ptr bool_ty() { return get(BOOL); }
   inline static Type_Ptr int_ty() { return get(INTEGER); }
+  inline static Type_Ptr str_ty() { return get(STRING); }
+  inline static Type_Ptr f32_ty() { return get(FLOAT32); }
+  inline static Type_Ptr f64_ty() { return get(FLOAT64); }
+  inline static Type_Ptr char_ty() { return get(CHAR); }
 
   static char const * type_name(Tag type_tag);
 

@@ -75,12 +75,12 @@ void Semantics::analyse_file(Ast_File& file) {
 
   // Add builtin types
   static std::array primative_types {
-    std::make_pair("f32", PrimativeType::get(PrimativeType::FLOAT32)),
-    std::make_pair("f64", PrimativeType::get(PrimativeType::FLOAT64)),
-    std::make_pair("i32", PrimativeType::get(PrimativeType::INTEGER)),
-    std::make_pair("str", PrimativeType::get(PrimativeType::STRING)),
-    std::make_pair("bool",PrimativeType::get(PrimativeType::BOOL)),
-    std::make_pair("char", PrimativeType::get(PrimativeType::CHAR))
+    std::make_pair("f32", PrimativeType::f32_ty()),
+    std::make_pair("f64", PrimativeType::f64_ty()),
+    std::make_pair("i32", PrimativeType::int_ty()),
+    std::make_pair("str", PrimativeType::str_ty()),
+    std::make_pair("bool",PrimativeType::bool_ty()),
+    std::make_pair("char", PrimativeType::char_ty())
   };
 
   for (auto [type_name, type] : primative_types) {
@@ -214,7 +214,7 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
   // Special case main function
   if (func.identifier.name == MAIN_FUNCTION_IDENT) {
     ListType _args_type;
-    _args_type.element_type = PrimativeType::get(PrimativeType::STRING);
+    _args_type.element_type = PrimativeType::str_ty();
     auto args_type = ctx->new_type(_args_type);
 
     auto args_count = func.arguments.size();

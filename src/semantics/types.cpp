@@ -257,7 +257,7 @@ Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {
     pattern(as<PrimativeType>(arg)) = [](auto& primative_type) {
       WHEN(primative_type.is_string_type()) {
         // lvalue string indexs...?
-        return PrimativeType::get(PrimativeType::CHAR);
+        return PrimativeType::char_ty();
       };
     },
     pattern(as<ListType>(arg)) = [&](auto& list_type) {

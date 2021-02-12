@@ -200,6 +200,25 @@ static auto constexpr PRELUDE = R"(
       value_str
     }
   }
+
+  fun str_compare: i32 (a: str, b: str) {
+    idx := 0;
+    while idx < a.length && idx < b.length {
+      if a[idx] != b[idx] {
+        return (a[idx] as i32) - (b[idx] as i32);
+      }
+      idx += 1;
+    }
+    if a.length != b.length {
+      a.length - b.length
+    } else {
+      0
+    }
+  }
+
+  fun str_equal: bool (a: str, b: str) {
+    str_compare(a, b) == 0
+  }
 )";
 
 static bool compile(std::string program, CompilerOptions options, bool path = true) {

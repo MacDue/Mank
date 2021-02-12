@@ -26,8 +26,7 @@ Ast_Expression_Type builtin_assert(
     // has attached note
     check_note = assert_call.arguments.at(1);
     infer.match_or_constrain_types_at(check_note, check_note->meta.type,
-      PrimativeType::get(PrimativeType::STRING),
-      "note must be a {1} (is {0})");
+      PrimativeType::str_ty(), "note must be a {1} (is {0})");
   }
 
   SourceLocation check_location = AstHelper::extract_location(check);

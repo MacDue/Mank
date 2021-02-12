@@ -18,6 +18,10 @@ Type_Ptr PrimativeType::get(PrimativeType::Tag tag) {
       static Type i32{PrimativeType(INTEGER)};
       return AstContext::make_static_type_ptr(&i32);
     }
+    case INTEGER64: {
+      static Type i64{PrimativeType(INTEGER64)};
+      return AstContext::make_static_type_ptr(&i64);
+    }
     case UNSIGNED_BYTE: {
       static Type u8{PrimativeType(UNSIGNED_BYTE)};
       return AstContext::make_static_type_ptr(&u8);
@@ -48,6 +52,8 @@ char const * PrimativeType::type_name(Tag type) {
       return "Float64";
     case PrimativeType::INTEGER:
       return "Integer32";
+    case PrimativeType::INTEGER64:
+      return "Integer64";
     case PrimativeType::UNSIGNED_BYTE:
       return "Unsigned byte";
     case PrimativeType::STRING:
@@ -63,12 +69,12 @@ char const * PrimativeType::type_name(Tag type) {
 
 uint PrimativeType::type_size(Tag type_tag) {
   switch (type_tag) {
+    case PrimativeType::INTEGER:
     case PrimativeType::FLOAT32:
       return 32;
+    case PrimativeType::INTEGER64:
     case PrimativeType::FLOAT64:
       return 64;
-    case PrimativeType::INTEGER:
-      return 32;
     case PrimativeType::CHAR:
     case PrimativeType::UNSIGNED_BYTE:
       return 8;
@@ -89,6 +95,7 @@ bool PrimativeType::is_numeric_type() const {
 
 bool PrimativeType::is_integer_type() const {
   return tag == PrimativeType::INTEGER
+    || tag == PrimativeType::INTEGER64
     || tag == PrimativeType::UNSIGNED_BYTE
     || tag == PrimativeType::CHAR; // _pretty_ much ;)
 }
@@ -113,7 +120,6 @@ bool PrimativeType::is_signed() const {
   return !is_boolean_type();
 }
 
-
 bool PrimativeType::satisfies(TypeVar::Constraint constraint) const {
   switch (constraint) {
     case TypeVar::Constraint::NUMERIC:
@@ -132,6 +138,11 @@ bool PrimativeType::satisfies(TypeVar::Constraint constraint) const {
 int32_t Ast_Literal::as_int32() const  {
   assert(literal_type == PrimativeType::INTEGER);
   return std::get<int32_t>(this->const_value());
+}
+
+int64_t Ast_Literal::as_int64() const {
+  assert(literal_type == PrimativeType::INTEGER64);
+  return std::get<int64_t>(this->const_value());
 }
 
 double Ast_Literal::as_float64() const {

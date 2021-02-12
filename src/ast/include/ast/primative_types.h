@@ -11,6 +11,7 @@ using PrimativeValue = std::variant<
   float,
   double,
   int32_t,
+  int64_t,
   uint8_t,
   bool,
   char,
@@ -22,6 +23,7 @@ DEF_TYPE(PrimativeType) {
     FLOAT64,
     STRING,
     INTEGER,
+    INTEGER64,
     UNSIGNED_BYTE,
     BOOL,
     CHAR

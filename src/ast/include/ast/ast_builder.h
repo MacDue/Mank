@@ -207,6 +207,12 @@ inline Expr_Ptr make_integer(int value, bool add_value = false) {
   return literal;
 }
 
+inline Expr_Ptr make_integer64(int64_t value, bool add_value = false) {
+  auto literal = make_literal(PrimativeType::INTEGER64, std::to_string(value));
+  ADD_VALUE();
+  return literal;
+}
+
 inline Expr_Ptr make_float64(double value, bool add_value = false) {
   auto literal = make_literal(PrimativeType::FLOAT64, std::to_string(value));
   ADD_VALUE();

@@ -256,6 +256,8 @@ llvm::Type* LLVMCodeGen::map_primative_to_llvm(PrimativeType::Tag primative) {
   switch (primative) {
     case PrimativeType::INTEGER:
       return llvm::Type::getInt32Ty(llvm_context);
+    case PrimativeType::INTEGER64:
+      return llvm::Type::getInt64Ty(llvm_context);
     case PrimativeType::FLOAT32:
       return llvm::Type::getFloatTy(llvm_context);
     case PrimativeType::FLOAT64:
@@ -1338,6 +1340,12 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
           /*bits:*/ literal.size_bytes(),
           /*value:*/ literal.as_int32(),
           /*signed:*/ true));
+    case PrimativeType::INTEGER64:
+      return llvm::ConstantInt::get(llvm_context,
+        llvm::APInt(
+          /*bits:*/ literal.size_bytes(),
+          /*value:*/ literal.as_int64(),
+          /*signed:*/ true));
     case PrimativeType::FLOAT32:
       return llvm::ConstantFP::get(llvm_context,
         llvm::APFloat(/*value:*/ literal.as_float32()));
@@ -1470,7 +1478,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Binary_Operation& binop, Scope&
     right = codegen_expression(*binop.right, scope);
   }
 
-  #define INT_TYPE anyof(PrimativeType::INTEGER, PrimativeType::CHAR)
+  #define INT_TYPE anyof(PrimativeType::INTEGER, PrimativeType::INTEGER64, PrimativeType::CHAR)
   return match(binop_primative.tag, binop.operation)(
     /* Basic integer operations */
     pattern(INT_TYPE, Ast_Operator::PLUS) = [&]{
@@ -1733,11 +1741,6 @@ void LLVMCodeGen::raise_mank_builtin_bounds_error(
   llvm::Value* length, llvm::Value* index,
   SourceLocation const & location
 ) {
-  length = ir_builder.CreateIntCast(
-    length, llvm::Type::getInt64Ty(llvm_context), false);
-  index = ir_builder.CreateIntCast(
-    index, llvm::Type::getInt64Ty(llvm_context), true /* for now */);
-
   llvm::Value* source_line = create_llvm_idx(location.start_line);
   llvm::Value* source_col = create_llvm_idx(location.start_column);
 
@@ -1757,11 +1760,19 @@ void LLVMCodeGen::insert_bounds_check(
     return ast_builder.make_ident(name);
   };
 
+  // Ensure length/index are compatible types & match error call
+  length = ir_builder.CreateIntCast(
+    length, llvm::Type::getInt64Ty(llvm_context), false);
+  index = ir_builder.CreateIntCast(
+    index, llvm::Type::getInt64Ty(llvm_context), true /* for now */);
+
+  auto i64_ty = PrimativeType::get(PrimativeType::INTEGER64);
+
   auto idx = create_precodegend_local("idx", index);
   Ast_Binary_Operation _idx_less_than_zero, _idx_greater_than_length;
   // 0 > idx
-  _idx_less_than_zero.left = ast_builder.make_integer(0, true);
-  _idx_less_than_zero.left->meta.type = PrimativeType::int_ty();
+  _idx_less_than_zero.left = ast_builder.make_integer64(0, true);
+  _idx_less_than_zero.left->meta.type = i64_ty;
   _idx_less_than_zero.right = idx;
   _idx_less_than_zero.operation = Ast_Operator::GREATER_THAN;
   auto idx_less_than_zero = mank_ctx.new_expr(_idx_less_than_zero);
@@ -1769,12 +1780,10 @@ void LLVMCodeGen::insert_bounds_check(
   // ||
   // idx >= length
   _idx_greater_than_length.left = idx;
-  _idx_greater_than_length.left->meta.type = PrimativeType::int_ty();
+  _idx_greater_than_length.left->meta.type = i64_ty;
   _idx_greater_than_length.right = create_precodegend_local("length", length);
   _idx_greater_than_length.operation = Ast_Operator::GREATER_EQUAL;
   auto idx_greater_than_length = mank_ctx.new_expr(_idx_greater_than_length);
-
-  auto abort_call = ast_builder.make_call("abort");
 
   auto block = ast_builder.make_block(false);
   auto& err_body = std::get<Ast_Block>(block->v);
@@ -1795,7 +1804,6 @@ void LLVMCodeGen::insert_bounds_check(
       bounds_error()
     }
   */
-  std::get<Ast_Call>(abort_call->v).callee->meta.type = scope.lookup_first("abort")->type;
   auto bounds_check = ast_builder.make_if_stmt(
     ast_builder.make_binary(
       Ast_Operator::LOGICAL_OR, idx_less_than_zero, idx_greater_than_length),
@@ -1850,11 +1858,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Index_Access& index, Scope& sco
     pattern(as<PrimativeType>(arg)) = [&](auto& str_type) -> llvm::Value* {
       // string indexes -- special case :(
       assert(str_type.is_string_type());
-      // TODO: bounds check
-      llvm::Value* raw_str_pointer = get_value_extractor(
-        *index.object, scope).get_value({Builtin::String::DATA}, "str_ptr");
-      return ir_builder.CreateGEP(
-        raw_str_pointer, { codegen_expression(*index.index, scope) }, "str_index");
+      auto [str_length, raw_str_pointer] = extract_string_info(*index.object, scope);
+      llvm::Value* str_index = codegen_expression(*index.index, scope);
+      insert_bounds_check(str_length, str_index, index, scope);
+      return ir_builder.CreateGEP(raw_str_pointer, { str_index }, "str_index");
     },
     pattern(as<ListType>(_)) = [&]() -> llvm::Value* {
       // Pretty much the same as strings :(

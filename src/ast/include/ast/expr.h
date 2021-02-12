@@ -26,6 +26,7 @@ DEF_EXPR(Ast_Literal) {
   std::string value;
 
   int32_t as_int32() const;
+  int64_t as_int64() const;
   double as_float64() const;
   float as_float32() const;
   bool as_bool() const;

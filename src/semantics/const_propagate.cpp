@@ -14,7 +14,7 @@ namespace AstHelper {
 #define WHEN_TYPE(runtime_check, const_check, op)  { \
     auto constexpr pass_check = const_check;         \
     if constexpr (pass_check) {                      \
-      WHEN(runtime_check && const_check) {           \
+      WHEN(runtime_check && (const_check)) {         \
         return PrimativeValue(op);                   \
       };                                             \
     } else {                                         \
@@ -25,6 +25,8 @@ namespace AstHelper {
   }
 
 #define CHECK(check, number) check<decltype(number)>
+#define SAME_TYPES(a,b) std::is_same_v<decltype(a), decltype(b)>
+#define LHS_RHS_MATCH() SAME_TYPES(lhs, rhs)
 
 static bool is_comparison_op(Ast_Operator op) {
   switch (op) {
@@ -71,7 +73,7 @@ void ConstantVisitor::after(Ast_Binary_Operation& binop) {
   binop.update_const_value(
     match(lhs, rhs)(
       pattern(vis(arg), vis(arg)) = [&](auto lhs, auto rhs){
-      WHEN_TYPE(is_integer_op(op), CHECK(std::is_integral_v, lhs) && CHECK(std::is_integral_v, rhs), [&]{
+      WHEN_TYPE(is_integer_op(op), LHS_RHS_MATCH() && CHECK(std::is_integral_v, lhs) && CHECK(std::is_integral_v, rhs), [&]{
         switch (op) {
           case Ast_Operator::MODULO:
             return lhs % rhs;
@@ -91,7 +93,7 @@ void ConstantVisitor::after(Ast_Binary_Operation& binop) {
       }());
     },
     pattern(vis(arg), vis(arg)) = [&](auto lhs, auto rhs){
-      WHEN_TYPE(!is_comparison_op(op), CHECK(std::is_arithmetic_v, lhs) && CHECK(std::is_arithmetic_v, rhs), [&]{
+      WHEN_TYPE(!is_comparison_op(op), LHS_RHS_MATCH() && CHECK(std::is_arithmetic_v, lhs) && CHECK(std::is_arithmetic_v, rhs), [&]{
         switch (op) {
           case Ast_Operator::PLUS:
             return lhs + rhs;
@@ -110,7 +112,7 @@ void ConstantVisitor::after(Ast_Binary_Operation& binop) {
       }());
     },
     pattern(vis(arg), vis(arg)) = [&](auto lhs, auto rhs){
-      WHEN_TYPE(true, CHECK(std::is_arithmetic_v, lhs) && CHECK(std::is_arithmetic_v, rhs), [&]{
+      WHEN_TYPE(true, LHS_RHS_MATCH() && CHECK(std::is_arithmetic_v, lhs) && CHECK(std::is_arithmetic_v, rhs), [&]{
         switch (op) {
           case Ast_Operator::LESS_THAN:
             return lhs < rhs;

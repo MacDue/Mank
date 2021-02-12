@@ -1,6 +1,8 @@
 #include <vector>
 
 #include "ast/ast_builder.h"
+
+#include "sema/sema_errors.h"
 #include "sema/builtin_functions.h"
 
 namespace Builtin {
@@ -138,7 +140,11 @@ void add_test_runner_main(Ast_File& file) {
     idx += 1;
   }
 
+  // FIXME: hack to stop tests/errors on stdlib
+  if (file.filename.at(0) == '<') return;
+
   if (tests.empty()) {
+    throw_general_error("no tests found");
     return;
   }
 

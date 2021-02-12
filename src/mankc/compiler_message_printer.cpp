@@ -88,17 +88,24 @@ message_type_formatting_info(CompilerMessage::Type type)
 
 std::ostream& operator<< (std::ostream& os, CompilerMessage const & message) {
   auto [message_type_name, ansi_colour] = message_type_formatting_info(message.type);
-  os << formatxx::format_string(ANSI_BOLD "{}:{}:{}: {}{}:" ANSI_RESET" {}\n",
+  if (message.location) {
+    os << formatxx::format_string(ANSI_BOLD "{}:{}:{}: {}{}:" ANSI_RESET" {}\n",
       message.source_lexer ? message.source_lexer->input_source_name() : "<unknown>",
-      message.location.start_line + 1, message.location.start_column + 1,
+      message.location->start_line + 1, message.location->start_column + 1,
       ansi_colour, message_type_name, message.message);
-  if (message.source_lexer) {
-    auto source_code = message.source_lexer->extract_lines(message.location);
-    auto lines = split_lines(source_code);
-    annotate_lines(lines, message.location, ansi_colour);
-    for (auto annotated_line: lines) {
-      os << annotated_line;
+    if (message.source_lexer) {
+      auto source_code = message.source_lexer->extract_lines(*message.location);
+      auto lines = split_lines(source_code);
+      annotate_lines(lines, *message.location, ansi_colour);
+      for (auto annotated_line: lines) {
+        os << annotated_line;
+      }
     }
+  } else {
+    os << formatxx::format_string(ANSI_BOLD "mankc: {}{}:" ANSI_RESET "{} {}\n",
+      ansi_colour, message_type_name,
+      message.source_lexer ? ' ' + message.source_lexer->input_source_name() + ':' : "",
+      message.message);
   }
   return os;
 }

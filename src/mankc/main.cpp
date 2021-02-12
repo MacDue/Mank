@@ -224,14 +224,8 @@ static auto constexpr PRELUDE = R"(
 static bool compile(std::string program, CompilerOptions options, bool path = true) {
   Lexer lexer;
   Parser parser(lexer);
-
-  if (path) {
-    lexer.load_file(program);
-  } else {
-    lexer.set_input_to_string(program);
-  }
-
   Semantics sema;
+
   if (options.build_tests) {
     sema.build_test_runner();
   }
@@ -239,6 +233,12 @@ static bool compile(std::string program, CompilerOptions options, bool path = tr
   std::optional<Ast_File> parsed_file;
   std::optional<CompilerError> sema_error;
   try {
+    if (path) {
+      lexer.load_file(program);
+    } else {
+      lexer.set_input_to_string(program);
+    }
+
     parsed_file.emplace(parser.parse_file());
     if (options.check_sema || options.code_gen) {
       sema.set_source(lexer);
@@ -287,6 +287,11 @@ int main(int argc, char* argv[]) {
       // Should not happen
       return 1;
     }
+  }
+
+  if (selected_options.input_files.empty()) {
+    std::cerr << CompilerMessage{std::nullopt, "no input files"};
+    return 1;
   }
 
   for (auto const & input_file: selected_options.input_files) {

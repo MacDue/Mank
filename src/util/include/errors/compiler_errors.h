@@ -26,8 +26,13 @@ public:
 
 template<typename TPattern, typename... TArgs>
 [[ noreturn ]] void throw_compile_error(
-  SourceLocation location, TPattern format_pattern, TArgs const & ... args
+  std::optional<SourceLocation> location, TPattern format_pattern, TArgs const & ... args
 ) {
   auto error_message = formatxx::format_string(format_pattern, args...);
   throw CompilerError(CompilerMessage{location, error_message});;
+}
+
+template<typename TPattern, typename... TArgs>
+[[ noreturn ]] void throw_general_error(TPattern format_pattern, TArgs const & ... args) {
+  throw_compile_error(std::nullopt, format_pattern, args...);
 }

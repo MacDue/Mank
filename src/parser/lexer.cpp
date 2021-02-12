@@ -2,6 +2,7 @@
 #include <filesystem>
 
 #include "parser/lexer.h"
+#include "errors/compiler_errors.h"
 
 /* Setup */
 
@@ -15,7 +16,7 @@ static std::string read_entire_file(std::string const & file) {
     in.read(&file_text[0], file_text.size());
     in.close();
   } else {
-    /* TODO: Handle errors */
+    throw_general_error("no such file");
   }
   return file_text;
 }
@@ -29,8 +30,8 @@ void Lexer::reset() {
 
 void Lexer::load_file(std::string const & file_path) {
   this->reset();
-  this->source = read_entire_file(file_path);
   this->source_name = std::filesystem::path(file_path).filename();
+  this->source = read_entire_file(file_path);
 }
 
 void Lexer::set_input_to_string(std::string source) {

@@ -437,15 +437,15 @@ Infer::Substitution Infer::unify_and_apply() {
     // Sort by pos in file (so it looks like there's some flow to it)
     std::sort(infer_reason_notes.begin(), infer_reason_notes.end(),
       [](CompilerMessage const & m1, CompilerMessage const & m2){
-        return std::make_pair(m1.location.start_line, m1.location.start_column)
-          < std::make_pair(m2.location.start_line, m2.location.start_column);
+        return std::make_pair(m1.location->start_line, m1.location->start_column)
+          < std::make_pair(m2.location->start_line, m2.location->start_column);
       });
 
     // FIXME: Hack to ensure no duplicate notes added
     auto last_note = std::unique(
       infer_reason_notes.begin(), infer_reason_notes.end(),
       [&](auto& a, auto& b){
-        return a.location == b.location && a.message == b.message;
+        return *a.location == *b.location && a.message == b.message;
       });
     infer_reason_notes.erase(last_note, infer_reason_notes.end());
     std::for_each(infer_reason_notes.begin(), infer_reason_notes.end(), add_message);

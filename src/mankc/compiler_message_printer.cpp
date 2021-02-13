@@ -102,10 +102,15 @@ std::ostream& operator<< (std::ostream& os, CompilerMessage const & message) {
       }
     }
   } else {
+    auto source_name = [&]() -> std::string {
+      if (message.source_lexer) {
+        auto name = message.source_lexer->input_source_name();
+        if (!name.empty()) { return ' ' + name + ':'; }
+      }
+      return "";
+    }();
     os << formatxx::format_string(ANSI_BOLD "mankc: {}{}:" ANSI_RESET "{} {}\n",
-      ansi_colour, message_type_name,
-      message.source_lexer ? ' ' + message.source_lexer->input_source_name() + ':' : "",
-      message.message);
+      ansi_colour, message_type_name, source_name, message.message);
   }
   return os;
 }

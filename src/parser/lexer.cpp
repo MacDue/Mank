@@ -7,18 +7,19 @@
 /* Setup */
 
 static std::string read_entire_file(std::string const & file) {
-  std::ifstream in(file, std::ios::in);
   std::string file_text;
-  if (in) {
-    in.seekg(0, std::ios::end);
-    file_text.resize(in.tellg());
-    in.seekg(0, std::ios::beg);
-    in.read(&file_text[0], file_text.size());
-    in.close();
-  } else {
-    throw_general_error("no such file");
+  if (std::filesystem::is_regular_file(file)) {
+    std::ifstream in(file, std::ios::in);
+    if (in) {
+      in.seekg(0, std::ios::end);
+      file_text.resize(in.tellg());
+      in.seekg(0, std::ios::beg);
+      in.read(&file_text[0], file_text.size());
+      in.close();
+      return file_text;
+    }
   }
-  return file_text;
+  throw_general_error("no such file");
 }
 
 void Lexer::reset() {

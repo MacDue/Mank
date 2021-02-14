@@ -1042,6 +1042,7 @@ void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope&
   global->setConstant(true);
   // This will need to be changed if we ever get to constant arrays/structs/pods
   auto primative_type = std::get<PrimativeType>(const_decl.type->v);
+  assert(!primative_type.is_string_type() && "global strings not yet supported");
   auto const_init = ast_builder.make_literal(primative_type.tag, "");
   const_init->meta.const_value = *const_decl.const_expression->meta.get_const_value();
   global->setInitializer(

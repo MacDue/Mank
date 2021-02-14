@@ -156,6 +156,7 @@ void Semantics::analyse_file(Ast_File& file) {
 
 void Semantics::analyse_global_consts(Ast_File& file) {
   for (auto global_const: file.global_consts) {
+    // TODO: Redecl error & shadow warn
     auto& sym = file.scope.add(
       Symbol(global_const->constant, global_const->type, Symbol::GLOBAL));
     sym.const_value = global_const->const_expression;

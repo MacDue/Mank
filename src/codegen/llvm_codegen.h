@@ -235,6 +235,7 @@ public:
   void codegen_statement(Ast_Loop& loop, Scope& scope);
   void codegen_statement(Ast_While_Loop& while_loop, Scope& scope);
   void codegen_statement(Ast_Loop_Control& loop_control, Scope& scope);
+  void codegen_statement(Ast_Constant_Declaration& const_decl, Scope& scope);
 
   void codegen_value_bind(
     Ast_Bind& bind,

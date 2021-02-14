@@ -96,6 +96,13 @@ void BaseAstVisitor::operator()(Ast_Loop_Control& loop_control) {
   after(loop_control);
 }
 
+void BaseAstVisitor::operator()(Ast_Constant_Declaration& const_decl) {
+  before(const_decl);
+  visit(const_decl);
+  std::visit(recur, const_decl.const_expression->v);
+  after(const_decl);
+}
+
 /* Expressions */
 
 void BaseAstVisitor::operator()(Ast_Block& block) {

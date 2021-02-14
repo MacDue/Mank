@@ -18,6 +18,7 @@ struct Symbol {
   SymbolName name;
 
   Type_Ptr type;
+  Expr_Ptr const_value; // for globals
 
   enum Kind {
     FUNCTION,
@@ -34,6 +35,10 @@ struct Symbol {
 
   inline bool is_local() {
     return kind == INPUT || kind == LOCAL;
+  }
+
+  inline bool is_global() {
+    return kind == GLOBAL;
   }
 
   Symbol(SymbolName name, Type_Ptr type, Kind kind)

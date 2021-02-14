@@ -56,6 +56,8 @@ Ast_File Parser::parse_file() {
       parsed_file.functions.emplace_back(this->parse_function());
     } else if (next_token.type == TokenType::POD) {
       parsed_file.pods.emplace_back(this->parse_pod());
+    } else if (next_token.type == TokenType::CONST) {
+      parsed_file.global_consts.emplace_back(this->parse_const_decl());
     } else {
       throw_error_here("unexpected \"{}\", expecting a function, procedure, test or pod type");
     }
@@ -483,6 +485,22 @@ Stmt_Ptr Parser::parse_structural_binding() {
   parsed_sad_binding.initializer = this->parse_expression();
   expect(TokenType::SEMICOLON);
   return ctx->new_stmt(parsed_sad_binding);
+}
+
+Stmt_Ptr Parser::parse_const_decl() {
+  Ast_Constant_Declaration const_decl;
+  expect(TokenType::CONST);
+  auto ident = this->parse_identifier();
+  if (!ident) {
+    throw_error_here("expected constant identifier");
+  }
+  const_decl.constant = *ident;
+  expect(TokenType::COLON);
+  const_decl.type = this->parse_type(true);
+  expect(TokenType::ASSIGN);
+  const_decl.const_expression = this->parse_expression();
+  expect(TokenType::SEMICOLON);
+  return ctx->new_stmt(const_decl);
 }
 
 /* Expressions */

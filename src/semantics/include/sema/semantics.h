@@ -64,6 +64,9 @@ private:
     return nullptr;
   }
 
+  // Globals in the process of const evaluation
+  std::set<Ast_Identifier> global_eval;
+
   bool assert_valid_binding(
     Ast_Identifier const& lvalue,
     SourceLocation bind_location,
@@ -80,8 +83,13 @@ private:
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);
 
+  void analyse_global_consts(Ast_File& file);
+  Type_Ptr check_constant_initializer(
+     Ast_Identifier constant, Ast_Expression& init, Scope& scope);
+
   void analyse_pod(Ast_Pod_Declaration& pod, Scope& scope);
   void analyse_function_header(Ast_Function_Declaration& func);
+  void analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scope& scope);
   Type_Ptr analyse_function_body(Ast_Function_Declaration& func);
   void analyse_assignment(Ast_Assign& assign, Scope& scope);
   void analyse_statement(Ast_Statement& stmt, Scope& scope);

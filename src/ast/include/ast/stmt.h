@@ -90,6 +90,13 @@ DEF_STMT(Ast_Loop_Control) {
   } type = NONE;
 };
 
+// Pretty much the same as var decls
+DEF_STMT(Ast_Constant_Declaration) {
+  Type_Ptr type;
+  Ast_Identifier constant;
+  Expr_Ptr const_expression;
+};
+
 using Ast_Statement_Type = std::variant<
   Ast_Expression_Statement,
   Ast_Return_Statement,
@@ -99,7 +106,8 @@ using Ast_Statement_Type = std::variant<
   Ast_For_Loop,
   Ast_Structural_Binding,
   Ast_Loop,
-  Ast_While_Loop>;
+  Ast_While_Loop,
+  Ast_Constant_Declaration>;
 
 class Ast_Statement {
   Ast_Statement(Ast_Statement_Type v)

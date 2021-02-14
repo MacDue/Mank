@@ -166,6 +166,8 @@ static TokenType ident_to_token(std::string_view ident) {
     return TokenType::AS;
   } else if (ident == "test") {
     return TokenType::TEST;
+  } else if (ident == "const") {
+    return TokenType::CONST;
   } else {
     return TokenType::IDENT;
   }

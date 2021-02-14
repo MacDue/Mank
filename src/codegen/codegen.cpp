@@ -1018,6 +1018,10 @@ void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& sco
   );
 }
 
+void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope& scope) {
+  assert(false && "no block level const codegen");
+}
+
 /* Expressions */
 
 llvm::Value* LLVMCodeGen::dereference(llvm::Value* value, Type_Ptr type) {

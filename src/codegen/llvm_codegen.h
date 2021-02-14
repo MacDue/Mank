@@ -136,6 +136,8 @@ class LLVMCodeGen: public CodeGenerator {
 
   void create_module();
 
+  llvm::GlobalVariable* create_global(std::string const & name, llvm::Type* type);
+
   llvm::Function* get_external(
     llvm::StringRef name,
     llvm::Type* return_type,

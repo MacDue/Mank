@@ -22,6 +22,10 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
 {
   this->create_module();
 
+  for (auto global_const: file_ast.global_consts) {
+    this->codegen_statement(*global_const, file_ast.scope);
+  }
+
   for (auto func: file_ast.functions) {
     this->codegen_function_body(*func);
   }
@@ -35,6 +39,16 @@ void LLVMCodeGen::create_module() {
     file_ast.filename, llvm_context);
   /* TODO: set machine target */
   /* TODO: set up optimizations */
+}
+
+llvm::GlobalVariable* LLVMCodeGen::create_global(
+  std::string const & name, llvm::Type* type
+) {
+  llvm_module->getOrInsertGlobal(name, type);
+  llvm::GlobalVariable* global = llvm_module->getNamedGlobal(name);
+  // No need for externals yet
+  global->setLinkage(llvm::GlobalValue::InternalLinkage);
+  return global;
 }
 
 llvm::Value* LLVMCodeGen::get_source_filename() {
@@ -1019,7 +1033,19 @@ void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& sco
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope& scope) {
-  assert(false && "no block level const codegen");
+  // Very limited const global support for primative types
+  assert(scope.get_parent() == nullptr && "is global scope");
+  assert(std::holds_alternative<PrimativeType>(const_decl.type->v));
+  llvm::GlobalVariable* global = create_global(
+    const_decl.constant.name,
+    map_type_to_llvm(const_decl.type.get(), scope));
+  global->setConstant(true);
+  // This will need to be changed if we ever get to constant arrays/structs/pods
+  auto primative_type = std::get<PrimativeType>(const_decl.type->v);
+  auto const_init = ast_builder.make_literal(primative_type.tag, "");
+  const_init->meta.const_value = *const_decl.const_expression->meta.get_const_value();
+  global->setInitializer(
+    static_cast<llvm::Constant*>(codegen_expression(*const_init, scope)));
 }
 
 /* Expressions */
@@ -1380,22 +1406,30 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope) {
   Symbol* symbol = scope.lookup_first_name(ident);
-  assert(symbol->is_local() && "only locals implemented");
+  assert((symbol->is_local() || symbol->is_global()) && "only locals/globals implemented");
 
-  if (ident.name.at(0) == '%') {
-    // Special pre-codegened values
-    auto* meta_ptr = symbol->meta.get();
-    if (ident.name == Builtin::MANK_BOUNDSCHECK) {
-      // Little hack for adding bounds checks
-      auto& boundscheck = *static_cast<SymbolMetaBoundsCheck*>(meta_ptr);
-      raise_mank_builtin_bounds_error(
-        boundscheck.length, boundscheck.index, boundscheck.location);
-      return nullptr;
+  llvm::Value* variable_address = nullptr;
+
+  if (symbol->is_local()) {
+    if (ident.name.at(0) == '%') {
+      // Special pre-codegened values
+      auto* meta_ptr = symbol->meta.get();
+      if (ident.name == Builtin::MANK_BOUNDSCHECK) {
+        // Little hack for adding bounds checks
+        auto& boundscheck = *static_cast<SymbolMetaBoundsCheck*>(meta_ptr);
+        raise_mank_builtin_bounds_error(
+          boundscheck.length, boundscheck.index, boundscheck.location);
+        return nullptr;
+      }
+      return static_cast<SymbolMetaLocal*>(meta_ptr)->alloca;
     }
-    return static_cast<SymbolMetaLocal*>(meta_ptr)->alloca;
+
+    variable_address = address_of(*ident.get_self().class_ptr(), scope);
+  } else if (symbol->is_global()) {
+    variable_address = llvm_module->getNamedGlobal(ident.name);
   }
 
-  llvm::Value* variable_address = address_of(*ident.get_self().class_ptr(), scope);
+  assert(variable_address != nullptr);
   return ir_builder.CreateLoad(variable_address,
     formatxx::format_string("load_{}", ident.name));
 }

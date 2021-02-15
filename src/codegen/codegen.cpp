@@ -42,20 +42,11 @@ void LLVMCodeGen::create_module() {
 }
 
 llvm::GlobalVariable* LLVMCodeGen::create_global(
-  std::string const & name, llvm::Type* type, bool unnamed
+  std::string const & name, llvm::Type* type
 ) {
-  llvm::GlobalVariable* global = nullptr;
-  if (!unnamed) {
-    llvm_module->getOrInsertGlobal(name, type);
-    global = llvm_module->getNamedGlobal(name);
-    global->setLinkage(llvm::GlobalValue::InternalLinkage);
-  } else {
-    // LLVM seems just to willingly leak these :/
-    global = new llvm::GlobalVariable(
-      *llvm_module, type, false, llvm::GlobalValue::InternalLinkage, nullptr, name);
-  }
-  // No need for externals yet
-  return global;
+  // LLVM seems to leak these (or maybe it tracks it somehow?)
+  return new llvm::GlobalVariable(
+    *llvm_module, type, false, llvm::GlobalValue::InternalLinkage, nullptr, name);
 }
 
 static inline void unnamed_const(llvm::GlobalVariable* global) {
@@ -128,7 +119,7 @@ llvm::Constant* LLVMCodeGen::create_const_string_initializer(std::string value) 
 
   llvm::ArrayType* init_type = llvm::ArrayType::get(int8_ty, value.length());
   llvm::Constant* init = llvm::ConstantArray::get(init_type, chars);
-  llvm::GlobalVariable* array = create_global("!const_str_init", init_type, true);
+  llvm::GlobalVariable* array = create_global("!const_str_init", init_type);
   unnamed_const(array);
   array->setInitializer(init);
   return llvm::ConstantExpr::getBitCast(array, int8_ty->getPointerTo());
@@ -150,7 +141,7 @@ llvm::Constant* LLVMCodeGen::create_const_string(std::string value, Scope& scope
 llvm::Value* LLVMCodeGen::create_const_string_global(
   std::string value, std::string const & name, Scope& scope
 ) {
-  llvm::GlobalVariable* global = create_global(name, get_string_ty(scope), true);
+  llvm::GlobalVariable* global = create_global(name, get_string_ty(scope));
   unnamed_const(global);
   global->setInitializer(create_const_string(value, scope));
   return global;

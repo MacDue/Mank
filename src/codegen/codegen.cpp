@@ -42,13 +42,27 @@ void LLVMCodeGen::create_module() {
 }
 
 llvm::GlobalVariable* LLVMCodeGen::create_global(
-  std::string const & name, llvm::Type* type
+  std::string const & name, llvm::Type* type, bool unnamed
 ) {
-  llvm_module->getOrInsertGlobal(name, type);
-  llvm::GlobalVariable* global = llvm_module->getNamedGlobal(name);
+  llvm::GlobalVariable* global = nullptr;
+  if (!unnamed) {
+    llvm_module->getOrInsertGlobal(name, type);
+    global = llvm_module->getNamedGlobal(name);
+    global->setLinkage(llvm::GlobalValue::InternalLinkage);
+  } else {
+    // LLVM seems just to willingly leak these :/
+    global = new llvm::GlobalVariable(
+      *llvm_module, type, false, llvm::GlobalValue::InternalLinkage, nullptr, name);
+  }
   // No need for externals yet
-  global->setLinkage(llvm::GlobalValue::InternalLinkage);
   return global;
+}
+
+static inline void unnamed_const(llvm::GlobalVariable* global) {
+  global->setLinkage(llvm::GlobalValue::PrivateLinkage);
+  global->setConstant(true);
+  // No idea what this does (could not find any docs -- but the IR Builder does it)
+  global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
 }
 
 llvm::Value* LLVMCodeGen::get_source_filename() {
@@ -102,6 +116,44 @@ llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
   } else {
     return static_cast<SymbolMetaCompoundType*>(str_sym->meta.get())->type;
   }
+}
+
+llvm::Constant* LLVMCodeGen::create_const_string_initializer(std::string value) {
+  // Not null terminated in Mank (LLVM's version of this adds a needless \0)
+  llvm::Type* int8_ty = llvm::Type::getInt8Ty(llvm_context);
+  std::vector<llvm::Constant*> chars(value.length());
+  for (size_t i = 0; i < value.length(); i++) {
+    chars[i] = llvm::ConstantInt::get(int8_ty, value[i]);
+  }
+
+  llvm::ArrayType* init_type = llvm::ArrayType::get(int8_ty, value.length());
+  llvm::Constant* init = llvm::ConstantArray::get(init_type, chars);
+  llvm::GlobalVariable* array = create_global("!const_str_init", init_type, true);
+  unnamed_const(array);
+  array->setInitializer(init);
+  return llvm::ConstantExpr::getBitCast(array, int8_ty->getPointerTo());
+}
+
+
+llvm::Constant* LLVMCodeGen::create_const_string(std::string value, Scope& scope) {
+  llvm::Type* str_type = get_string_ty(scope);
+  llvm::Type* int64_ty = llvm::Type::getInt64Ty(llvm_context);
+
+  return llvm::ConstantStruct::get(
+    static_cast<llvm::StructType*>(str_type),
+  {
+    llvm::ConstantInt::get(int64_ty, value.length()),
+    create_const_string_initializer(value)
+  });
+}
+
+llvm::Value* LLVMCodeGen::create_const_string_global(
+  std::string value, std::string const & name, Scope& scope
+) {
+  llvm::GlobalVariable* global = create_global(name, get_string_ty(scope), true);
+  unnamed_const(global);
+  global->setInitializer(create_const_string(value, scope));
+  return global;
 }
 
 llvm::Function* LLVMCodeGen::get_str_concat_internal() {
@@ -1042,11 +1094,18 @@ void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope&
   global->setConstant(true);
   // This will need to be changed if we ever get to constant arrays/structs/pods
   auto primative_type = std::get<PrimativeType>(const_decl.type->v);
-  assert(!primative_type.is_string_type() && "global strings not yet supported");
   auto const_init = ast_builder.make_literal(primative_type.tag, "");
   const_init->meta.const_value = *const_decl.const_expression->meta.get_const_value();
-  global->setInitializer(
-    static_cast<llvm::Constant*>(codegen_expression(*const_init, scope)));
+
+  llvm::Constant* global_int = nullptr;
+  if (!primative_type.is_string_type()) {
+    global_int = static_cast<llvm::Constant*>(codegen_expression(*const_init, scope));
+  } else {
+    global_int = create_const_string(
+      std::get<std::string>(const_init->meta.const_value), scope);
+  }
+
+  global->setInitializer(global_int);
 }
 
 /* Expressions */
@@ -1385,10 +1444,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
           llvm::APFloat(/*value:*/ literal.as_float64()));
     case PrimativeType::STRING: {
       auto str_value = literal.as_string();
-      llvm::Value* raw_str = ir_builder.CreateGlobalStringPtr(str_value, "!const_str_init");
-      llvm::Value* length = llvm::ConstantInt::get(
-        llvm::Type::getInt64Ty(llvm_context), str_value.length());
-      return create_string(raw_str, length, scope);
+      llvm::Value* str_global = create_const_string_global(str_value, "!const_str", scope);
+      return ir_builder.CreateLoad(str_global, "get_str");
     }
     case PrimativeType::BOOL:
       return llvm::ConstantInt::get(llvm_context,

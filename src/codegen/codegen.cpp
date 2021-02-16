@@ -125,7 +125,6 @@ llvm::Constant* LLVMCodeGen::create_const_string_initializer(std::string value) 
   return llvm::ConstantExpr::getBitCast(array, int8_ty->getPointerTo());
 }
 
-
 llvm::Constant* LLVMCodeGen::create_const_string(std::string value, Scope& scope) {
   llvm::Type* str_type = get_string_ty(scope);
   llvm::Type* int64_ty = llvm::Type::getInt64Ty(llvm_context);

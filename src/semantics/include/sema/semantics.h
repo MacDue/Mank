@@ -83,7 +83,6 @@ private:
   Symbol* emit_warning_if_shadows(
     Ast_Identifier& ident, Scope& scope, std::string warning);
 
-  void analyse_global_consts(Ast_File& file);
   Type_Ptr check_constant_initializer(
      Ast_Identifier constant, Ast_Expression& init, Scope& scope);
 

@@ -1,13 +1,16 @@
 # Based on: https://www.scratchapixel.com/code.php?id=3&origin=/lessons/3d-basic-rendering/introduction-to-ray-tracing
 # Made nice and manky!
 
+const MAX_RAY_DEPTH := 10;
+const INF := 10000000000.0;
+const M_PI := 3.141592653589793;
+
 fun trace: Vec3f (
   ray_origin: Vec3f,
   ray_dir: Vec3f,
   spheres: Sphere[],
   depth: i32
 ) {
-  bind (INF, MAX_RAY_DEPTH) = (10000000000.0, 10);
   t_near := INF;
   hit_sphere_idx := -1;
   for s_idx in 0 .. spheres.length {
@@ -116,7 +119,6 @@ proc ray_trace(image_width: i32, image_height: i32, spheres: Sphere[]) {
   # TODO: Vectors! Can only handle tiny images with stack memory :(
   # image := [=[=new_vec3f();60];60];
 
-  M_PI := 3.141592653589793;
   bind (fov, aspect) = (30., image_width as f64 / image_height as f64);
 
   inverse_width := 1. / image_width as f64;

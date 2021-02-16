@@ -1,0 +1,34 @@
+# Simple consts
+const FOO := 10;
+const FRAMETIME := 1.0/16.0;
+const PIXEL_COUNT := 800 * 600;
+
+# Complex dependant consts
+const BAR := BAZ * 2 + WAZ;
+const WAZ := -1 * JAZ;
+const JAZ := BAZ + 2;
+const BAZ := -92;
+
+# Const strings
+const HELLO_WORLD := HELLO + " " + WORLD;
+const HELLO := "Hello";
+const WORLD := "World";
+
+test simple_consts {
+  assert!(FOO == 10);
+  assert!(FRAMETIME == 1.0/16.0);
+  assert!(PIXEL_COUNT == 800 * 600);
+}
+
+test complex_dependant_consts {
+  assert!(BAR == -94);
+  assert!(WAZ == 90);
+  assert!(JAZ == -90);
+  assert!(BAZ == -92);
+}
+
+test const_strings {
+  assert!(str_equal(HELLO_WORLD, "Hello World"));
+  assert!(str_equal(HELLO, "Hello"));
+  assert!(str_equal(WORLD, "World"));
+}

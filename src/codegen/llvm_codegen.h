@@ -136,6 +136,8 @@ class LLVMCodeGen: public CodeGenerator {
 
   void create_module();
 
+  llvm::GlobalVariable* create_global(std::string const & name, llvm::Type* type);
+
   llvm::Function* get_external(
     llvm::StringRef name,
     llvm::Type* return_type,
@@ -152,6 +154,11 @@ class LLVMCodeGen: public CodeGenerator {
   llvm::Function* get_bounds_error();
 
   llvm::Type* get_string_ty(Scope& scope);
+
+  llvm::Constant* create_const_string_initializer(std::string value);
+  llvm::Constant* create_const_string(std::string value, Scope& scope);
+  llvm::Value* create_const_string_global(
+    std::string value, std::string const & name, Scope& scope);
 
   llvm::Value* create_string_concat(
     Ast_Expression& s1, Ast_Expression& s2, Scope& scope);
@@ -235,6 +242,7 @@ public:
   void codegen_statement(Ast_Loop& loop, Scope& scope);
   void codegen_statement(Ast_While_Loop& while_loop, Scope& scope);
   void codegen_statement(Ast_Loop_Control& loop_control, Scope& scope);
+  void codegen_statement(Ast_Constant_Declaration& const_decl, Scope& scope);
 
   void codegen_value_bind(
     Ast_Bind& bind,

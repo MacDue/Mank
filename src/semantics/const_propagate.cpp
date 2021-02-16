@@ -131,6 +131,10 @@ void ConstantVisitor::after(Ast_Binary_Operation& binop) {
         }
       }());
     },
+    pattern(as<std::string>(arg), as<std::string>(arg)) = [&](auto& lhs, auto& rhs) {
+      assert(op == Ast_Operator::PLUS);
+      return PrimativeValue(lhs + rhs);
+    },
     pattern(_, _) = [&]{ return PrimativeValue(); }
   ));
 }

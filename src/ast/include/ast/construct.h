@@ -33,14 +33,18 @@ DEF_TYPE(Ast_Pod_Declaration), Ast_Node {
   }
 };
 
+struct Ast_Constant_Declaration;
+
 using Function_Ptr = SpAstPtr<Type, Ast_Function_Declaration>;
 using Pod_Ptr = SpAstPtr<Type, Ast_Pod_Declaration>;
+using Const_Ptr = SpAstPtr<Ast_Statement, Ast_Constant_Declaration>;
 
 struct Ast_File {
   Scope scope;
   std::string filename;
   std::vector<Function_Ptr> functions;
   std::vector<Pod_Ptr> pods;
+  std::vector<Const_Ptr> global_consts;
   AstContext ctx; // owns EVERYTHING
 
   Ast_File(std::string filename)

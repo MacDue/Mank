@@ -74,6 +74,7 @@ private:
   Stmt_Ptr parse_for_loop();
   Stmt_Ptr parse_loop();
   Stmt_Ptr parse_while_loop();
+  Stmt_Ptr parse_const_decl();
 
   // void parse_parse_tuple_bindings(bindings&)
   // void parse_pod_bindings(bindings&)

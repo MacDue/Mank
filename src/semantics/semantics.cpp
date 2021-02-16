@@ -79,7 +79,7 @@ void Semantics::analyse_file(Ast_File& file) {
     std::make_pair("f64", PrimativeType::f64_ty()),
     std::make_pair("i32", PrimativeType::int_ty()),
     std::make_pair("str", PrimativeType::str_ty()),
-    std::make_pair("bool",PrimativeType::bool_ty()),
+    std::make_pair("bool", PrimativeType::bool_ty()),
     std::make_pair("char", PrimativeType::char_ty())
   };
 
@@ -115,40 +115,94 @@ void Semantics::analyse_file(Ast_File& file) {
     }
   };
 
-  /* Add symbols for (yet to be checked) pods */
-  for (auto pod: file.pods) {
-    check_top_level_decl("pod", Symbol::TYPE, pod->identifier,
-      get_symbol_identifer_if_type<Ast_Pod_Declaration>);
-    file.scope.add(
-      Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
+  // FIXME?: Shadowing does not follow declaration order (since)
+  // globals -> pods -> functions are processed seperately
+
+  /* Check global constants */
+  {
+    for (auto global_const: file.global_consts) {
+      check_top_level_decl("global constant", Symbol::GLOBAL, global_const->constant,
+        [](Symbol* sym){ return sym->name.get_raw_self(); });
+      auto& sym = file.scope.add(
+        Symbol(global_const->constant, global_const->type, Symbol::GLOBAL));
+      sym.const_value = global_const->const_expression;
+    }
+    for (auto global_const: file.global_consts) {
+      auto sym = file.scope.lookup_first_name(global_const->constant);
+      if (!sym->const_value->meta.is_const()) {
+        analyse_constant_decl(*global_const, file.scope);
+      }
+    }
+    infer->unify_and_apply(); // allow inference between constants
   }
 
-  /* Check pods */
-  for (auto pod: file.pods) {
-    analyse_pod(*pod, global_scope);
+  /* Pod declarations */
+  {
+    /* Add symbols for (yet to be checked) pods */
+    for (auto pod: file.pods) {
+      check_top_level_decl("pod", Symbol::TYPE, pod->identifier,
+        get_symbol_identifer_if_type<Ast_Pod_Declaration>);
+      file.scope.add(
+        Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
+    }
+
+    /* Check pods */
+    for (auto pod: file.pods) {
+      analyse_pod(*pod, global_scope);
+    }
   }
 
-  if (building_tests()) {
-    Builtin::add_test_runner_main(file);
-  } else {
-    // Remove tests
-    std::erase_if(file.functions, [](auto func){ return func->test; });
+  /* Process tests */
+  {
+    if (building_tests()) {
+      Builtin::add_test_runner_main(file);
+    } else {
+      // Remove tests if not building with --tests
+      std::erase_if(file.functions, [](auto func){ return func->test; });
+    }
   }
 
-  /* Add function headers into scope, resolve function return/param types */
-  for (auto func: file.functions) {
-    check_top_level_decl("function", Symbol::FUNCTION, func->identifier,
-      get_symbol_identifer_if_type<Ast_Function_Declaration>);
-    file.scope.add(
-      Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
-    func->body.scope.set_parent(global_scope);
-    analyse_function_header(*func);
-  }
+  /* Functions/procedures */
+  {
+    /* Add function headers into scope, resolve function return/param types */
+    for (auto func: file.functions) {
+      check_top_level_decl("function", Symbol::FUNCTION, func->identifier,
+        get_symbol_identifer_if_type<Ast_Function_Declaration>);
+      file.scope.add(
+        Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
+      func->body.scope.set_parent(global_scope);
+      analyse_function_header(*func);
+    }
 
-  /* Check functions */
-  for (auto func: file.functions) {
-    analyse_function_body(*func);
+    /* Check functions */
+    for (auto func: file.functions) {
+      analyse_function_body(*func);
+    }
   }
+}
+
+Type_Ptr Semantics::check_constant_initializer(
+  Ast_Identifier constant, Ast_Expression& init, Scope& scope
+) {
+  if (global_eval.contains(constant)) {
+    throw_sema_error_at(init, "recursive constant initializer");
+  }
+  global_eval.insert(constant);
+  auto init_type = analyse_expression(init, scope);
+  AstHelper::constant_expr_eval(init);
+  if (!init.meta.is_const()) {
+    throw_sema_error_at(init, "initializer not constant");
+  }
+  global_eval.erase(constant);
+  return init_type;
+}
+
+void Semantics::analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scope& scope) {
+  resolve_type_or_fail(scope, const_decl.type, "undeclared constant type {}");
+  auto init_type = check_constant_initializer(
+    const_decl.constant, *const_decl.const_expression, scope);
+  infer->match_or_constrain_types_at(const_decl.constant, const_decl.type, init_type,
+    "constant type {} does not match initializer of {}");
 }
 
 static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& nested_field) {
@@ -713,6 +767,13 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
       } else if (symbol->is_local()) {
         expr.set_value_type(Expression_Meta::LVALUE);
         return symbol->type;
+      } else if (symbol->is_global()) {
+        auto& global_meta = symbol->const_value->meta;
+        if (!global_meta.is_const()) {
+          check_constant_initializer(ident, *symbol->const_value, scope);
+        }
+        ident.update_const_value(*symbol->const_value->meta.get_const_value());
+        return symbol->type; // Globals are constant.
       } else {
         throw_sema_error_at(ident, "{} cannot be used in this context", ident.name);
       }

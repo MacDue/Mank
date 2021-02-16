@@ -82,6 +82,7 @@ class AstPrinter {
     void print_stmt(Ast_Loop& loop);
     void print_stmt(Ast_While_Loop& while_loop);
     void print_stmt(Ast_Loop_Control& loop_control);
+    void print_stmt(Ast_Constant_Declaration& const_decl);
 
     void print_binding(Ast_Binding& binding);
     void print_binding(Ast_Tuple_Binds& tuple_binds);

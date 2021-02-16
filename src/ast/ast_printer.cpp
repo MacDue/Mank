@@ -12,10 +12,14 @@
 /* Constructs */
 
 void AstPrinter::print_file(Ast_File& file) {
-  putf("* File with {} pods, and {} functions",
-    file.pods.size(), file.functions.size());
+  putf("* File with {} global consts, {} pods, and {} functions",
+    file.global_consts.size(), file.pods.size(), file.functions.size());
   if (!hide_lex_details) {
     putf("- Source name: {}", file.filename);
+  }
+  for (auto global_const: file.global_consts) {
+    self->print_stmt(*global_const);
+    putf("");
   }
   for (auto pod: file.pods) {
     self->print_pod(*pod);
@@ -198,6 +202,13 @@ void AstPrinter::print_stmt(Ast_Loop_Control& loop_control) {
       assert(false && "fix me! unknown loop control");
       break;
   }
+}
+
+void AstPrinter::print_stmt(Ast_Constant_Declaration& const_decl) {
+  putf("* Constant declaration");
+  putf("- {} : {}", const_decl.constant.name, type_to_string(const_decl.type));
+  putf("- Initializer:");
+  self->print_expr(*const_decl.const_expression);
 }
 
 /* Expressions */

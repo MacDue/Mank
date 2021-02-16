@@ -18,18 +18,24 @@ fun get_move: i32 (state: ref GameState) {
   }
 }
 
+# Some terminal colour codes
+const RED        := 202;
+const BLUE       := 33 ;
+const GREY       := 239;
+const PINK       := 207;
+const BRIGHT_RED := 196;
+
+fun colour_text: str (text: str, colour_code: i32) {
+  "\e[38;5;" + int_to_string(colour_code) + "m" + text + "\e[0m"
+}
+
 #  1 | 2 | 3
 # -----------
 #  4 | 5 | 6
 # -----------
 #  7 | 8 | 9
 
-fun colour_text: str (text: str, colour_code: i32) {
-  "\e[38;5;" + int_to_string(colour_code) + "m" + text + "\e[0m"
-}
-
 proc print_board(state: ref GameState) {
-  bind (GREY, X_COL, O_COL) = (239, 202, 33);
   for cell_idx in 0 .. 9 {
     value := state.board[cell_idx];
     row_pos := cell_idx % 3;
@@ -39,9 +45,9 @@ proc print_board(state: ref GameState) {
       if value == 0 {
         colour_text(('0' + (cell_idx + 1) as char) as str, GREY)
       } else if value == 1 {
-        colour_text("X", X_COL)
+        colour_text("X", RED)
       } else {
-        colour_text("O", O_COL)
+        colour_text("O", BLUE)
       }
     });
     if mid_cell { putchar('|'); }
@@ -87,7 +93,6 @@ fun game_over: (i32, bool) (state: ref GameState) {
 }
 
 proc main {
-  bind (BRIGHT_RED, PINK) = (196, 207);
   game := GameState {
     .player = 1,
     .board = [=0;9]

@@ -22,6 +22,10 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
 {
   this->create_module();
 
+  for (auto global_const: file_ast.global_consts) {
+    this->codegen_statement(*global_const, file_ast.scope);
+  }
+
   for (auto func: file_ast.functions) {
     this->codegen_function_body(*func);
   }
@@ -35,6 +39,21 @@ void LLVMCodeGen::create_module() {
     file_ast.filename, llvm_context);
   /* TODO: set machine target */
   /* TODO: set up optimizations */
+}
+
+llvm::GlobalVariable* LLVMCodeGen::create_global(
+  std::string const & name, llvm::Type* type
+) {
+  // LLVM seems to leak these (or maybe it tracks it somehow?)
+  return new llvm::GlobalVariable(
+    *llvm_module, type, false, llvm::GlobalValue::InternalLinkage, nullptr, name);
+}
+
+static inline void unnamed_const(llvm::GlobalVariable* global) {
+  global->setLinkage(llvm::GlobalValue::PrivateLinkage);
+  global->setConstant(true);
+  // No idea what this does (could not find any docs -- but the IR Builder does it)
+  global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
 }
 
 llvm::Value* LLVMCodeGen::get_source_filename() {
@@ -88,6 +107,43 @@ llvm::Type* LLVMCodeGen::get_string_ty(Scope& scope) {
   } else {
     return static_cast<SymbolMetaCompoundType*>(str_sym->meta.get())->type;
   }
+}
+
+llvm::Constant* LLVMCodeGen::create_const_string_initializer(std::string value) {
+  // Not null terminated in Mank (LLVM's version of this adds a needless \0)
+  llvm::Type* int8_ty = llvm::Type::getInt8Ty(llvm_context);
+  std::vector<llvm::Constant*> chars(value.length());
+  for (size_t i = 0; i < value.length(); i++) {
+    chars[i] = llvm::ConstantInt::get(int8_ty, value[i]);
+  }
+
+  llvm::ArrayType* init_type = llvm::ArrayType::get(int8_ty, value.length());
+  llvm::Constant* init = llvm::ConstantArray::get(init_type, chars);
+  llvm::GlobalVariable* array = create_global("!const_str_init", init_type);
+  unnamed_const(array);
+  array->setInitializer(init);
+  return llvm::ConstantExpr::getBitCast(array, int8_ty->getPointerTo());
+}
+
+llvm::Constant* LLVMCodeGen::create_const_string(std::string value, Scope& scope) {
+  llvm::Type* str_type = get_string_ty(scope);
+  llvm::Type* int64_ty = llvm::Type::getInt64Ty(llvm_context);
+
+  return llvm::ConstantStruct::get(
+    static_cast<llvm::StructType*>(str_type),
+  {
+    llvm::ConstantInt::get(int64_ty, value.length()),
+    create_const_string_initializer(value)
+  });
+}
+
+llvm::Value* LLVMCodeGen::create_const_string_global(
+  std::string value, std::string const & name, Scope& scope
+) {
+  llvm::GlobalVariable* global = create_global(name, get_string_ty(scope));
+  unnamed_const(global);
+  global->setInitializer(create_const_string(value, scope));
+  return global;
 }
 
 llvm::Function* LLVMCodeGen::get_str_concat_internal() {
@@ -1018,6 +1074,30 @@ void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& sco
   );
 }
 
+void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope& scope) {
+  // Very limited const global support for primative types
+  assert(scope.get_parent() == nullptr && "is global scope");
+  assert(std::holds_alternative<PrimativeType>(const_decl.type->v));
+  llvm::GlobalVariable* global = create_global(
+    const_decl.constant.name,
+    map_type_to_llvm(const_decl.type.get(), scope));
+  global->setConstant(true);
+  // This will need to be changed if we ever get to constant arrays/structs/pods
+  auto primative_type = std::get<PrimativeType>(const_decl.type->v);
+  auto const_init = ast_builder.make_literal(primative_type.tag, "");
+  const_init->meta.const_value = *const_decl.const_expression->meta.get_const_value();
+
+  llvm::Constant* global_int = nullptr;
+  if (!primative_type.is_string_type()) {
+    global_int = static_cast<llvm::Constant*>(codegen_expression(*const_init, scope));
+  } else {
+    global_int = create_const_string(
+      std::get<std::string>(const_init->meta.const_value), scope);
+  }
+
+  global->setInitializer(global_int);
+}
+
 /* Expressions */
 
 llvm::Value* LLVMCodeGen::dereference(llvm::Value* value, Type_Ptr type) {
@@ -1354,10 +1434,8 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
           llvm::APFloat(/*value:*/ literal.as_float64()));
     case PrimativeType::STRING: {
       auto str_value = literal.as_string();
-      llvm::Value* raw_str = ir_builder.CreateGlobalStringPtr(str_value, "!const_str_init");
-      llvm::Value* length = llvm::ConstantInt::get(
-        llvm::Type::getInt64Ty(llvm_context), str_value.length());
-      return create_string(raw_str, length, scope);
+      llvm::Value* str_global = create_const_string_global(str_value, "!const_str", scope);
+      return ir_builder.CreateLoad(str_global, "get_str");
     }
     case PrimativeType::BOOL:
       return llvm::ConstantInt::get(llvm_context,
@@ -1376,22 +1454,30 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope)
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Identifier& ident, Scope& scope) {
   Symbol* symbol = scope.lookup_first_name(ident);
-  assert(symbol->is_local() && "only locals implemented");
+  assert((symbol->is_local() || symbol->is_global()) && "only locals/globals implemented");
 
-  if (ident.name.at(0) == '%') {
-    // Special pre-codegened values
-    auto* meta_ptr = symbol->meta.get();
-    if (ident.name == Builtin::MANK_BOUNDSCHECK) {
-      // Little hack for adding bounds checks
-      auto& boundscheck = *static_cast<SymbolMetaBoundsCheck*>(meta_ptr);
-      raise_mank_builtin_bounds_error(
-        boundscheck.length, boundscheck.index, boundscheck.location);
-      return nullptr;
+  llvm::Value* variable_address = nullptr;
+
+  if (symbol->is_local()) {
+    if (ident.name.at(0) == '%') {
+      // Special pre-codegened values
+      auto* meta_ptr = symbol->meta.get();
+      if (ident.name == Builtin::MANK_BOUNDSCHECK) {
+        // Little hack for adding bounds checks
+        auto& boundscheck = *static_cast<SymbolMetaBoundsCheck*>(meta_ptr);
+        raise_mank_builtin_bounds_error(
+          boundscheck.length, boundscheck.index, boundscheck.location);
+        return nullptr;
+      }
+      return static_cast<SymbolMetaLocal*>(meta_ptr)->alloca;
     }
-    return static_cast<SymbolMetaLocal*>(meta_ptr)->alloca;
+
+    variable_address = address_of(*ident.get_self().class_ptr(), scope);
+  } else if (symbol->is_global()) {
+    variable_address = llvm_module->getNamedGlobal(ident.name);
   }
 
-  llvm::Value* variable_address = address_of(*ident.get_self().class_ptr(), scope);
+  assert(variable_address != nullptr);
   return ir_builder.CreateLoad(variable_address,
     formatxx::format_string("load_{}", ident.name));
 }

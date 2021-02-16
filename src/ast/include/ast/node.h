@@ -101,6 +101,10 @@ DEF_EXPR(Ast_Identifier) {
     : Ast_Node(location), name{name} {}
   Ast_Identifier(std::string name)
     : Ast_Identifier({} /* dummy */, name) {};
+
+  bool operator < (Ast_Identifier const & other) const {
+    return name < other.name;
+  }
 };
 
 struct Ast_Argument {

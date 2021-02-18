@@ -4,3 +4,5 @@ add_library(MankParser
   token_helpers.cpp
 )
 
+# Using target_link_libraries is COMPLETELY broken -- this works
+target_include_directories(MankParser PRIVATE "../../deps/eternal/include")

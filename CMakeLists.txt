@@ -27,5 +27,8 @@ add_subdirectory(deps/litexx)
 add_subdirectory(deps/formatxx)
 add_subdirectory(deps/patterns)
 
+set(WITH_TESTS OFF CACHE BOOL "Enable tests" FORCE)
+add_subdirectory(deps/eternal)
+
 enable_testing ()
 add_subdirectory(tests)

@@ -7,3 +7,6 @@
 [submodule "deps/formatxx"]
 	path = deps/formatxx
 	url = https://github.com/seanmiddleditch/formatxx.git
+[submodule "deps/eternal"]
+	path = deps/eternal
+	url = https://github.com/mapbox/eternal.git

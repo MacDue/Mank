@@ -57,6 +57,7 @@ private:
   std::vector<Type_Ptr> parse_type_list(TokenType left_delim, TokenType right_delim);
   Type_Ptr parse_lambda_type();
   Type_Ptr parse_pod();
+  Type_Ptr parse_enum();
   Type_Ptr parse_tuple_type();
   Type_Ptr parse_function();
 

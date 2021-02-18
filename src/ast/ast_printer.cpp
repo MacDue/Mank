@@ -11,24 +11,35 @@
 
 /* Constructs */
 
+#define FOR_DECL_PRINT(decl, decls, print) {  \
+  for (auto decl: decls) {                    \
+    print;                                    \
+    putf("");                                 \
+  }                                           \
+}
+
 void AstPrinter::print_file(Ast_File& file) {
   putf("* File with {} global consts, {} pods, and {} functions",
     file.global_consts.size(), file.pods.size(), file.functions.size());
   if (!hide_lex_details) {
     putf("- Source name: {}", file.filename);
   }
-  for (auto global_const: file.global_consts) {
+
+  FOR_DECL_PRINT(global_const, file.global_consts, ({
     self->print_stmt(*global_const);
-    putf("");
-  }
-  for (auto pod: file.pods) {
+  }))
+
+  FOR_DECL_PRINT(pod, file.pods, ({
     self->print_pod(*pod);
-    putf("");
-  }
-  for (auto func: file.functions) {
+  }))
+
+  FOR_DECL_PRINT(enum_decl, file.enums, ({
+    self->print_enum(*enum_decl);
+  }))
+
+  FOR_DECL_PRINT(func, file.functions, ({
     self->print_function(*func);
-    putf("");
-  }
+  }))
 }
 
 void AstPrinter::print_args(std::vector<Ast_Argument> const & args) {
@@ -51,6 +62,39 @@ void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
     self->print_args(pod.fields);
   } else {
     putf("- No fields");
+  }
+}
+
+void AstPrinter::print_enum_members(
+  std::vector<EnumMemberType> const & enum_members
+) {
+  using namespace mpark::patterns;
+  for (auto& member: enum_members) {
+    match(member)(
+      pattern(as<PlainEnum>(arg)) = [&](auto& plain_enum) {
+        indent();
+        putf(" {}", plain_enum.tag.name);
+      },
+      pattern(as<TupleEnum>(arg)) = [&](auto& tuple_enum) {
+        (void) tuple_enum;
+        // TODO
+      },
+      pattern(as<PodEnum>(arg)) = [&](auto& pod_enum) {
+        (void) pod_enum;
+        // TODO
+      }
+    );
+  }
+}
+
+
+void AstPrinter::print_enum(Ast_Enum_Declaration& enum_decl) {
+  putf("* Enum {}", enum_decl.identifier.name);
+  if (enum_decl.members.size() > 0) {
+    putf("- Members:");
+    self->print_enum_members(enum_decl.members);
+  } else {
+    putf("- No members");
   }
 }
 

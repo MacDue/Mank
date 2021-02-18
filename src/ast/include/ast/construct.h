@@ -41,11 +41,11 @@ struct TupleEnum: PlainEnum {
   std::vector<Type_Ptr> elements;
 };
 
-struct StructEnum: PlainEnum {
+struct PodEnum: PlainEnum {
   std::vector<Ast_Argument> fields;
 };
 
-using EnumMemberType = std::variant<PlainEnum, TupleEnum, StructEnum>;
+using EnumMemberType = std::variant<PlainEnum, TupleEnum, PodEnum>;
 
 DEF_TYPE(Ast_Enum_Declaration), Ast_Node {
   Ast_Identifier identifier;
@@ -56,6 +56,7 @@ struct Ast_Constant_Declaration;
 
 using Function_Ptr = SpAstPtr<Type, Ast_Function_Declaration>;
 using Pod_Ptr = SpAstPtr<Type, Ast_Pod_Declaration>;
+using Enum_Ptr = SpAstPtr<Type, Ast_Enum_Declaration>;
 using Const_Ptr = SpAstPtr<Ast_Statement, Ast_Constant_Declaration>;
 
 struct Ast_File {
@@ -63,6 +64,7 @@ struct Ast_File {
   std::string filename;
   std::vector<Function_Ptr> functions;
   std::vector<Pod_Ptr> pods;
+  std::vector<Enum_Ptr> enums;
   std::vector<Const_Ptr> global_consts;
   AstContext ctx; // owns EVERYTHING
 

@@ -56,6 +56,8 @@ Ast_File Parser::parse_file() {
       parsed_file.functions.emplace_back(this->parse_function());
     } else if (next_token.type == TokenType::POD) {
       parsed_file.pods.emplace_back(this->parse_pod());
+    } else if (next_token.type == TokenType::ENUM) {
+      parsed_file.enums.emplace_back(this->parse_enum());
     } else if (next_token.type == TokenType::CONST) {
       parsed_file.global_consts.emplace_back(this->parse_const_decl());
     } else {
@@ -79,6 +81,52 @@ Type_Ptr Parser::parse_pod() {
   parsed_pod.fields = this->parse_arguments(
     TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
   return ctx->new_type(parsed_pod);
+}
+
+Type_Ptr Parser::parse_enum() {
+  /*
+    (basic enum -- will extend later)
+    enum = "enum", identifier, "{", [enum_members], "}" ;
+    enum_members = identifier, {",", identifier} ;
+  */
+  Ast_Enum_Declaration parsed_enum;
+  expect(TokenType::ENUM);
+  auto enum_name = this->parse_identifier();
+  if (!enum_name) {
+    throw_error_here("expected enum name");
+  }
+  parsed_enum.identifier = *enum_name;
+  // parsing members
+
+  expect(TokenType::LEFT_BRACE);
+  while (!peek(TokenType::RIGHT_BRACE)) {
+    EnumMemberType enum_member;
+    auto tag = this->parse_identifier();
+    if (!tag) {
+      throw_error_here("expected enum member name");
+    }
+    switch (lexer.peek_next_token().type) {
+      case TokenType::COMMA:
+      case TokenType::RIGHT_BRACE:
+        enum_member = PlainEnum{.tag = *tag };
+        break;
+      case TokenType::LEFT_PAREN:
+        break; // TODO: tuple enum
+      case TokenType::RIGHT_PAREN:
+        break; // TODO: pod enum
+      default: // fallthrough and error
+        break;
+    }
+
+    parsed_enum.members.push_back(enum_member);
+
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(TokenType::RIGHT_BRACE);
+
+  return ctx->new_type(parsed_enum);
 }
 
 Type_Ptr Parser::parse_function() {

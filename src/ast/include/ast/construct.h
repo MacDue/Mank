@@ -33,6 +33,25 @@ DEF_TYPE(Ast_Pod_Declaration), Ast_Node {
   }
 };
 
+struct PlainEnum {
+  Ast_Identifier tag;
+};
+
+struct TupleEnum: PlainEnum {
+  std::vector<Type_Ptr> elements;
+};
+
+struct StructEnum: PlainEnum {
+  std::vector<Ast_Argument> fields;
+};
+
+using EnumMemberType = std::variant<PlainEnum, TupleEnum, StructEnum>;
+
+DEF_TYPE(Ast_Enum_Declaration), Ast_Node {
+  Ast_Identifier identifier;
+  std::vector<EnumMemberType> members;
+};
+
 struct Ast_Constant_Declaration;
 
 using Function_Ptr = SpAstPtr<Type, Ast_Function_Declaration>;

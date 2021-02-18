@@ -48,6 +48,7 @@ using Type_Type = std::variant<
   PrimativeType,
   Ast_Function_Declaration,
   Ast_Pod_Declaration,
+  Ast_Enum_Declaration,
   FixedSizeArrayType,
   ReferenceType,
   LambdaType,

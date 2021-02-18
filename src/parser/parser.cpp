@@ -644,22 +644,30 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
     auto ident = *this->parse_identifier();
+    std::optional<Ast_Specialized_Identifier> special_ident;
     // FIXME! This is just hacked in.
     // Works fine for current macro impl though.
     if (this->consume(TokenType::EXCLAMATION_MARK)) {
       Ast_Macro_Identifier macro_ident;
       *static_cast<Ast_Identifier*>(macro_ident.get_raw_self()) = ident;
       return ctx->new_expr(macro_ident);
-    }
-
-    std::optional<Ast_Specialized_Identifier> special_ident;
-    // @([types])
-    if (this->consume(TokenType::AT)) {
+    } else if (this->consume(TokenType::AT)) { // @([types])
       Ast_Specialized_Identifier s_ident;
       *static_cast<Ast_Identifier*>(s_ident.get_raw_self()) = ident;
       s_ident.specializations = this->parse_type_list(
         TokenType::LEFT_PAREN, TokenType::RIGHT_PAREN);
       special_ident = s_ident;
+    } else if (this->peek(TokenType::DOUBLE_COLON)) {
+      // TODO: Replace Ast_Identifiers in most places with Ast_Path
+      //  -> (then maybe remove Ast_Identifier expressions)
+      Ast_Path path;
+      path.path.push_back(ident);
+      while (this->consume(TokenType::DOUBLE_COLON)) {
+        auto path_section = this->parse_identifier();
+        if (!path_section) { throw_error_here("expected path section"); }
+        path.path.push_back(*path_section);
+      }
+      return ctx->new_expr(path);
     }
 
     if (!brace_delimited && peek(TokenType::LEFT_BRACE)) {

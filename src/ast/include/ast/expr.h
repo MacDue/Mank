@@ -91,6 +91,13 @@ DEF_EXPR(Ast_Spawn) {
   Expr_Ptr initializer;
 };
 
+// foo::bar::baz
+DEF_EXPR(Ast_Path) {
+  bool leading_colons = false;
+  std::vector<Ast_Identifier> path;
+};
+
+
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
 
@@ -116,7 +123,8 @@ using Ast_Expression_Type = std::variant<
   Ast_As_Cast,
   Ast_Array_Repeat,
   Ast_Spawn,
-  Ast_Specialized_Identifier>;
+  Ast_Specialized_Identifier,
+  Ast_Path>;
 
 class Ast_Expression {
   template<typename Expr>

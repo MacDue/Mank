@@ -443,3 +443,13 @@ void AstPrinter::print_expr(Ast_Specialized_Identifier& special_ident) {
   putf("- Types:");
   self->print_types(special_ident.specializations);
 }
+
+void AstPrinter::print_expr(Ast_Path& path) {
+  putf("* Path");
+  size_t access_order_no = 0;
+  for (auto& p: path.path) {
+    indent();
+    putf("{}. {}", access_order_no, p.name);
+    ++access_order_no;
+  }
+}

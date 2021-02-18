@@ -112,6 +112,7 @@ class AstPrinter {
     void print_expr(Ast_Array_Repeat& array_repeat);
     void print_expr(Ast_Spawn& spawn);
     void print_expr(Ast_Specialized_Identifier& special_ident);
+    void print_expr(Ast_Path& path);
 
     DepthUpdate operator -> () {
       return DepthUpdate(this);

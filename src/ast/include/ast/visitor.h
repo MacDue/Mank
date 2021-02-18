@@ -76,7 +76,8 @@ struct BaseAstVisitor: public AstVisitor<
   Ast_As_Cast,
   Ast_Array_Repeat,
   Ast_Spawn,
-  Ast_Specialized_Identifier
+  Ast_Specialized_Identifier,
+  Ast_Path
 > {
   void operator()(Ast_File& file) override;
   void operator()(Ast_Function_Declaration& func) override;
@@ -110,4 +111,5 @@ struct BaseAstVisitor: public AstVisitor<
   void operator()(Ast_Array_Repeat& array_repeat) override;
   void operator()(Ast_Spawn& spawn) override;
   void operator()(Ast_Specialized_Identifier& special_ident) override;
+  void operator()(Ast_Path& path) override;
 };

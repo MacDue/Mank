@@ -327,6 +327,11 @@ public:
     assert(false && "??? don't think special idents need codegen!");
   }
 
+  inline llvm::Value* codegen_expression(Ast_Path& path, Scope& scope) {
+    (void) path; (void) scope;
+    assert(false && "??? path codegen");
+  }
+
 public:
   LLVMCodeGen(Ast_File& file_ast);
   /* JIT tools */

@@ -231,15 +231,21 @@ void BaseAstVisitor::operator()(Ast_Array_Repeat& array_repeat) {
   after(array_repeat);
 }
 
-void BaseAstVisitor::operator()(Ast_Spawn& spawn){
+void BaseAstVisitor::operator()(Ast_Spawn& spawn) {
   before(spawn);
   visit(spawn);
   std::visit(recur, spawn.initializer->v);
   after(spawn);
 }
 
-void BaseAstVisitor::operator()(Ast_Specialized_Identifier& special_ident){
+void BaseAstVisitor::operator()(Ast_Specialized_Identifier& special_ident) {
   before(special_ident);
   visit(special_ident);
   after(special_ident);
+}
+
+void BaseAstVisitor::operator()(Ast_Path& path) {
+  before(path);
+  visit(path);
+  after(path);
 }

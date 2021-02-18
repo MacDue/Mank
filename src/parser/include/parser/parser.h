@@ -93,6 +93,7 @@ private:
   Expr_Ptr parse_postfix_expression(bool brace_delimited);
   Expr_Ptr parse_call(Expr_Ptr target);
   Expr_Ptr parse_field_access(Expr_Ptr object);
+  Expr_Ptr parse_namespace_access(Expr_Ptr object);
   Expr_Ptr parse_index_access(Expr_Ptr object);
   Expr_Ptr parse_primary_expression(bool brace_delimited);
   Expr_Ptr parse_parenthesised_expression();

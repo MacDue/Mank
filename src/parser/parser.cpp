@@ -1054,18 +1054,24 @@ Type_Ptr Parser::parse_base_type(bool default_tvar) {
     return this->parse_tuple_type();
   }
 
-  // Array/simple types
-  auto type_name = this->parse_identifier();
   Type_Ptr type;
-
-  if (!type_name) {
-    if (default_tvar) {
-      type = ctx->new_tvar();
-    } else {
-      return nullptr;
-    }
+  if (consume(TokenType::BITWISE_OR)) {
+    // Allows typing |\i32->i32|[] for a vector of lambdas and stuff
+    // TODO: Change to parse_type()? Would allow for more odd refs...
+    type = this->parse_base_type();
+    expect(TokenType::BITWISE_OR);
   } else {
-    type = ctx->new_type(UncheckedType(*type_name));
+    // Array/simple types
+    auto type_name = this->parse_identifier();
+    if (!type_name) {
+      if (default_tvar) {
+        type = ctx->new_tvar();
+      } else {
+        return nullptr;
+      }
+    } else {
+      type = ctx->new_type(UncheckedType(*type_name));
+    }
   }
 
   if (peek(TokenType::LEFT_SQUARE_BRACKET)) {

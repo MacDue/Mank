@@ -61,7 +61,9 @@ Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
         WHEN(std::holds_alternative<Ast_Enum_Declaration>(ty->v)) {
           // FIXME: Will need work for nested scopes/namespaces
           auto enum_decl = std::get<Ast_Enum_Declaration>(ty->v);
-          auto& type_info = first_lookup->scope->get_type_info();
+          // HACK: Need the type info from the enum's scope.
+          Symbol* emum_sym = this->lookup_first_name(enum_decl.identifier);
+          auto& type_info = emum_sym->scope->get_type_info();
           auto& enum_info = type_info.get<UserTypes::EnumInfo>(enum_decl.identifier);
           enum_info.get_member_or_fail(segment);
           end_of_path = true;

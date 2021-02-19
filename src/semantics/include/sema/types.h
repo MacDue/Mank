@@ -7,10 +7,10 @@
 
 #include "ast/types.h"
 #include "ast/ast_builder.h"
+#include "ast/user_type_info.h"
 
 #include "sema/type_infer.h"
-#include "sema/sema_errors.h"
-#include "sema/user_type_info.h"
+#include "errors/compiler_errors.h"
 
 // The resolved type + a the type's identifier in the source (for error messages)
 using TypeResolution = std::pair<Type_Ptr, std::optional<Ast_Identifier>>;
@@ -65,7 +65,7 @@ static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_for
   if (resolved_type) {
     to_resolve = resolved_type;
   } else if (type_slot) {
-    throw_sema_error_at(*type_slot, error_format);
+    throw_error_at(*type_slot, error_format);
   } else {
     IMPOSSIBLE();
   }

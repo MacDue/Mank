@@ -5,7 +5,7 @@
 #include "parser/parser.h"
 #include "parser/token_helpers.h"
 
-#include "sema/sema_errors.h"
+#include "errors/compiler_errors.h"
 
 Ast_File Parser::parse_from_file(std::string file_path) {
   Lexer lexer;
@@ -100,26 +100,22 @@ Type_Ptr Parser::parse_enum() {
 
   expect(TokenType::LEFT_BRACE);
   while (!peek(TokenType::RIGHT_BRACE)) {
-    EnumMemberType enum_member;
+    EnumMember enum_member;
     auto tag = this->parse_identifier();
     if (!tag) {
       throw_error_here("expected enum member name");
     }
+    enum_member.tag = *tag;
     switch (lexer.peek_next_token().type) {
-      case TokenType::COMMA:
-      case TokenType::RIGHT_BRACE:
-        enum_member = PlainEnum{.tag = *tag };
-        break;
       case TokenType::LEFT_PAREN:
         break; // TODO: tuple enum
       case TokenType::RIGHT_PAREN:
         break; // TODO: pod enum
-      default: // fallthrough and error
-        break;
+      default:
+        break; // fallthrough
     }
 
     parsed_enum.members.push_back(enum_member);
-
     if (!consume(TokenType::COMMA)) {
       break;
     }
@@ -303,7 +299,7 @@ Stmt_Ptr Parser::parse_statement() {
       } else {
         // This is kinda a odd case... Since the code only becomes invalid
         // after we parse more context.
-        throw_sema_error_at(expr, "expression is not an identifier");
+        throw_error_at(expr, "expression is not an identifier");
       }
       var_decl.type = this->parse_type();
       // If there's no type it should be infered

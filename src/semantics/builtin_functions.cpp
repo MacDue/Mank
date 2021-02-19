@@ -1,8 +1,8 @@
 #include <vector>
 
 #include "ast/ast_builder.h"
+#include "errors/compiler_errors.h"
 
-#include "sema/sema_errors.h"
 #include "sema/builtin_functions.h"
 
 namespace Builtin {

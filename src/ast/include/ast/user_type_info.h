@@ -5,8 +5,10 @@
 #include <variant>
 
 #include "ast/node.h"
-#include "ast/construct.h"
-#include "sema/sema_errors.h"
+#include "ast/defs.h"
+#include "errors/compiler_errors.h"
+
+struct EnumMember;
 
 namespace UserTypes {
   template <typename UserType, typename MemberInfo>
@@ -25,7 +27,7 @@ namespace UserTypes {
 
     inline MemberInfo get_member_or_fail(Ast_Identifier const & member) const {
       if (!has_member(member)) {
-        throw_sema_error_at(member, "{} contains no {} named \"{}\"",
+        throw_error_at(member, "{} contains no {} named \"{}\"",
           type->identifier.name, MemberInfo::name, member.name);
       }
       return members.at(member.name);
@@ -41,8 +43,7 @@ namespace UserTypes {
   using PodInfo = TypeInfo<Ast_Pod_Declaration, PodFieldInfo>;
 
   struct EnumMemberInfo {
-    uint ordinal;
-    EnumMember::Data const * member;
+    EnumMember* member;
     static constexpr auto name = "member";
   };
 

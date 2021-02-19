@@ -504,7 +504,7 @@ void Infer::assert_lvalue(Expr_Ptr expr, char const* error_template) {
     add_constraint(AstHelper::extract_location(expr), lc, expr->meta.type, error_template);
   } else {
     if (!expr->is_lvalue()) {
-      throw_sema_error_at(expr, error_template);
+      throw_error_at(expr, error_template);
     }
   }
 }

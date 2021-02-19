@@ -184,7 +184,7 @@ static std::pair<Type_Ptr,int> get_field_type(
         };
       },
       pattern(as<TypeVar>(_)) = [&]() -> Type_Ptr {
-        throw_sema_error_at(object, TYPE_MUST_BE_KNOWN);
+        throw_error_at(object, TYPE_MUST_BE_KNOWN);
         return nullptr;
       },
       pattern(_) = []() -> Type_Ptr { return nullptr; });
@@ -192,7 +192,7 @@ static std::pair<Type_Ptr,int> get_field_type(
       return std::make_pair(access_type, resolved_field_index);
     }
   }
-  throw_sema_error_at(object, "not a pod type (is {})", type_to_string(type.get()));
+  throw_error_at(object, "not a pod type (is {})", type_to_string(type.get()));
 }
 
 Type_Ptr get_field_type(
@@ -265,7 +265,7 @@ Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {
       return list_type.element_type;
     },
     pattern(_) = [&]() -> Type_Ptr {
-      throw_sema_error_at(access.object, "not an indexable type (is {})",
+      throw_error_at(access.object, "not an indexable type (is {})",
         type_to_string(type.get()));
       return nullptr;
     }
@@ -280,13 +280,13 @@ void static_check_array_bounds(Ast_Index_Access& index_access, bool allow_missin
     if (!array_type) {
       // Would only be a tvar
       if (allow_missing_types) return;
-      throw_sema_error_at(index_access.object, TYPE_MUST_BE_KNOWN);
+      throw_error_at(index_access.object, TYPE_MUST_BE_KNOWN);
     }
     // assert(array_type && "should be an array type");
     // FIXME: Will break with more integer types
     auto int_index = std::get<int32_t>(*index_value);
     if (int_index < 0 || static_cast<size_t>(int_index) >= array_type->size) {
-      throw_sema_error_at(index_access.index, "out of bounds index");
+      throw_error_at(index_access.index, "out of bounds index");
     }
   }
 }
@@ -331,7 +331,7 @@ bool validate_type_cast(Type_Ptr source_type, Ast_As_Cast& as_cast) {
     pattern(_, _) = []{ return false; });
 
   if (!valid_cast) {
-    throw_sema_error_at(as_cast, "invalid cast from {} to {}",
+    throw_error_at(as_cast, "invalid cast from {} to {}",
       type_to_string(source_type.get()), type_to_string(as_cast.type.get()));
   }
   return valid_cast;

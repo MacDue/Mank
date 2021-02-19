@@ -1,4 +1,8 @@
+#include <mpark/patterns.hpp>
+
+#include "ast/expr.h"
 #include "ast/scope.h"
+#include "ast/types.h"
 
 Symbol& Scope::add(Symbol symbol) {
   symbol.scope = this;
@@ -24,4 +28,53 @@ void Scope::destroy_locals() {
       [](Symbol const & symbol){ return symbol.kind == Symbol::LOCAL; });
     return symbol_bucket.empty();
   });
+}
+
+Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
+  // VERY wonky path resolution (will only work now)
+  using namespace mpark::patterns;
+  Symbol* first_lookup = lookup_first_name(path.path.at(0));
+
+  PathResolution res;
+  switch (first_lookup->kind){
+    case Symbol::GLOBAL:
+      res = first_lookup->const_value;
+      break;
+    case Symbol::FUNCTION:
+    case Symbol::INPUT:
+    case Symbol::LOCAL:
+    case Symbol::TYPE:
+      res = remove_reference(first_lookup->type);
+    default:
+      break;
+  }
+
+  bool end_of_path = false;
+
+  for (size_t idx = 1; idx < path.path.size(); idx++) {
+    auto& segment = path.path[idx];
+    if (end_of_path) {
+      throw_error_at(segment, "unexpected path segment");
+    }
+    res = match(res)(
+      pattern(as<Type_Ptr>(arg)) = [&](auto& ty){
+        WHEN(std::holds_alternative<Ast_Enum_Declaration>(ty->v)) {
+          // FIXME: Will need work for nested scopes/namespaces
+          auto enum_decl = std::get<Ast_Enum_Declaration>(ty->v);
+          auto& type_info = first_lookup->scope->get_type_info();
+          auto& enum_info = type_info.get<UserTypes::EnumInfo>(enum_decl.identifier);
+          enum_info.get_member_or_fail(segment);
+          end_of_path = true;
+          return PathResolution { ty };
+        };
+      },
+      pattern(_) = [&]{
+        // TODO: better error
+        throw_error_at(segment, "invalid path");
+        return PathResolution{};
+      }
+    );
+  }
+
+  return res;
 }

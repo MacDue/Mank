@@ -5,6 +5,8 @@
 #include <unordered_map>
 
 #include "ast/node.h"
+#include "ast/common_ptrs.h"
+#include "ast/user_type_info.h"
 
 using SymbolName = Ast_Identifier;
 
@@ -46,12 +48,17 @@ struct Symbol {
 };
 
 class Scope {
+  UserTypes::TypeMap user_types_info;
   std::unordered_map<std::string, std::vector<Symbol>> symbols;
   Scope* parent = nullptr;
   int level = 0;
 public:
   inline Scope* get_parent() { return parent; }
   inline int get_level() { return level; }
+
+  inline UserTypes::TypeMap& get_type_info() {
+    return user_types_info;
+  }
 
   inline void set_parent(Scope& parent) {
     this->parent = &parent;
@@ -67,4 +74,8 @@ public:
   Symbol* lookup_first(std::string const & name);
 
   void destroy_locals();
+
+  using PathResolution = std::variant<Type_Ptr, Expr_Ptr>;
+
+  PathResolution resolve_path(Ast_Path const & path);
 };

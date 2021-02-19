@@ -9,7 +9,7 @@
 
 #include "ast/util.h"
 #include "ast/types.h"
-#include "sema/user_type_info.h"
+#include "ast/user_type_info.h"
 #include "errors/compiler_errors.h"
 #include "errors/compiler_message.h"
 

@@ -6,6 +6,7 @@
 #include "ast/scope.h"
 #include "ast/block.h"
 #include "ast/context.h"
+#include "ast/common_ptrs.h"
 #include "ast/generic_type.h"
 
 using TypeParam = SpAstPtr<Type, GenericType>;
@@ -53,13 +54,6 @@ DEF_TYPE(Ast_Enum_Declaration), Ast_Node {
   Ast_Identifier identifier;
   std::vector<EnumMember> members;
 };
-
-struct Ast_Constant_Declaration;
-
-using Function_Ptr = SpAstPtr<Type, Ast_Function_Declaration>;
-using Pod_Ptr = SpAstPtr<Type, Ast_Pod_Declaration>;
-using Enum_Ptr = SpAstPtr<Type, Ast_Enum_Declaration>;
-using Const_Ptr = SpAstPtr<Ast_Statement, Ast_Constant_Declaration>;
 
 struct Ast_File {
   Scope scope;

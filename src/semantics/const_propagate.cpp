@@ -5,8 +5,8 @@
 
 #include "ast/ast.h"
 #include "sema/types.h"
-#include "sema/sema_errors.h"
 #include "sema/const_propagate.h"
+#include "errors/compiler_errors.h"
 
 namespace AstHelper {
 
@@ -103,7 +103,7 @@ void ConstantVisitor::after(Ast_Binary_Operation& binop) {
             return lhs * rhs;
           case Ast_Operator::DIVIDE:
             if (rhs == 0) {
-              throw_sema_error_at(binop, "division by zero");
+              throw_error_at(binop, "division by zero");
             }
             return lhs / rhs;
           default:

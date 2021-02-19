@@ -152,7 +152,9 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
       return all_paths_return(*binary.left, unreachable_stmt)
         || all_paths_return(*binary.right, unreachable_stmt);
     },
-    pattern(anyof(as<Ast_Literal>(_), as<Ast_Identifier>(_), as<Ast_Lambda>(_))) = []{
+    pattern(anyof(as<Ast_Literal>(_), as<Ast_Identifier>(_),
+      as<Ast_Lambda>(_), as<Ast_Path>(_))
+    ) = []{
       return false;
     },
     pattern(as<Ast_Field_Access>(arg)) = [&](auto& access){

@@ -6,7 +6,7 @@
 
 #include "sema/types.h"
 #include "sema/type_infer.h"
-#include "sema/user_type_info.h"
+#include "ast/user_type_info.h"
 
 #include "ast/ast.h"
 #include "errors/compiler_message.h"
@@ -41,8 +41,7 @@ private:
   std::optional<Infer> infer;
 
   Lexer* source_file = nullptr;
-
-  UserTypes::TypeMap user_types;
+  Scope* global_scope = nullptr;
 
   bool build_tests = false;
 

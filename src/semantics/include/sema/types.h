@@ -8,9 +8,9 @@
 #include "ast/types.h"
 #include "ast/ast_builder.h"
 
-#include "sema/pod_info.h"
 #include "sema/type_infer.h"
 #include "sema/sema_errors.h"
+#include "sema/user_type_info.h"
 
 // The resolved type + a the type's identifier in the source (for error messages)
 using TypeResolution = std::pair<Type_Ptr, std::optional<Ast_Identifier>>;
@@ -43,17 +43,17 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 
 Type_Ptr get_field_type(
   Ast_Field_Access& access,
-  ResolvedPodInfoMap const & pod_info);
+  UserTypes::TypeMap const & user_types);
 
 Type_Ptr get_field_type(
   TypeFieldConstraint& field_constraint,
-  ResolvedPodInfoMap const & pod_info);
+  UserTypes::TypeMap const & user_types);
 
 Type_Ptr get_field_type(
   Ast_Pod_Bind& pod_bind,
   Expr_Ptr init,
   Type_Ptr init_type,
-  ResolvedPodInfoMap const & pod_info);
+  UserTypes::TypeMap const & user_types);
 
 Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);
 

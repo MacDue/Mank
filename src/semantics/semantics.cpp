@@ -67,7 +67,7 @@ void Semantics::analyse_file(Ast_File& file) {
   // Setup the context
   this->ctx = &file.ctx;
   this->builder.emplace(AstBuilder(file));
-  this->infer.emplace(Infer(*this->ctx, resolved_pods, [&](CompilerMessage msg){
+  this->infer.emplace(Infer(*this->ctx, user_types, [&](CompilerMessage msg){
     warnings.emplace_back(msg);
   }));
 
@@ -142,13 +142,25 @@ void Semantics::analyse_file(Ast_File& file) {
     for (auto pod: file.pods) {
       check_top_level_decl("pod", Symbol::TYPE, pod->identifier,
         get_symbol_identifer_if_type<Ast_Pod_Declaration>);
-      file.scope.add(
-        Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
+      file.scope.add(Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
     }
 
     /* Check pods */
     for (auto pod: file.pods) {
       analyse_pod(*pod, global_scope);
+    }
+  }
+
+  /* Enum declarations */
+  {
+    for (auto enum_decl: file.enums) {
+      check_top_level_decl("enum", Symbol::TYPE, enum_decl->identifier,
+        get_symbol_identifer_if_type<Ast_Enum_Declaration>);
+      file.scope.add(Symbol(enum_decl->identifier, enum_decl.class_ptr(), Symbol::TYPE));
+    }
+
+    for (auto enum_decl: file.enums) {
+      analyse_enum(*enum_decl, global_scope);
     }
   }
 
@@ -168,8 +180,7 @@ void Semantics::analyse_file(Ast_File& file) {
     for (auto func: file.functions) {
       check_top_level_decl("function", Symbol::FUNCTION, func->identifier,
         get_symbol_identifer_if_type<Ast_Function_Declaration>);
-      file.scope.add(
-        Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
+      file.scope.add(Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
       func->body.scope.set_parent(global_scope);
       analyse_function_header(*func);
     }
@@ -225,12 +236,13 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
 }
 
 void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
+  using namespace UserTypes;
   PodInfo pod_info;
   pod_info.type = pod.get_self();
   uint field_index = 0;
   for (auto& field: pod.fields) {
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
-    if (pod_info.fields.contains(field.name.name)) {
+    if (pod_info.has_member(field.name)) {
       throw_sema_error_at(field.name, "duplicate pod field");
     }
     if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
@@ -243,17 +255,30 @@ void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
         field.type = nullptr; // cycles bad
       }
     }
-    pod_info.fields.insert({
-      field.name.name,
-      std::make_pair(field.type, field_index)
-    });
+    pod_info.add_member(field.name,
+      PodFieldInfo{ .index = field_index, .type = field.type });
     field_index += 1;
   }
 
-  this->resolved_pods.insert({
-    pod.identifier.name,
-    pod_info
-  });
+  this->user_types.add<PodInfo>(pod.identifier, pod_info);
+}
+
+void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
+  using namespace UserTypes;
+  EnumInfo enum_info;
+  enum_info.type = enum_decl.get_self();
+  uint enum_ordinal = 0;
+  for (auto& member: enum_decl.members) {
+    // TODO: tuple/pod enums
+    if (enum_info.has_member(member.tag)) {
+      throw_sema_error_at(member.tag, "duplicate enum member");
+    }
+    enum_info.add_member(member.tag,
+      EnumMemberInfo{ .ordinal = enum_ordinal, .member = nullptr });
+    member.ordinal = enum_ordinal += 1;
+  }
+
+  this->user_types.add<EnumInfo>(enum_decl.identifier, enum_info);
 }
 
 void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
@@ -632,7 +657,7 @@ void Semantics::check_pod_bindings(
       field_type = ctx->new_tvar();
       infer->add_constraint(field_bind.field.location, field_type, field_constraint);
     } else {
-      field_type = get_field_type(field_bind, init, init_type, resolved_pods);
+      field_type = get_field_type(field_bind, init, init_type, user_types);
     }
     match(field_bind.replacement)(
       pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
@@ -802,7 +827,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
             field_type, field_constraint);
           return field_type;
         } else {
-          return get_field_type(access, resolved_pods);
+          return get_field_type(access, user_types);
         }
       } else {
         throw_sema_error_at(access.object, "is void?");
@@ -877,20 +902,20 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
       resolve_type_or_fail(scope, pod_init.pod, "undeclared pod type {}");
       std::unordered_set<std::string_view> seen_fields;
       auto& pod_type = std::get<Ast_Pod_Declaration>(pod_init.pod->v);
-      auto& pod_info = this->resolved_pods.at(pod_type.identifier.name);
+      auto& pod_info = this->user_types.get<UserTypes::PodInfo>(pod_type.identifier);
       for (auto& init: pod_init.fields) {
         if (seen_fields.contains(init.field.name)) {
           throw_sema_error_at(init.field, "repeated field in initializer");
         }
-        auto [expected_type, field_index] = pod_info.get_field_or_fail(init.field);
+        auto field_info = pod_info.get_member_or_fail(init.field);
         auto init_type = analyse_expression(*init.initializer, scope);
         assert_valid_binding({}, AstHelper::extract_location(init.initializer),
-           expected_type, init_type, init.initializer);
+           field_info.type, init_type, init.initializer);
 
-        init.field_index = field_index;
+        init.field_index = field_info.index;
         seen_fields.insert(init.field.name);
       }
-      if (seen_fields.size() != pod_info.fields.size()) {
+      if (seen_fields.size() != pod_info.members.size()) {
         throw_sema_error_at(pod_init, "incomplete pod initialization");
       }
       return pod_init.pod;

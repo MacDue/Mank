@@ -5,8 +5,8 @@
 #include <formatxx/std_string.h>
 
 #include "sema/types.h"
-#include "sema/pod_info.h"
 #include "sema/type_infer.h"
+#include "sema/user_type_info.h"
 
 #include "ast/ast.h"
 #include "errors/compiler_message.h"
@@ -42,7 +42,7 @@ private:
 
   Lexer* source_file = nullptr;
 
-  ResolvedPodInfoMap resolved_pods;
+  UserTypes::TypeMap user_types;
 
   bool build_tests = false;
 
@@ -87,6 +87,7 @@ private:
      Ast_Identifier constant, Ast_Expression& init, Scope& scope);
 
   void analyse_pod(Ast_Pod_Declaration& pod, Scope& scope);
+  void analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope);
   void analyse_function_header(Ast_Function_Declaration& func);
   void analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scope& scope);
   Type_Ptr analyse_function_body(Ast_Function_Declaration& func);

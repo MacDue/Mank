@@ -9,7 +9,7 @@
 
 #include "ast/util.h"
 #include "ast/types.h"
-#include "sema/pod_info.h"
+#include "sema/user_type_info.h"
 #include "errors/compiler_errors.h"
 #include "errors/compiler_message.h"
 
@@ -17,7 +17,7 @@ using AddMessage = std::function<void(CompilerMessage)>;
 
 class Infer {
   AstContext& ctx;
-  ResolvedPodInfoMap const & resolved_pods;
+  UserTypes::TypeMap const & user_types;
 
   AddMessage add_message;
 
@@ -26,8 +26,8 @@ class Infer {
   std::map<int32_t, std::vector<std::pair<SourceLocation, Type_Ptr>>> unify_reasoning;
 public:
 
-  Infer(AstContext& ctx, ResolvedPodInfoMap& resolved_pods, AddMessage add_message)
-    : ctx{ctx}, resolved_pods{resolved_pods}, add_message{add_message} {}
+  Infer(AstContext& ctx, UserTypes::TypeMap & user_types, AddMessage add_message)
+    : ctx{ctx}, user_types{user_types}, add_message{add_message} {}
 
   class UnifyError: public std::exception {
     std::string error_message;

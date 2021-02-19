@@ -68,7 +68,7 @@ class AstPrinter {
     void print_args(std::vector<Ast_Argument> const & args);
     void print_types(std::vector<Type_Ptr> const & types);
 
-    void print_enum_members(std::vector<EnumMemberType> const & enum_members);
+    void print_enum_members(std::vector<EnumMember> const & enum_members);
 
     void print_file(Ast_File& file);
     void print_pod(Ast_Pod_Declaration& pod);

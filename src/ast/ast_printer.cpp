@@ -66,27 +66,24 @@ void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
 }
 
 void AstPrinter::print_enum_members(
-  std::vector<EnumMemberType> const & enum_members
+  std::vector<EnumMember> const & enum_members
 ) {
   using namespace mpark::patterns;
   for (auto& member: enum_members) {
-    match(member)(
-      pattern(as<PlainEnum>(arg)) = [&](auto& plain_enum) {
-        indent();
-        putf(" {}", plain_enum.tag.name);
+    indent(); putf(" {}", member.tag.name);
+    match(member.data)(
+      pattern(some(as<EnumMember::TupleData>(arg))) = [&](auto& tuple_data) {
+        // TODO: tuple enums
+        (void) tuple_data;
       },
-      pattern(as<TupleEnum>(arg)) = [&](auto& tuple_enum) {
-        (void) tuple_enum;
-        // TODO
+      pattern(some(as<EnumMember::PodData>(arg))) = [&](auto& pod_data) {
+        // TODO: pod enums
+        (void) pod_data;
       },
-      pattern(as<PodEnum>(arg)) = [&](auto& pod_enum) {
-        (void) pod_enum;
-        // TODO
-      }
+      pattern(_) = []{}
     );
   }
 }
-
 
 void AstPrinter::print_enum(Ast_Enum_Declaration& enum_decl) {
   putf("* Enum {}", enum_decl.identifier.name);

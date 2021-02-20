@@ -27,7 +27,7 @@ DEF_TYPE(PodType) {
 
   inline void assert_has_field(Ast_Identifier const & field) const {
     if (!has_field(field)) {
-      throw_error_at(field, "{} has no field name \"{}\"",
+      throw_error_at(field, "{} has no field named \"{}\"",
         identifier.name, field.name);
     }
   }

@@ -909,7 +909,7 @@ TEST_CASE("Reference binding", "[Sema]") {
     auto& function = *code.functions.at(0);
 
     // a
-    REQUIRE_REF_TYPE_TO(function, 3, Ast_Pod_Declaration, ({}));
+    REQUIRE_REF_TYPE_TO(function, 3, PodType, ({}));
 
     // b
     REQUIRE_REF_TYPE_TO(function, 4, PrimativeType, ({
@@ -1333,7 +1333,7 @@ TEST_CASE("Pod literal semantics", "[Sema]") {
     REQUIRE_NOTHROW(sema.analyse_file(code));
 
     auto& pod_decl = FIRST_STMT(Ast_Variable_Declaration);
-    REQUIRE(match_types(pod_decl.type, code.pods.at(0).class_ptr()));
+    REQUIRE(match_types(pod_decl.type, code.items.at(0)->declared_type));
 
     // repeated init
     {

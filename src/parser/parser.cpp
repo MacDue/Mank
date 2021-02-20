@@ -55,9 +55,9 @@ Ast_File Parser::parse_file() {
     ) {
       parsed_file.functions.emplace_back(this->parse_function());
     } else if (next_token.type == TokenType::POD) {
-      parsed_file.pods.emplace_back(this->parse_pod());
+      parsed_file.items.emplace_back(this->parse_pod());
     } else if (next_token.type == TokenType::ENUM) {
-      parsed_file.enums.emplace_back(this->parse_enum());
+      parsed_file.items.emplace_back(this->parse_enum());
     } else if (next_token.type == TokenType::CONST) {
       parsed_file.global_consts.emplace_back(this->parse_const_decl());
     } else {
@@ -67,7 +67,7 @@ Ast_File Parser::parse_file() {
   return parsed_file;
 }
 
-Type_Ptr Parser::parse_pod() {
+Item_Ptr Parser::parse_pod() {
   /*
     pod = "pod", identifier, [braced_parameter_list] ;
   */
@@ -80,10 +80,10 @@ Type_Ptr Parser::parse_pod() {
   parsed_pod.identifier = *pod_name;
   parsed_pod.fields = this->parse_arguments(
     TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
-  return ctx->new_type(parsed_pod);
+  return ctx->new_item(parsed_pod);
 }
 
-Type_Ptr Parser::parse_enum() {
+Item_Ptr Parser::parse_enum() {
   /*
     (basic enum -- will extend later)
     enum = "enum", identifier, "{", [enum_members], "}" ;
@@ -96,11 +96,11 @@ Type_Ptr Parser::parse_enum() {
     throw_error_here("expected enum name");
   }
   parsed_enum.identifier = *enum_name;
-  // parsing members
 
+  // parsing members
   expect(TokenType::LEFT_BRACE);
   while (!peek(TokenType::RIGHT_BRACE)) {
-    EnumMember enum_member;
+    Ast_Enum_Declaration::Member enum_member;
     auto tag = this->parse_identifier();
     if (!tag) {
       throw_error_here("expected enum member name");
@@ -122,7 +122,7 @@ Type_Ptr Parser::parse_enum() {
   }
   expect(TokenType::RIGHT_BRACE);
 
-  return ctx->new_type(parsed_enum);
+  return ctx->new_item(parsed_enum);
 }
 
 Type_Ptr Parser::parse_function() {

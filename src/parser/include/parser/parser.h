@@ -49,6 +49,10 @@ private:
       std::string(last_token.raw_token), args...);
   }
 
+  /* Items */
+  Item_Ptr parse_pod();
+  Item_Ptr parse_enum();
+
   /* Types */
   Type_Ptr parse_type(bool default_tvar = false);
   Type_Ptr parse_base_type(bool default_tvar = false);
@@ -56,8 +60,6 @@ private:
   Type_Ptr parse_list_type(Type_Ptr base_type);
   std::vector<Type_Ptr> parse_type_list(TokenType left_delim, TokenType right_delim);
   Type_Ptr parse_lambda_type();
-  Type_Ptr parse_pod();
-  Type_Ptr parse_enum();
   Type_Ptr parse_tuple_type();
   Type_Ptr parse_function();
 

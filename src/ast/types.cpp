@@ -38,10 +38,10 @@ std::string type_to_string(Type const & type, bool hide_details) {
     pattern(as<PrimativeType>(arg)) = [](auto const & primative_type) {
       return std::string(primative_type.name());
     },
-    pattern(as<Ast_Pod_Declaration>(arg)) = [](auto const & pod_type) {
+    pattern(as<PodType>(arg)) = [](auto const & pod_type) {
       return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
-    pattern(as<Ast_Enum_Declaration>(arg)) = [](auto const & enum_type) {
+    pattern(as<EnumType>(arg)) = [](auto const & enum_type) {
       return formatxx::format_string("enum {}", enum_type.identifier.name);
     },
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto const & array_type) {

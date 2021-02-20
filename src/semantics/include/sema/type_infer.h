@@ -9,7 +9,6 @@
 
 #include "ast/util.h"
 #include "ast/types.h"
-#include "ast/user_type_info.h"
 #include "errors/compiler_errors.h"
 #include "errors/compiler_message.h"
 
@@ -17,8 +16,6 @@ using AddMessage = std::function<void(CompilerMessage)>;
 
 class Infer {
   AstContext& ctx;
-  UserTypes::TypeMap const & user_types;
-
   AddMessage add_message;
 
   // subs reasoning = map tvar id -> source location, tvar id
@@ -26,8 +23,8 @@ class Infer {
   std::map<int32_t, std::vector<std::pair<SourceLocation, Type_Ptr>>> unify_reasoning;
 public:
 
-  Infer(AstContext& ctx, UserTypes::TypeMap & user_types, AddMessage add_message)
-    : ctx{ctx}, user_types{user_types}, add_message{add_message} {}
+  Infer(AstContext& ctx, AddMessage add_message)
+    : ctx{ctx}, add_message{add_message} {}
 
   class UnifyError: public std::exception {
     std::string error_message;

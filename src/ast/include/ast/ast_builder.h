@@ -33,6 +33,11 @@ Type_Ptr to_type_ptr(T && type) {
   return file.ctx.new_type(type);
 }
 
+template <typename T>
+Item_Ptr to_item_ptr(T && item) {
+  return file.ctx.new_item(item);
+}
+
 template<typename... TFunction>
 Ast_File& add_functions(TFunction && ... function) {
   if constexpr (sizeof...(function) > 0) {
@@ -77,11 +82,11 @@ inline Type_Ptr make_reference(Type_Ptr type) {
 }
 
 template <typename... TFields>
-Type_Ptr make_pod(std::string name, TFields && ... fields) {
+Item_Ptr make_pod(std::string name, TFields && ... fields) {
   Ast_Pod_Declaration pod;
   pod.identifier.name = name;
   pod.fields = std::vector<Ast_Argument> { fields... };
-  return to_type_ptr(pod);
+  return to_item_ptr(pod);
 }
 
 /* Functions */

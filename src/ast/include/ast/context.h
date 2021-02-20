@@ -14,6 +14,7 @@ class AstContext {
   Type_Ptr add_type(Type type);
   Stmt_Ptr add_stmt(Ast_Statement type);
   Expr_Ptr add_expr(Ast_Expression type);
+  Item_Ptr add_item(Ast_Item item);
 public:
   AstContext();
   AstContext(AstContext&& ctx);
@@ -42,6 +43,11 @@ public:
   template <typename T>
   Expr_Ptr new_expr(T expr) {
     return add_expr(Ast_Expression(expr));
+  }
+
+  template <typename T>
+  Item_Ptr new_item(T item) {
+    return add_item(Ast_Item(item));
   }
 
   ~AstContext();

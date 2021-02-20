@@ -363,8 +363,15 @@ llvm::Type* LLVMCodeGen::map_lambda_type_to_llvm(LambdaType const & lambda_type,
     }, "lambda");
 }
 
-llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope) {
-  std::vector<llvm::Type*> field_types = map_arg_types_to_llvm(pod_type.fields, scope);
+llvm::Type* LLVMCodeGen::map_pod_to_llvm(PodType const & pod_type, Scope& scope) {
+  std::vector<llvm::Type*> field_types;
+  field_types.reserve(pod_type.fields.size());
+  std::transform(
+    pod_type.fields.begin(), pod_type.fields.end(), std::back_inserter(field_types),
+    [&](auto const & field_info){
+      return map_type_to_llvm(field_info.second.type.get(), scope);
+    });
+
   return llvm::StructType::create(llvm_context,
     field_types,
     pod_type.identifier.name);
@@ -421,7 +428,7 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
       }
       return map_primative_to_llvm(primative.tag);
     },
-    pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto const & pod_type) {
+    pattern(as<PodType>(arg)) = [&](auto const & pod_type) {
       Symbol* pod_symbol = scope.lookup_first_name(pod_type.identifier);
       assert(pod_symbol && pod_symbol->kind == Symbol::TYPE);
       if (!pod_symbol->meta) {
@@ -1012,7 +1019,7 @@ void LLVMCodeGen::codegen_pod_bindings(
 
     // FIXME! Can't think of a better way right now :(
     match(agg_type->v)(
-      pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type){
+      pattern(as<PodType>(arg)) = [&](auto& pod_type){
         field_type = pod_type.get_field_type(field_bind.field_index);
         field_is_ref = is_reference_type(field_type);
       },
@@ -1127,8 +1134,8 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
       llvm::Value* source_address = address_of(source_object, scope);
       llvm::Value* field_value = ir_builder.CreateGEP(
         source_address, make_idx_list_for_gep(idx_list), access.field.name);
-      auto pod_type = std::get<Ast_Pod_Declaration>(remove_reference(access.object->meta.type)->v);
-      auto type = pod_type.fields.at(idx_list.back()).type;
+      auto pod_type = std::get<PodType>(remove_reference(access.object->meta.type)->v);
+      auto type = pod_type.get_field_type(access.field_index);
       return dereference(field_value, type);
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
@@ -1676,7 +1683,7 @@ Ast_Expression& LLVMCodeGen::flatten_nested_pod_accesses(
 
   auto pior_is_reference = [](Ast_Field_Access& pior_access) {
     auto pior_type = remove_reference(pior_access.object->meta.type);
-    auto pior_pod = std::get<Ast_Pod_Declaration>(pior_type->v);
+    auto pior_pod = std::get<PodType>(pior_type->v);
     return is_reference_type(pior_pod.get_field_type(pior_access.field_index));
   };
 
@@ -1750,8 +1757,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
     return special_value;
   }
 
-  auto accessed_type = std::get<Ast_Pod_Declaration>(pod_type->v)
-    .get_field_type(access.field_index);
+  auto accessed_type = std::get<PodType>(pod_type->v).get_field_type(access.field_index);
 
   std::vector<uint> idx_list;
   auto& source_object = flatten_nested_pod_accesses(access, idx_list);
@@ -1800,7 +1806,7 @@ void LLVMCodeGen::initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer,
         initialize_aggregate(field_ptr, nested_agg, scope);
       },
       pattern(_) = [&]{
-        auto field_type = std::get<Ast_Pod_Declaration>(pod_type->v).get_field_type(init.field_index);
+        auto field_type = std::get<PodType>(pod_type->v).get_field_type(init.field_index);
         llvm::Value* value = codegen_bind(*init.initializer, field_type, scope);
         ir_builder.CreateStore(value, field_ptr);
       }

@@ -5,9 +5,12 @@
 /* Top level constructs */
 struct Ast_File;
 struct Ast_Function_Declaration;
+struct Ast_Constant_Declaration;
+
+/* Items */
+struct Ast_Item;
 struct Ast_Pod_Declaration;
 struct Ast_Enum_Declaration;
-struct Ast_Constant_Declaration;
 
 /* Expressions */
 struct Ast_Expression;

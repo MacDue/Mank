@@ -7,7 +7,6 @@
 
 #include "ast/types.h"
 #include "ast/ast_builder.h"
-#include "ast/user_type_info.h"
 
 #include "sema/type_infer.h"
 #include "errors/compiler_errors.h"
@@ -41,19 +40,12 @@ T min_type(T a, T b) {
 
 TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 
-Type_Ptr get_field_type(
-  Ast_Field_Access& access,
-  UserTypes::TypeMap const & user_types);
+Type_Ptr get_field_type(Ast_Field_Access& access);
+
+Type_Ptr get_field_type(TypeFieldConstraint& field_constraint);
 
 Type_Ptr get_field_type(
-  TypeFieldConstraint& field_constraint,
-  UserTypes::TypeMap const & user_types);
-
-Type_Ptr get_field_type(
-  Ast_Pod_Bind& pod_bind,
-  Expr_Ptr init,
-  Type_Ptr init_type,
-  UserTypes::TypeMap const & user_types);
+  Ast_Pod_Bind& pod_bind, Expr_Ptr init, Type_Ptr init_type);
 
 Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);
 

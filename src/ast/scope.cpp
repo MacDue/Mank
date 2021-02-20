@@ -50,7 +50,6 @@ Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
   }
 
   bool end_of_path = false;
-
   for (size_t idx = 1; idx < path.path.size(); idx++) {
     auto& segment = path.path[idx];
     if (end_of_path) {
@@ -58,14 +57,10 @@ Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
     }
     res = match(res)(
       pattern(as<Type_Ptr>(arg)) = [&](auto& ty){
-        WHEN(std::holds_alternative<Ast_Enum_Declaration>(ty->v)) {
-          // FIXME: Will need work for nested scopes/namespaces
-          auto enum_decl = std::get<Ast_Enum_Declaration>(ty->v);
-          // HACK: Need the type info from the enum's scope.
-          Symbol* emum_sym = this->lookup_first_name(enum_decl.identifier);
-          auto& type_info = emum_sym->scope->get_type_info();
-          auto& enum_info = type_info.get<UserTypes::EnumInfo>(enum_decl.identifier);
-          enum_info.get_member_or_fail(segment);
+        WHEN(std::holds_alternative<EnumType>(ty->v)) {
+          auto& enum_type = std::get<EnumType>(ty->v);
+          // throws if enum does not have a member
+          (void) enum_type.get_member(segment);
           end_of_path = true;
           return PathResolution { ty };
         };

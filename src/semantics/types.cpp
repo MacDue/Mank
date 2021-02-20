@@ -48,7 +48,7 @@ bool match_types(Type_Ptr a, Type_Ptr b,
         [](auto const & a, auto const & b) {
           return a.tag == b.tag;
         },
-      pattern(as<Ast_Pod_Declaration>(arg), as<Ast_Pod_Declaration>(arg)) =
+      pattern(as<PodType>(arg), as<PodType>(arg)) =
         [](auto const & a, auto const & b) {
           return a.identifier.name == b.identifier.name;
         },
@@ -151,16 +151,14 @@ static std::pair<Type_Ptr,int> get_field_type(
   Type_Ptr type,
   Expr_Ptr object,
   Ast_Identifier const & field,
-  Expression_Meta::ValueType& value_type,
-  UserTypes::TypeMap const & user_types
+  Expression_Meta::ValueType& value_type
 ) {
   using namespace mpark::patterns;
   if (type) {
     int resolved_field_index = -1;
     auto access_type = match(remove_reference(type)->v)(
-      pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
-        auto& pod_info = user_types.get<UserTypes::PodInfo>(pod_type.identifier);
-        auto field_info = pod_info.get_member_or_fail(field);
+      pattern(as<PodType>(arg)) = [&](auto& pod_type) {
+        auto field_info = pod_type.get_field(field);
         // Only update value type here (all others are always rvalues)
         value_type = object->meta.value_type;
         resolved_field_index = field_info.index;
@@ -195,24 +193,17 @@ static std::pair<Type_Ptr,int> get_field_type(
   throw_error_at(object, "not a pod type (is {})", type_to_string(type.get()));
 }
 
-Type_Ptr get_field_type(
-  Ast_Field_Access& access,
-  UserTypes::TypeMap const & user_types
-) {
+Type_Ptr get_field_type(Ast_Field_Access& access) {
   auto [access_type, field_index] = get_field_type(
     access.object->meta.type,
     access.object,
     access.field,
-    access.get_meta().value_type,
-    user_types);
+    access.get_meta().value_type);
   access.field_index = field_index;
   return access_type;
 }
 
-Type_Ptr get_field_type(
-  TypeFieldConstraint& field_constraint,
-  UserTypes::TypeMap const & user_types
-) {
+Type_Ptr get_field_type(TypeFieldConstraint& field_constraint) {
   Expression_Meta::ValueType value_type;
   if (auto pior_value_type = field_constraint.get_value_type()) {
     value_type = *pior_value_type;
@@ -221,7 +212,7 @@ Type_Ptr get_field_type(
     field_constraint.type,
     field_constraint.get_object(),
     field_constraint.get_field(),
-    value_type, user_types);
+    value_type);
   field_constraint.resolve_field_index(field_index);
   // If there was no pior value is this a NOP.
   field_constraint.resolve_value_type(value_type);
@@ -229,18 +220,14 @@ Type_Ptr get_field_type(
 }
 
 Type_Ptr get_field_type(
-  Ast_Pod_Bind& pod_bind,
-  Expr_Ptr init,
-  Type_Ptr init_type,
-  UserTypes::TypeMap const & user_types
+  Ast_Pod_Bind& pod_bind, Expr_Ptr init, Type_Ptr init_type
 ) {
   Expression_Meta::ValueType _value_type; // no needed
   auto [access_type, field_index] = get_field_type(
     init_type,
     init,
     pod_bind.field,
-    _value_type,
-    user_types);
+    _value_type);
   pod_bind.field_index = field_index;
   return access_type;
 }

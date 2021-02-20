@@ -39,4 +39,5 @@ public:
 // Some helpers for defining new "nodes"
 #define DEF_EXPR(name) struct name: Ast_Node, Ast_Expression_Node<name>
 #define DEF_STMT(name) struct name: Ast_Node, AstSelf<Ast_Statement, name>
+#define DEF_ITEM(name) struct name: Ast_Node, AstSelf<Ast_Item, name>
 #define DEF_TYPE(name) struct name: AstSelf<Type, name>

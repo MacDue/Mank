@@ -10,3 +10,6 @@
 [submodule "deps/eternal"]
 	path = deps/eternal
 	url = https://github.com/mapbox/eternal.git
+[submodule "deps/ordered-map"]
+	path = deps/ordered-map
+	url = https://github.com/Tessil/ordered-map.git

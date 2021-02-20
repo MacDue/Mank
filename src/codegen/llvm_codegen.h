@@ -209,7 +209,7 @@ public:
   llvm::Type* get_vector_ty(Scope& scope);
 
   llvm::Type* map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope);
-  llvm::Type* map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope);
+  llvm::Type* map_pod_to_llvm(PodType const & pod_type, Scope& scope);
   llvm::Type* map_primative_to_llvm(PrimativeType::Tag primative);
   llvm::Type* map_type_to_llvm(Type const * type, Scope& scope);
 

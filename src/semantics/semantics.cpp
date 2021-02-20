@@ -64,14 +64,15 @@ Ast_Identifier* get_symbol_identifer_if_type(Symbol* symbol) {
 #define MAIN_FUNCTION_IDENT "main"
 
 void Semantics::analyse_file(Ast_File& file) {
+  using namespace mpark::patterns;
+
   // Setup the context
   this->ctx = &file.ctx;
-  this->global_scope = &file.scope;
   this->builder.emplace(AstBuilder(file));
-  this->infer.emplace(Infer(*this->ctx, global_scope->get_type_info(),
-    [&](CompilerMessage msg){
-      warnings.emplace_back(msg);
-    }));
+  this->infer.emplace(Infer(*this->ctx,
+    [&](CompilerMessage msg){ warnings.emplace_back(msg); }));
+
+  auto& global_scope = file.scope;
 
   // Add builtin types
   static std::array primative_types {
@@ -84,18 +85,18 @@ void Semantics::analyse_file(Ast_File& file) {
   };
 
   for (auto [type_name, type] : primative_types) {
-    global_scope->add(
+    global_scope.add(
       Symbol(SymbolName(type_name), type, Symbol::TYPE));
   }
 
   // Add builtin function declartions
-  Builtin::add_builtins_to_scope(*global_scope, *ctx, *builder);
+  Builtin::add_builtins_to_scope(global_scope, *ctx, *builder);
 
   auto check_top_level_decl = [&](
     char const * decl_name, Symbol::Kind sym_kind, Ast_Identifier& ident,
     auto get_previous_decl
   ) {
-    if (auto symbol = global_scope->lookup_first_name(ident)) {
+    if (auto symbol = global_scope.lookup_first_name(ident)) {
       Ast_Identifier* pior_ident = nullptr;
       if (symbol->kind == sym_kind && (pior_ident = get_previous_decl(symbol))) {
         if (auto func_decl = std::get_if<Ast_Function_Declaration>(&symbol->type->v)) {
@@ -134,31 +135,36 @@ void Semantics::analyse_file(Ast_File& file) {
     infer->unify_and_apply(); // allow inference between constants
   }
 
-  /* Pod declarations */
+  /* Items/declarations */
   {
-    /* Add symbols for (yet to be checked) pods */
-    for (auto pod: file.pods) {
-      check_top_level_decl("pod", Symbol::TYPE, pod->identifier,
-        get_symbol_identifer_if_type<Ast_Pod_Declaration>);
-      file.scope.add(Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
+    for (auto item: file.items) {
+      // Add (unresolved types into the global scope -- allows cross referencing)
+      match(item->v)(
+        pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_decl){
+          check_top_level_decl("pod", Symbol::TYPE, pod_decl.identifier,
+            get_symbol_identifer_if_type<PodType>);
+          item->declared_type = get_pod_type(pod_decl);
+          global_scope.add(Symbol(pod_decl.identifier, item->declared_type, Symbol::TYPE));
+        },
+        pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
+          check_top_level_decl("enum", Symbol::TYPE, enum_decl.identifier,
+            get_symbol_identifer_if_type<EnumType>);
+          item->declared_type = get_enum_type(enum_decl);
+          global_scope.add(
+            Symbol(enum_decl.identifier, item->declared_type, Symbol::TYPE));
+        }
+      );
     }
 
-    /* Check pods */
-    for (auto pod: file.pods) {
-      analyse_pod(*pod, *global_scope);
-    }
-  }
-
-  /* Enum declarations */
-  {
-    for (auto enum_decl: file.enums) {
-      check_top_level_decl("enum", Symbol::TYPE, enum_decl->identifier,
-        get_symbol_identifer_if_type<Ast_Enum_Declaration>);
-      file.scope.add(Symbol(enum_decl->identifier, enum_decl.class_ptr(), Symbol::TYPE));
-    }
-
-    for (auto enum_decl: file.enums) {
-      analyse_enum(*enum_decl, *global_scope);
+    for (auto item: file.items) {
+      match(item->declared_type->v)(
+        pattern(as<PodType>(arg)) = [&](auto& pod_type){
+          analyse_pod(pod_type, global_scope);
+        },
+        pattern(as<EnumType>(arg)) = [&](auto& enum_type){
+          analyse_enum(enum_type, global_scope);
+        }
+      );
     }
   }
 
@@ -178,8 +184,8 @@ void Semantics::analyse_file(Ast_File& file) {
     for (auto func: file.functions) {
       check_top_level_decl("function", Symbol::FUNCTION, func->identifier,
         get_symbol_identifer_if_type<Ast_Function_Declaration>);
-      file.scope.add(Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
-      func->body.scope.set_parent(*global_scope);
+      global_scope.add(Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
+      func->body.scope.set_parent(global_scope);
       analyse_function_header(*func);
     }
 
@@ -214,7 +220,36 @@ void Semantics::analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scop
     "constant type {} does not match initializer of {}");
 }
 
-static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& nested_field) {
+Type_Ptr Semantics::get_pod_type(Ast_Pod_Declaration& pod) {
+  PodType pod_type;
+  pod_type.identifier = pod.identifier;
+  uint field_index = 0;
+  for (auto& field: pod.fields) {
+    if (pod_type.has_field(field.name)) {
+      throw_error_at(field.name, "duplicate pod field");
+    }
+    pod_type.add_field(field.name, field.type, field_index);
+    ++field_index;
+  }
+  return ctx->new_type(pod_type);
+}
+
+Type_Ptr Semantics::get_enum_type(Ast_Enum_Declaration& enum_decl) {
+  EnumType enum_type;
+  enum_type.identifier = enum_decl.identifier;
+  uint enum_ordinal = 0;
+  for (auto& member: enum_decl.members) {
+    // TODO: tuple/pod enums
+    if (enum_type.has_member(member.tag)) {
+      throw_error_at(member.tag, "duplicate enum member");
+    }
+    enum_type.add_member(member.tag, enum_ordinal);
+    ++enum_ordinal;
+  }
+  return ctx->new_type(enum_type);
+}
+
+static int pod_is_recursive(PodType& pod, PodType& nested_field) {
   /*
     0 if not recursive, 1 if directly recursive, indirection steps otherwise
     Simply counts how many steps into the structure we go till the top level pod is reached.
@@ -222,8 +257,8 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
   if (&pod == &nested_field) {
     return 1;
   } else {
-    for (auto& field: nested_field.fields) {
-      if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
+    for (auto& [_,  field]: nested_field.fields) {
+      if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
         if (auto steps = pod_is_recursive(pod, *pod_field)) {
           return 1 + steps;
         }
@@ -233,18 +268,12 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
   return 0;
 }
 
-void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
-  using namespace UserTypes;
-  PodInfo pod_info;
-  pod_info.type = pod.get_self();
-  uint field_index = 0;
-  for (auto& field: pod.fields) {
+void Semantics::analyse_pod(PodType& pod_type, Scope& scope) {
+  for (auto it = pod_type.fields.begin(); it != pod_type.fields.end(); ++it) {
+    auto& field = it.value();
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
-    if (pod_info.has_member(field.name)) {
-      throw_error_at(field.name, "duplicate pod field");
-    }
-    if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
-      if (auto steps = pod_is_recursive(pod, *pod_field)) {
+    if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
+      if (auto steps = pod_is_recursive(pod_type, *pod_field)) {
         if (steps == 1) {
           throw_error_at(field.name, "directly recursive pods are not allowed");
         } else {
@@ -253,29 +282,11 @@ void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
         field.type = nullptr; // cycles bad
       }
     }
-    pod_info.add_member(field.name,
-      PodFieldInfo{ .index = field_index, .type = field.type });
-    field_index += 1;
   }
-
-  scope.get_type_info().add<PodInfo>(pod.identifier, pod_info);
 }
 
-void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
-  using namespace UserTypes;
-  EnumInfo enum_info;
-  enum_info.type = enum_decl.get_self();
-  uint enum_ordinal = 0;
-  for (auto& member: enum_decl.members) {
-    // TODO: tuple/pod enums
-    if (enum_info.has_member(member.tag)) {
-      throw_error_at(member.tag, "duplicate enum member");
-    }
-    enum_info.add_member(member.tag, EnumMemberInfo{ .member = &member });
-    member.ordinal = enum_ordinal += 1;
-  }
-
-  scope.get_type_info().add<EnumInfo>(enum_decl.identifier, enum_info);
+void Semantics::analyse_enum(EnumType& enum_type, Scope& scope) {
+  /* TODO: Check tuple/pod enum data */
 }
 
 void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
@@ -654,7 +665,7 @@ void Semantics::check_pod_bindings(
       field_type = ctx->new_tvar();
       infer->add_constraint(field_bind.field.location, field_type, field_constraint);
     } else {
-      field_type = get_field_type(field_bind, init, init_type, global_scope->get_type_info());
+      field_type = get_field_type(field_bind, init, init_type);
     }
     match(field_bind.replacement)(
       pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
@@ -824,7 +835,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
             field_type, field_constraint);
           return field_type;
         } else {
-          return get_field_type(access, global_scope->get_type_info());
+          return get_field_type(access);
         }
       } else {
         throw_error_at(access.object, "is void?");
@@ -898,13 +909,12 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
     pattern(as<Ast_Pod_Literal>(arg)) = [&](auto& pod_init) {
       resolve_type_or_fail(scope, pod_init.pod, "undeclared pod type {}");
       std::unordered_set<std::string_view> seen_fields;
-      auto& pod_type = std::get<Ast_Pod_Declaration>(pod_init.pod->v);
-      auto& pod_info = global_scope->get_type_info().get<UserTypes::PodInfo>(pod_type.identifier);
+      auto& pod_type = std::get<PodType>(pod_init.pod->v);
       for (auto& init: pod_init.fields) {
         if (seen_fields.contains(init.field.name)) {
           throw_error_at(init.field, "repeated field in initializer");
         }
-        auto field_info = pod_info.get_member_or_fail(init.field);
+        auto field_info = pod_type.get_field(init.field);
         auto init_type = analyse_expression(*init.initializer, scope);
         assert_valid_binding({}, AstHelper::extract_location(init.initializer),
            field_info.type, init_type, init.initializer);
@@ -912,7 +922,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
         init.field_index = field_info.index;
         seen_fields.insert(init.field.name);
       }
-      if (seen_fields.size() != pod_info.members.size()) {
+      if (seen_fields.size() != pod_type.fields.size()) {
         throw_error_at(pod_init, "incomplete pod initialization");
       }
       return pod_init.pod;

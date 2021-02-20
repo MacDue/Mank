@@ -5,6 +5,8 @@
 
 #include "ast/lambda.h"
 #include "ast/type_var.h"
+#include "ast/pod_type.h"
+#include "ast/enum_type.h"
 #include "ast/construct.h"
 #include "ast/array_type.h"
 #include "ast/tuple_type.h"
@@ -47,8 +49,8 @@ using Type_Type = std::variant<
   UncheckedType,
   PrimativeType,
   Ast_Function_Declaration,
-  Ast_Pod_Declaration,
-  Ast_Enum_Declaration,
+  PodType,
+  EnumType,
   FixedSizeArrayType,
   ReferenceType,
   LambdaType,

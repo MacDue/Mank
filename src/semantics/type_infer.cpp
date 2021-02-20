@@ -105,7 +105,7 @@ bool Infer::substitute(
   };
 
   return match(current_type->v)(
-    pattern(anyof(as<PrimativeType>(_), as<Ast_Pod_Declaration>(_))) = [&]{
+    pattern(anyof(as<PrimativeType>(_), as<PodType>(_))) = [&]{
       return false;
     },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
@@ -232,7 +232,7 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
 
   // std::cout << "unify: " << type_to_string(c.t1.get()) << " = " << type_to_string(c.t2.get()) << '\n';
   auto unify_field_constraint = [&](Type_Ptr other_type, TypeFieldConstraint& field_constraint) {
-    auto field_type = get_field_type(field_constraint, user_types);
+    auto field_type = get_field_type(field_constraint);
     Constraint fc{field_type, other_type};
     return try_unify_sub_constraints(c, { fc });
   };
@@ -283,7 +283,7 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
         return ret;
       };
     },
-    pattern(as<Ast_Pod_Declaration>(arg), as<Ast_Pod_Declaration>(arg)) = [&](auto& p1, auto& p2) {
+    pattern(as<PodType>(arg), as<PodType>(arg)) = [&](auto& p1, auto& p2) {
       WHEN(p1.identifier.name == p2.identifier.name) {
         return Substitution{};
       };

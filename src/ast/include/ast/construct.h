@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ast/node.h"
+#include "ast/items.h"
 #include "ast/scope.h"
 #include "ast/block.h"
 #include "ast/context.h"
@@ -25,42 +26,12 @@ DEF_TYPE(Ast_Function_Declaration), Ast_Node {
   Ast_Block body;
 };
 
-DEF_TYPE(Ast_Pod_Declaration), Ast_Node {
-  Ast_Identifier identifier;
-  std::vector<Ast_Argument> fields;
-
-  inline Type_Ptr get_field_type(size_t field_index) {
-    return fields.at(field_index).type;
-  }
-};
-
-struct EnumMember {
-  struct TupleData {
-    std::vector<Type_Ptr> elements;
-  };
-
-  struct PodData {
-    std::vector<Ast_Argument> fields;
-  };
-
-  using Data = std::variant<TupleData, PodData>;
-
-  uint ordinal;
-  Ast_Identifier tag;
-  std::optional<Data> data;
-};
-
-DEF_TYPE(Ast_Enum_Declaration), Ast_Node {
-  Ast_Identifier identifier;
-  std::vector<EnumMember> members;
-};
-
 struct Ast_File {
   Scope scope;
   std::string filename;
+  // TODO: Merge consts + functions into items
   std::vector<Function_Ptr> functions;
-  std::vector<Pod_Ptr> pods;
-  std::vector<Enum_Ptr> enums;
+  std::vector<Item_Ptr> items;
   std::vector<Const_Ptr> global_consts;
   AstContext ctx; // owns EVERYTHING
 

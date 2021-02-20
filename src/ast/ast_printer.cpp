@@ -19,8 +19,8 @@
 }
 
 void AstPrinter::print_file(Ast_File& file) {
-  putf("* File with {} global consts, {} pods, and {} functions",
-    file.global_consts.size(), file.pods.size(), file.functions.size());
+  // putf("* File with {} global consts, {} pods, and {} functions",
+  //   file.global_consts.size(), file.pods.size(), file.functions.size());
   if (!hide_lex_details) {
     putf("- Source name: {}", file.filename);
   }
@@ -29,13 +29,13 @@ void AstPrinter::print_file(Ast_File& file) {
     self->print_stmt(*global_const);
   }))
 
-  FOR_DECL_PRINT(pod, file.pods, ({
-    self->print_pod(*pod);
-  }))
+  // FOR_DECL_PRINT(pod, file.pods, ({
+  //   self->print_pod(*pod);
+  // }))
 
-  FOR_DECL_PRINT(enum_decl, file.enums, ({
-    self->print_enum(*enum_decl);
-  }))
+  // FOR_DECL_PRINT(enum_decl, file.enums, ({
+  //   self->print_enum(*enum_decl);
+  // }))
 
   FOR_DECL_PRINT(func, file.functions, ({
     self->print_function(*func);
@@ -66,30 +66,30 @@ void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
 }
 
 void AstPrinter::print_enum_members(
-  std::vector<EnumMember> const & enum_members
+  std::vector<Ast_Enum_Declaration::Member> const & enum_members
 ) {
   using namespace mpark::patterns;
-  for (auto& member: enum_members) {
-    indent(); putf(" {}", member.tag.name);
-    match(member.data)(
-      pattern(some(as<EnumMember::TupleData>(arg))) = [&](auto& tuple_data) {
-        // TODO: tuple enums
-        (void) tuple_data;
-      },
-      pattern(some(as<EnumMember::PodData>(arg))) = [&](auto& pod_data) {
-        // TODO: pod enums
-        (void) pod_data;
-      },
-      pattern(_) = []{}
-    );
-  }
+  // for (auto& member: enum_members) {
+  //   indent(); putf(" {}", member.tag.name);
+  //   match(member.data)(
+  //     pattern(some(as<EnumMember::TupleData>(arg))) = [&](auto& tuple_data) {
+  //       // TODO: tuple enums
+  //       (void) tuple_data;
+  //     },
+  //     pattern(some(as<EnumMember::PodData>(arg))) = [&](auto& pod_data) {
+  //       // TODO: pod enums
+  //       (void) pod_data;
+  //     },
+  //     pattern(_) = []{}
+  //   );
+  // }
 }
 
 void AstPrinter::print_enum(Ast_Enum_Declaration& enum_decl) {
   putf("* Enum {}", enum_decl.identifier.name);
   if (enum_decl.members.size() > 0) {
     putf("- Members:");
-    self->print_enum_members(enum_decl.members);
+    // self->print_enum_members(enum_decl.members);
   } else {
     putf("- No members");
   }

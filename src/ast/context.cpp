@@ -10,6 +10,7 @@ struct ContextData {
   std::deque<Type> types;
   std::deque<Ast_Statement> stmts;
   std::deque<Ast_Expression> exprs;
+  std::deque<Ast_Item> items;
 
   std::set<TypeVar> active_tvars;
 
@@ -46,6 +47,10 @@ Stmt_Ptr AstContext::add_stmt(Ast_Statement stmt) {
 
 Expr_Ptr AstContext::add_expr(Ast_Expression expr) {
   return data->add(expr, data->exprs);
+}
+
+Item_Ptr AstContext::add_item(Ast_Item item) {
+  return data->add(item, data->items);
 }
 
 void AstHelper::rewrite_expr(Ast_Expression& expr, Ast_Expression_Type rewrite) {

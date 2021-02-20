@@ -26,6 +26,7 @@ add_subdirectory(src)
 add_subdirectory(deps/litexx)
 add_subdirectory(deps/formatxx)
 add_subdirectory(deps/patterns)
+add_subdirectory(deps/ordered-map)
 
 set(WITH_TESTS OFF CACHE BOOL "Enable tests" FORCE)
 add_subdirectory(deps/eternal)

@@ -5,7 +5,6 @@
 #include <unordered_map>
 
 #include "ast/node.h"
-#include "ast/common_ptrs.h"
 
 using SymbolName = Ast_Identifier;
 

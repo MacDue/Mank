@@ -7,9 +7,11 @@
 #include "ast/scope.h"
 #include "ast/block.h"
 #include "ast/context.h"
-#include "ast/common_ptrs.h"
 #include "ast/generic_type.h"
 
+/* Specialized pointers */
+using Function_Ptr = SpAstPtr<Type, Ast_Function_Declaration>;
+using Const_Ptr = SpAstPtr<Ast_Statement, Ast_Constant_Declaration>;
 using TypeParam = SpAstPtr<Type, GenericType>;
 
 DEF_TYPE(Ast_Function_Declaration), Ast_Node {

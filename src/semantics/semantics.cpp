@@ -143,13 +143,13 @@ void Semantics::analyse_file(Ast_File& file) {
         pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_decl){
           check_top_level_decl("pod", Symbol::TYPE, pod_decl.identifier,
             get_symbol_identifer_if_type<PodType>);
-          item->declared_type = get_pod_type(pod_decl);
+          ctx->new_identified_type<PodType>(pod_decl);
           global_scope.add(Symbol(pod_decl.identifier, item->declared_type, Symbol::TYPE));
         },
         pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
           check_top_level_decl("enum", Symbol::TYPE, enum_decl.identifier,
             get_symbol_identifer_if_type<EnumType>);
-          item->declared_type = get_enum_type(enum_decl);
+          ctx->new_identified_type<EnumType>(enum_decl);
           global_scope.add(
             Symbol(enum_decl.identifier, item->declared_type, Symbol::TYPE));
         }
@@ -157,12 +157,12 @@ void Semantics::analyse_file(Ast_File& file) {
     }
 
     for (auto item: file.items) {
-      match(item->declared_type->v)(
-        pattern(as<PodType>(arg)) = [&](auto& pod_type){
-          analyse_pod(pod_type, global_scope);
+      match(item->v)(
+        pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_decl){
+          analyse_pod(pod_decl, global_scope);
         },
-        pattern(as<EnumType>(arg)) = [&](auto& enum_type){
-          analyse_enum(enum_type, global_scope);
+        pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
+          analyse_enum(enum_decl, global_scope);
         }
       );
     }
@@ -220,35 +220,6 @@ void Semantics::analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scop
     "constant type {} does not match initializer of {}");
 }
 
-Type_Ptr Semantics::get_pod_type(Ast_Pod_Declaration& pod) {
-  PodType pod_type;
-  pod_type.identifier = pod.identifier;
-  uint field_index = 0;
-  for (auto& field: pod.fields) {
-    if (pod_type.has_field(field.name)) {
-      throw_error_at(field.name, "duplicate pod field");
-    }
-    pod_type.add_field(field.name, field.type, field_index);
-    ++field_index;
-  }
-  return ctx->new_type(pod_type);
-}
-
-Type_Ptr Semantics::get_enum_type(Ast_Enum_Declaration& enum_decl) {
-  EnumType enum_type;
-  enum_type.identifier = enum_decl.identifier;
-  uint enum_ordinal = 0;
-  for (auto& member: enum_decl.members) {
-    // TODO: tuple/pod enums
-    if (enum_type.has_member(member.tag)) {
-      throw_error_at(member.tag, "duplicate enum member");
-    }
-    enum_type.add_member(member.tag, enum_ordinal);
-    ++enum_ordinal;
-  }
-  return ctx->new_type(enum_type);
-}
-
 static int pod_is_recursive(PodType& pod, PodType& nested_field) {
   /*
     0 if not recursive, 1 if directly recursive, indirection steps otherwise
@@ -268,9 +239,13 @@ static int pod_is_recursive(PodType& pod, PodType& nested_field) {
   return 0;
 }
 
-void Semantics::analyse_pod(PodType& pod_type, Scope& scope) {
-  for (auto it = pod_type.fields.begin(); it != pod_type.fields.end(); ++it) {
-    auto& field = it.value();
+void Semantics::analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope) {
+  auto& pod_type = std::get<PodType>(pod_decl.get_self().class_ptr()->declared_type->v);
+  for (size_t field_index = 0; field_index < pod_decl.fields.size(); ++field_index) {
+    auto& field = pod_decl.fields.at(field_index);
+    if (pod_type.has_field(field.name)) {
+      throw_error_at(field.name, "duplicate pod field");
+    }
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
     if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
       if (auto steps = pod_is_recursive(pod_type, *pod_field)) {
@@ -282,11 +257,20 @@ void Semantics::analyse_pod(PodType& pod_type, Scope& scope) {
         field.type = nullptr; // cycles bad
       }
     }
+    pod_type.add_field(field.name, field.type, field_index);
   }
 }
 
-void Semantics::analyse_enum(EnumType& enum_type, Scope& scope) {
+void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
   /* TODO: Check tuple/pod enum data */
+  auto& enum_type = std::get<EnumType>(enum_decl.get_self().class_ptr()->declared_type->v);
+  for (size_t enum_ordinal = 0; enum_ordinal < enum_decl.members.size(); ++enum_ordinal) {
+    auto& member = enum_decl.members.at(enum_ordinal);
+    if (enum_type.has_member(member.tag)) {
+      throw_error_at(member.tag, "duplicate enum member");
+    }
+    enum_type.add_member(member.tag, enum_ordinal);
+  }
 }
 
 void Semantics::analyse_function_header(Ast_Function_Declaration& func) {

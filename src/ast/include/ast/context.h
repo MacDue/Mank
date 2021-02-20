@@ -50,5 +50,13 @@ public:
     return add_item(Ast_Item(item));
   }
 
+  template <typename Type, typename Item>
+  Type_Ptr new_identified_type(Item& item) {
+    // Creates a new (empty) type linked to a top level item (e.g. Pod)
+    Type type;
+    type.identifier = item.identifier;
+    return item.get_self().class_ptr()->declared_type = new_type(type);
+  }
+
   ~AstContext();
 };

@@ -7,10 +7,6 @@
 DEF_ITEM(Ast_Pod_Declaration) {
   Ast_Identifier identifier;
   std::vector<Ast_Argument> fields;
-
-  inline Type_Ptr get_field_type(size_t field_index) {
-    return fields.at(field_index).type;
-  }
 };
 
 DEF_ITEM(Ast_Enum_Declaration) {

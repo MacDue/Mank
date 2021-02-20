@@ -83,11 +83,8 @@ private:
   Type_Ptr check_constant_initializer(
      Ast_Identifier constant, Ast_Expression& init, Scope& scope);
 
-  Type_Ptr get_pod_type(Ast_Pod_Declaration& pod);
-  Type_Ptr get_enum_type(Ast_Enum_Declaration& enum_decl);
-
-  void analyse_pod(PodType& pod_type, Scope& scope);
-  void analyse_enum(EnumType& enum_type, Scope& scope);
+  void analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope);
+  void analyse_enum(Ast_Enum_Declaration& enum_type, Scope& scope);
   void analyse_function_header(Ast_Function_Declaration& func);
   void analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scope& scope);
   Type_Ptr analyse_function_body(Ast_Function_Declaration& func);

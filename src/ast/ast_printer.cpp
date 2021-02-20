@@ -8,6 +8,8 @@
 // Little hack that allows depth to be incremented/decremented
 // when print functions are called/return (see DepthUpdate)
 #define self (*this)
+ // hack for nest blocks
+#define nest DepthUpdate _du(this);
 
 /* Constructs */
 
@@ -70,23 +72,29 @@ void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
   }
 }
 
+
 void AstPrinter::print_enum_members(
   std::vector<Ast_Enum_Declaration::Member> const & enum_members
 ) {
   using namespace mpark::patterns;
   for (auto& member: enum_members) {
     indent(); putf(" {}", member.tag.name);
-    match(member.data)(
-      pattern(some(as<Ast_Enum_Declaration::Member::TupleData>(arg))) = [&](auto& tuple_data) {
-        // TODO: tuple enums
-        (void) tuple_data;
-      },
-      pattern(some(as<Ast_Enum_Declaration::Member::PodData>(arg))) = [&](auto& pod_data) {
-        // TODO: pod enums
-        (void) pod_data;
-      },
-      pattern(_) = []{}
-    );
+    // Nasty nest blocks to fix formatting :(
+    nest {
+      nest {
+        match(member.data)(
+          pattern(some(as<Ast_Enum_Declaration::Member::TupleData>(arg))) = [&](auto& tuple_data) {
+            putf("- Tuple data:");
+            nest { self->print_types(tuple_data.elements); }
+          },
+          pattern(some(as<Ast_Enum_Declaration::Member::PodData>(arg))) = [&](auto& pod_data) {
+            putf("- Pod data:");
+            self->print_args(pod_data.fields);
+          },
+          pattern(_) = []{}
+        );
+      }
+    }
   }
 }
 

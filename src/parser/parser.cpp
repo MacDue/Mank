@@ -107,12 +107,21 @@ Item_Ptr Parser::parse_enum() {
     }
     enum_member.tag = *tag;
     switch (lexer.peek_next_token().type) {
-      case TokenType::LEFT_PAREN:
+      case TokenType::LEFT_BRACE: {
+        Ast_Enum_Declaration::Member::PodData pod_data;
+        pod_data.fields = this->parse_arguments(
+          TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
+        enum_member.data = pod_data;
         break; // TODO: tuple enum
-      case TokenType::RIGHT_PAREN:
+      }
+      case TokenType::LEFT_PAREN: {
+        Ast_Enum_Declaration::Member::TupleData tuple_data;
+        tuple_data.elements = this->parse_type_list(
+          TokenType::LEFT_PAREN, TokenType::RIGHT_PAREN);
+        enum_member.data = tuple_data;
         break; // TODO: pod enum
-      default:
-        break; // fallthrough
+      }
+      default: break; // fallthrough
     }
 
     parsed_enum.members.push_back(enum_member);

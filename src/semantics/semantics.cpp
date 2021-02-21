@@ -239,14 +239,23 @@ static int pod_is_recursive(PodType& pod, PodType& nested_field) {
   return 0;
 }
 
-void Semantics::analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope) {
-  auto& pod_type = std::get<PodType>(pod_decl.get_self().class_ptr()->declared_type->v);
-  for (size_t field_index = 0; field_index < pod_decl.fields.size(); ++field_index) {
-    auto& field = pod_decl.fields.at(field_index);
+static void resolve_pod_field_types(
+  PodType& pod_type, std::vector<Ast_Argument>& fields, Scope& scope
+) {
+  for (size_t field_index = 0; field_index < fields.size(); ++field_index) {
+    auto& field = fields.at(field_index);
     if (pod_type.has_field(field.name)) {
       throw_error_at(field.name, "duplicate pod field");
     }
     resolve_type_or_fail(scope, field.type, "undeclared field type {}");
+    pod_type.add_field(field.name, field.type, field_index);
+  }
+}
+
+void Semantics::analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope) {
+  auto& pod_type = std::get<PodType>(pod_decl.get_self().class_ptr()->declared_type->v);
+  resolve_pod_field_types(pod_type, pod_decl.fields, scope);
+  for (auto& field: pod_decl.fields) {
     if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
       if (auto steps = pod_is_recursive(pod_type, *pod_field)) {
         if (steps == 1) {
@@ -257,17 +266,35 @@ void Semantics::analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope) {
         field.type = nullptr; // cycles bad
       }
     }
-    pod_type.add_field(field.name, field.type, field_index);
   }
 }
 
 void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
-  /* TODO: Check tuple/pod enum data */
+  using namespace mpark::patterns;
   auto& enum_type = std::get<EnumType>(enum_decl.get_self().class_ptr()->declared_type->v);
   for (size_t enum_ordinal = 0; enum_ordinal < enum_decl.members.size(); ++enum_ordinal) {
     auto& member = enum_decl.members.at(enum_ordinal);
     if (enum_type.has_member(member.tag)) {
       throw_error_at(member.tag, "duplicate enum member");
+    }
+    if (member.data) {
+      match(*member.data)(
+        pattern(as<Ast_Enum_Declaration::Member::TupleData>(arg)) =
+          [&](auto& tuple_data) -> EnumType::Data {
+            for (auto& el_type: tuple_data.elements) {
+              resolve_type_or_fail(scope, el_type, "undeclared element type {}");
+            }
+            TupleType enum_tuple;
+            enum_tuple.element_types = tuple_data.elements;
+            return enum_tuple;
+          },
+        pattern(as<Ast_Enum_Declaration::Member::PodData>(arg)) =
+          [&](auto& pod_data) -> EnumType::Data {
+            PodType enum_pod;
+            resolve_pod_field_types(enum_pod, pod_data.fields, scope);
+            return enum_pod;
+          }
+      );
     }
     enum_type.add_member(member.tag, enum_ordinal);
   }

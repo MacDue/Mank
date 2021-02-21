@@ -52,7 +52,7 @@ Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);
 bool validate_type_cast(Type_Ptr type, Ast_As_Cast& as_cast);
 
 template<typename T>
-static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
+void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
   auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);
   if (resolved_type) {
     to_resolve = resolved_type;

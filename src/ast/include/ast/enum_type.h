@@ -9,11 +9,10 @@
 #include "errors/compiler_errors.h"
 
 DEF_TYPE(EnumType) {
-  using Data = std::variant<TupleType, PodType>;
   struct Member {
     uint ordinal;
     Ast_Identifier tag;
-    std::optional<Data> data;
+    Type_Ptr data; // Tuple or pod type
   };
 
   Ast_Identifier identifier;
@@ -24,7 +23,7 @@ DEF_TYPE(EnumType) {
   }
 
   inline void add_member(
-    Ast_Identifier tag, uint ordinal, std::optional<Data> data = std::nullopt
+    Ast_Identifier tag, uint ordinal, Type_Ptr data = nullptr
   ) {
     members.insert({
       tag.name, Member { .ordinal = ordinal, .tag = tag, .data = data }
@@ -46,5 +45,14 @@ DEF_TYPE(EnumType) {
   inline Member const & get_member(Ast_Identifier const & tag) const {
     assert_has_member(tag);
     return members.at(tag.name);
+  }
+
+  // These assume the path is valid
+  inline Member& get_member(Ast_Path const & path) {
+    return get_member(path.path.back());
+  }
+
+  inline Member const & get_member(Ast_Path const & path) const {
+    return get_member(path.path.back());
   }
 };

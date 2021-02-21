@@ -36,6 +36,8 @@ Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
   Symbol* first_lookup = lookup_first_name(path.path.at(0));
 
   PathResolution res;
+  if (!first_lookup) return res;
+
   switch (first_lookup->kind){
     case Symbol::GLOBAL:
       res = first_lookup->const_value;

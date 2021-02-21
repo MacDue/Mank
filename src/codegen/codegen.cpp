@@ -437,7 +437,7 @@ LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
   for (auto& [tag, member]: enum_type.members) {
     llvm::Type* variant_data = nullptr;
     if (member.data) {
-      variant_data = match(*member.data)(
+      variant_data = match(member.data->v)(
         pattern(as<PodType>(arg)) = [&](auto& pod_type){
           return map_pod_to_llvm(pod_type, scope, true);
         },
@@ -1473,6 +1473,13 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
   auto callee_type = remove_reference(call.callee->meta.type);
+  // if (auto enum_type = std::get_if<EnumType>(callee_type->v)) {
+  //   auto& member = std::get<Ast_Path>(call.callee->v).path.back();
+  //   auto&
+
+
+  // }
+
   LambdaType* lambda_type = std::get_if<LambdaType>(&callee_type->v);
   Ast_Function_Declaration* function_type = nullptr;
 

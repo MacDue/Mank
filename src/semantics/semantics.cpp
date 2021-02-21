@@ -277,23 +277,23 @@ void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
     if (enum_type.has_member(member.tag)) {
       throw_error_at(member.tag, "duplicate enum member");
     }
-    std::optional<EnumType::Data> enum_data;
+    Type_Ptr enum_data;
     if (member.data) {
       enum_data = match(*member.data)(
         pattern(as<Ast_Enum_Declaration::Member::TupleData>(arg)) =
-          [&](auto& tuple_data) -> EnumType::Data {
+          [&](auto& tuple_data) {
             for (auto& el_type: tuple_data.elements) {
               resolve_type_or_fail(scope, el_type, "undeclared element type {}");
             }
             TupleType enum_tuple;
             enum_tuple.element_types = tuple_data.elements;
-            return enum_tuple;
+            return ctx->new_type(enum_tuple);
           },
         pattern(as<Ast_Enum_Declaration::Member::PodData>(arg)) =
-          [&](auto& pod_data) -> EnumType::Data {
+          [&](auto& pod_data) {
             PodType enum_pod;
             resolve_pod_field_types(enum_pod, pod_data.fields, scope);
-            return enum_pod;
+            return ctx->new_type(enum_pod);
           }
       );
     }
@@ -979,7 +979,18 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
     },
     pattern(as<Ast_Path>(arg)) = [&](auto& path){
       return match(scope.resolve_path(path))(
-        pattern(as<Type_Ptr>(arg)) = [](auto ty){ return ty; },
+        pattern(as<Type_Ptr>(arg)) = [&](auto ty){
+          if (!ty) {
+            throw_error_at(path, "invalid path");
+          }
+          if (auto enum_type = std::get_if<EnumType>(&ty->v)) {
+            auto& member = enum_type->get_member(path);
+            if (member.data) {
+              throw_error_at(path, "enum member missing initialization");
+            }
+          }
+          return ty;
+        },
         pattern(as<Expr_Ptr>(arg)) = [](auto constant) { return constant->meta.type; }
       );
     },
@@ -994,6 +1005,18 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
   );
   expr.meta.type = expr_type;
   return expr_type;
+}
+
+static std::pair<EnumType*, EnumType::Member*>
+path_as_enum_member(Ast_Path& path, Scope& scope) {
+  auto res = scope.resolve_path(path);
+  if (auto ty = std::get_if<Type_Ptr>(&res)) {
+    if (auto enum_type = std::get_if<EnumType>(&(*ty)->v)) {
+      return std::make_pair(
+        enum_type->get_raw_self(), &enum_type->get_member(path));
+    }
+  }
+  throw_error_at(path, "not an enum member");
 }
 
 Type_Ptr Semantics::analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope) {
@@ -1159,6 +1182,11 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
         resolve_type_or_fail(scope, spec, "undeclared specialization type");
       }
     },
+    pattern(as<Ast_Path>(arg)) = [&](auto& enum_path) {
+      // FIXME: Needs work if paths to functions ever added
+      auto [enum_type, _] = path_as_enum_member(enum_path, scope);
+      callee_type = enum_type->get_self().class_ptr();
+    },
     pattern(_) = [&]{
       callee_type = analyse_expression(*call.callee, scope);
     }
@@ -1230,6 +1258,23 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
 
       // FINALLY we've checked everything in the call!
       return function_type.return_type;
+    },
+    pattern(as<EnumType>(arg)) = [&](auto& enum_type){
+      auto& enum_path = std::get<Ast_Path>(call.callee->v);
+      auto& member = enum_type.get_member(enum_path);
+      if (!member.data || !std::holds_alternative<TupleType>(member.data->v)) {
+        throw_error_at(call.callee, "not a tuple enum member");
+      }
+      auto& tuple_type = std::get<TupleType>(member.data->v);
+      if (tuple_type.element_types.size() != call.arguments.size()) {
+        throw_error_at(call, "incorrect number of elements for enum tuple");
+      }
+      for (size_t idx = 0; idx < tuple_type.element_types.size(); ++idx) {
+        auto& element = call.arguments.at(idx);
+        (void) analyse_expression(*element, scope);
+        assert_valid_binding({}, tuple_type.element_types.at(idx), element);
+      }
+      return enum_type.get_self().class_ptr();
     },
     pattern(_) = [&]() -> Type_Ptr {
       throw_error_at(call.callee, NOT_CALLABLE,

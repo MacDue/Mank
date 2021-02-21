@@ -7,6 +7,7 @@
 
 #include "sema/types.h"
 #include "ast/ast_builder.h"
+#include "ast/expr_helpers.h"
 #include "parser/token_helpers.h"
 #include "errors/compiler_errors.h"
 
@@ -423,7 +424,7 @@ LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
 ) {
   using namespace mpark::patterns;
 
-  auto get_enum_tag_type = [&](size_t enum_size) -> llvm::Type* {
+  auto get_enum_tag_type = [&](size_t enum_size) {
     return (
       enum_size <= 0xff       ? llvm::Type::getInt8Ty (llvm_context) :
       enum_size <= 0xffff     ? llvm::Type::getInt16Ty(llvm_context) :
@@ -432,7 +433,7 @@ LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
   };
 
   EnumTypeLLVM llvm_enum_type;
-  llvm::Type* tag_type = get_enum_tag_type(enum_type.members.size());
+  llvm_enum_type.tag_type = get_enum_tag_type(enum_type.members.size());
   uint64_t max_data_size = 0;
   for (auto& [tag, member]: enum_type.members) {
     llvm::Type* variant_data = nullptr;
@@ -453,16 +454,16 @@ LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
       if (data_size > max_data_size) {
         max_data_size = data_size;
       }
-      varaint = { tag_type, variant_data };
+      varaint = { llvm_enum_type.tag_type, variant_data };
     } else {
-      varaint = { tag_type };
+      varaint = { llvm_enum_type.tag_type };
     }
     auto variant_name = enum_type.identifier.name + "!" + tag;
     llvm_enum_type.variants.push_back(
       llvm::StructType::create(llvm_context, varaint, variant_name));
   }
 
-  std::vector<llvm::Type*> enum_obj = { tag_type };
+  std::vector<llvm::Type*> enum_obj = { llvm_enum_type.tag_type };
   if (max_data_size > 0) {
     enum_obj.push_back(llvm::ArrayType::get(
       llvm::Type::getInt8Ty(llvm_context), max_data_size));
@@ -1471,17 +1472,64 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
   );
 }
 
+LLVMCodeGen::EnumTypeLLVM& LLVMCodeGen::get_llvm_enum_type(EnumType const & enum_type, Scope& scope) {
+  Symbol* enum_sym = scope.lookup_first_name(enum_type.identifier);
+  assert(std::holds_alternative<EnumType>(enum_sym->type->v));
+  if (!enum_sym->meta) {
+    map_type_to_llvm(enum_type.get_self().class_ptr().get(), scope);
+  }
+  return static_cast<SymbolMetaEnum*>(enum_sym->meta.get())->type;
+}
+
+llvm::Value* LLVMCodeGen::codegen_enum_tuple_init(Ast_Call& enum_tuple_init, Scope& scope) {
+  // Get enum information and LLVM types
+  auto& member_path = std::get<Ast_Path>(enum_tuple_init.callee->v);
+  auto [enum_type, member_info] = AstHelper::path_as_enum_member(member_path, scope);
+  auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
+
+  llvm::Value* enum_addr = create_entry_alloca(
+    get_current_function(), enum_llvm.general_type, "temp_enum");
+
+  // Get pointers to enum tag and contained tuple
+  llvm::Type* enum_variant = enum_llvm.variants.at(member_info->ordinal);
+  llvm::Value* enum_tuple = ir_builder.CreateBitCast(enum_addr, enum_variant->getPointerTo());
+  llvm::Value* enum_tag = ir_builder.CreateConstGEP2_32(enum_variant, enum_tuple, 0, 0);
+  enum_tuple = ir_builder.CreateConstGEP2_32(enum_variant, enum_tuple, 0, 1);
+
+  // Fill in enum tag
+  ir_builder.CreateStore(
+    llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal),
+    enum_tag);
+
+  // Fill in tuple
+  Ast_Expression_List values;
+  values.elements = enum_tuple_init.arguments;
+  initialize_aggregate(enum_tuple, values, scope,
+    map_type_to_llvm(member_info->data.get(), scope));
+
+  return ir_builder.CreateLoad(enum_addr, "enum_expr");
+}
+
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
+  using namespace mpark::patterns;
   auto callee_type = remove_reference(call.callee->meta.type);
-  // if (auto enum_type = std::get_if<EnumType>(callee_type->v)) {
-  //   auto& member = std::get<Ast_Path>(call.callee->v).path.back();
-  //   auto&
-
-
-  // }
-
-  LambdaType* lambda_type = std::get_if<LambdaType>(&callee_type->v);
+  LambdaType* lambda_type = nullptr;
   Ast_Function_Declaration* function_type = nullptr;
+
+  llvm::Value* special_case = match(callee_type->v)(
+    pattern(as<LambdaType>(arg)) = [&](auto& lt) -> llvm::Value* {
+      lambda_type = lt.get_raw_self();
+      return nullptr; // Not a special case (handled below)
+    },
+    pattern(as<EnumType>(_)) = [&]{
+      return codegen_enum_tuple_init(call, scope);
+    },
+    // Handle anything else later
+    pattern(_) = []() -> llvm::Value* { return nullptr; }
+  );
+
+  // Return special cases early
+  if (special_case) return special_case;
 
   llvm::Value* callee;
   llvm::Value* env_ptr = nullptr;
@@ -1876,10 +1924,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
   return dereference(field_value, accessed_type);
 }
 
-void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope) {
+void LLVMCodeGen::initialize_aggregate(
+  llvm::Value* ptr, Ast_Expression_List& values, Scope& scope, llvm::Type* llvm_agg_type
+) {
   using namespace mpark::patterns;
-  auto agg_type = values.get_type();
-  llvm::Type* llvm_agg_type = map_type_to_llvm(agg_type.get(), scope);
+  if (!llvm_agg_type) {
+    auto agg_type = values.get_type();
+    llvm_agg_type = map_type_to_llvm(agg_type.get(), scope);
+  }
   uint gep_idx = 0;
   for (auto el: values.elements) {
     llvm::Value* element_ptr = ir_builder.CreateConstGEP2_32(

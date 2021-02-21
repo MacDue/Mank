@@ -1007,18 +1007,6 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
   return expr_type;
 }
 
-static std::pair<EnumType*, EnumType::Member*>
-path_as_enum_member(Ast_Path& path, Scope& scope) {
-  auto res = scope.resolve_path(path);
-  if (auto ty = std::get_if<Type_Ptr>(&res)) {
-    if (auto enum_type = std::get_if<EnumType>(&(*ty)->v)) {
-      return std::make_pair(
-        enum_type->get_raw_self(), &enum_type->get_member(path));
-    }
-  }
-  throw_error_at(path, "not an enum member");
-}
-
 Type_Ptr Semantics::analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope) {
   using namespace mpark::patterns;
   resolve_type_or_fail(scope, as_cast.type, "undeclared cast target {}");
@@ -1184,7 +1172,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
     },
     pattern(as<Ast_Path>(arg)) = [&](auto& enum_path) {
       // FIXME: Needs work if paths to functions ever added
-      auto [enum_type, _] = path_as_enum_member(enum_path, scope);
+      auto [enum_type, _] = AstHelper::path_as_enum_member(enum_path, scope);
       callee_type = enum_type->get_self().class_ptr();
     },
     pattern(_) = [&]{
@@ -1274,7 +1262,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
         (void) analyse_expression(*element, scope);
         assert_valid_binding({}, tuple_type.element_types.at(idx), element);
       }
-      return enum_type.get_self().class_ptr();
+      return call.callee->meta.type = enum_type.get_self().class_ptr();
     },
     pattern(_) = [&]() -> Type_Ptr {
       throw_error_at(call.callee, NOT_CALLABLE,

@@ -56,6 +56,7 @@ class LLVMCodeGen: public CodeGenerator {
 
   struct EnumTypeLLVM {
     llvm::Type* general_type;
+    llvm::IntegerType* tag_type;
     std::vector<llvm::Type*> variants;
   };
 
@@ -167,6 +168,8 @@ class LLVMCodeGen: public CodeGenerator {
   llvm::Function* get_bounds_error();
 
   llvm::Type* get_string_ty(Scope& scope);
+
+  EnumTypeLLVM& get_llvm_enum_type(EnumType const & enum_type, Scope& scope);
 
   llvm::Constant* create_const_string_initializer(std::string value);
   llvm::Constant* create_const_string(std::string value, Scope& scope);
@@ -281,7 +284,8 @@ public:
   Ast_Expression& flatten_nested_array_indexes(
     Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);
 
-  void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
+  void initialize_aggregate(
+    llvm::Value* ptr, Ast_Expression_List& values, Scope& scope, llvm::Type* llvm_agg_type = nullptr);
   void initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope);
 
   llvm::Value* get_vector_length(llvm::Value* data_ptr);
@@ -313,6 +317,9 @@ public:
 
   llvm::Value* codegen_builtin_vector_calls(
     Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope);
+
+
+  llvm::Value* codegen_enum_tuple_init(Ast_Call& enum_tuple, Scope& scope);
 
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);

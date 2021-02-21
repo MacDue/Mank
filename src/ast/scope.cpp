@@ -77,3 +77,16 @@ Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
 
   return res;
 }
+
+namespace AstHelper {
+std::pair<EnumType*, EnumType::Member*> path_as_enum_member(Ast_Path& path, Scope& scope) {
+  auto res = scope.resolve_path(path);
+  if (auto ty = std::get_if<Type_Ptr>(&res)) {
+    if (auto enum_type = std::get_if<EnumType>(&(*ty)->v)) {
+      return std::make_pair(
+        enum_type->get_raw_self(), &enum_type->get_member(path));
+    }
+  }
+  throw_error_at(path, "not an enum member");
+}
+}

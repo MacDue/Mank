@@ -267,7 +267,11 @@ static bool compile(std::string program, CompilerOptions options, bool path = tr
   }
 
   if (options.code_gen) {
-    CodeGen codegen(*parsed_file);
+    try {
+      CodeGen codegen(*parsed_file);
+    } catch (CompilerError& e) {
+      std::cerr << e;
+    }
   }
 
   return true;

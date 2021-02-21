@@ -277,8 +277,9 @@ void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
     if (enum_type.has_member(member.tag)) {
       throw_error_at(member.tag, "duplicate enum member");
     }
+    std::optional<EnumType::Data> enum_data;
     if (member.data) {
-      match(*member.data)(
+      enum_data = match(*member.data)(
         pattern(as<Ast_Enum_Declaration::Member::TupleData>(arg)) =
           [&](auto& tuple_data) -> EnumType::Data {
             for (auto& el_type: tuple_data.elements) {
@@ -296,7 +297,7 @@ void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
           }
       );
     }
-    enum_type.add_member(member.tag, enum_ordinal);
+    enum_type.add_member(member.tag, enum_ordinal, enum_data);
   }
 }
 

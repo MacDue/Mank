@@ -14,6 +14,7 @@ using Function_Ptr = SpAstPtr<Type, Ast_Function_Declaration>;
 using Const_Ptr = SpAstPtr<Ast_Statement, Ast_Constant_Declaration>;
 using TypeParam = SpAstPtr<Type, GenericType>;
 
+// TODO: Make this an item along with consts
 DEF_TYPE(Ast_Function_Declaration), Ast_Node {
   bool external   :1 = false,
        c_function :1 = false,

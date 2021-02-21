@@ -8,11 +8,17 @@
 #include "sema/types.h"
 #include "ast/ast_builder.h"
 #include "parser/token_helpers.h"
+#include "errors/compiler_errors.h"
 
 #include "llvm_codegen.h"
 #include "codegen/codegen.h"
 #include "codegen/builtins.h"
 #include "codegen/mangle.h"
+
+// #include <llvm/Support/TargetSelect.h>
+// #include <llvm/Support/TargetSelect.h>
+// #include <llvm/Target/TargetOptions.h>
+// #include <llvm/Support/TargetRegistry.h>
 
 CodeGen::CodeGen(Ast_File& file_ast)
   : impl{std::make_unique<LLVMCodeGen>(file_ast)} {}
@@ -20,6 +26,7 @@ CodeGen::CodeGen(Ast_File& file_ast)
 LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
   : file_ast{file_ast}, mank_ctx{file_ast.ctx}, ast_builder{file_ast}
 {
+  // llvm::InitializeNativeTarget();
   this->create_module();
 
   for (auto global_const: file_ast.global_consts) {
@@ -37,7 +44,27 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
 void LLVMCodeGen::create_module() {
   this->llvm_module = std::make_unique<llvm::Module>(
     file_ast.filename, llvm_context);
-  /* TODO: set machine target */
+
+  // auto target_triple = llvm::sys::getDefaultTargetTriple();
+
+  // std::string target_error;
+  // auto target = llvm::TargetRegistry::lookupTarget(target_triple, target_error);
+  // if (!target) {
+  //   throw_general_error("LLVM error: failed to setup module target: " + target_error);
+  // }
+
+  // auto cpu_type = "generic";
+  // auto features = "";
+
+  // llvm::TargetOptions opt; /* empty */
+  // auto relocation_model = llvm::Optional<llvm::Reloc::Model>();
+  // this->target_machine = target->createTargetMachine(
+  //   target_triple, cpu_type, features, opt, relocation_model);
+
+  // // Not stricly needed (something vauge about performace)
+  // this->llvm_module->setDataLayout(target_machine->createDataLayout());
+  // this->llvm_module->setTargetTriple(target_triple);
+
   /* TODO: set up optimizations */
 }
 
@@ -363,7 +390,9 @@ llvm::Type* LLVMCodeGen::map_lambda_type_to_llvm(LambdaType const & lambda_type,
     }, "lambda");
 }
 
-llvm::Type* LLVMCodeGen::map_pod_to_llvm(PodType const & pod_type, Scope& scope) {
+llvm::Type* LLVMCodeGen::map_pod_to_llvm(
+  PodType const & pod_type, Scope& scope, bool unnamed
+) {
   std::vector<llvm::Type*> field_types;
   field_types.reserve(pod_type.fields.size());
   std::transform(
@@ -372,9 +401,77 @@ llvm::Type* LLVMCodeGen::map_pod_to_llvm(PodType const & pod_type, Scope& scope)
       return map_type_to_llvm(field_info.second.type.get(), scope);
     });
 
-  return llvm::StructType::create(llvm_context,
-    field_types,
-    pod_type.identifier.name);
+  if (!unnamed) {
+    return llvm::StructType::create(llvm_context,
+      field_types,
+      pod_type.identifier.name);
+  } else {
+    return llvm::StructType::get(llvm_context, field_types);
+  }
+}
+
+llvm::Type* LLVMCodeGen::map_tuple_to_llvm(TupleType const & tuple_type, Scope& scope) {
+  std::vector<llvm::Type*> element_types;
+  std::transform(tuple_type.element_types.begin(), tuple_type.element_types.end(),
+    std::back_inserter(element_types),
+    [&](auto const & element_type){ return map_type_to_llvm(element_type.get(), scope); });
+  return llvm::StructType::get(llvm_context, element_types);
+}
+
+LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
+  EnumType const & enum_type, Scope& scope
+) {
+  using namespace mpark::patterns;
+
+  auto get_enum_tag_type = [&](size_t enum_size) -> llvm::Type* {
+    return (
+      enum_size <= 0xff       ? llvm::Type::getInt8Ty (llvm_context) :
+      enum_size <= 0xffff     ? llvm::Type::getInt16Ty(llvm_context) :
+      enum_size <= 0xffffffff ? llvm::Type::getInt32Ty(llvm_context) :
+                                llvm::Type::getInt64Ty(llvm_context));
+  };
+
+  EnumTypeLLVM llvm_enum_type;
+  llvm::Type* tag_type = get_enum_tag_type(enum_type.members.size());
+  uint64_t max_data_size = 0;
+  for (auto& [tag, member]: enum_type.members) {
+    llvm::Type* variant_data = nullptr;
+    if (member.data) {
+      variant_data = match(*member.data)(
+        pattern(as<PodType>(arg)) = [&](auto& pod_type){
+          return map_pod_to_llvm(pod_type, scope, true);
+        },
+        pattern(as<TupleType>(arg)) = [&](auto& tuple_type){
+          return map_tuple_to_llvm(tuple_type, scope);
+        }
+      );
+    }
+
+    std::vector<llvm::Type*> varaint;
+    if (variant_data) {
+      uint64_t data_size = llvm_module->getDataLayout().getTypeAllocSize(variant_data);
+      if (data_size > max_data_size) {
+        max_data_size = data_size;
+      }
+      varaint = { tag_type, variant_data };
+    } else {
+      varaint = { tag_type };
+    }
+    auto variant_name = enum_type.identifier.name + "!" + tag;
+    llvm_enum_type.variants.push_back(
+      llvm::StructType::create(llvm_context, varaint, variant_name));
+  }
+
+  std::vector<llvm::Type*> enum_obj = { tag_type };
+  if (max_data_size > 0) {
+    enum_obj.push_back(llvm::ArrayType::get(
+      llvm::Type::getInt8Ty(llvm_context), max_data_size));
+  }
+
+  llvm_enum_type.general_type = llvm::StructType::create(
+    llvm_context, enum_obj, enum_type.identifier.name);
+
+  return llvm_enum_type;
 }
 
 #define MANK_VEC_BULTIN "!vec"
@@ -417,6 +514,7 @@ llvm::Type* LLVMCodeGen::get_vector_ty(Scope& scope) {
 }
 
 llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
+  // FIXME: All the scope based meta cache stuff here would break with path name resoluton for types
   using namespace mpark::patterns;
   if (!type) {
     return llvm::Type::getVoidTy(llvm_context);
@@ -449,17 +547,21 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
       return map_lambda_type_to_llvm(lambda_type, scope);
     },
     pattern(as<TupleType>(arg)) = [&](auto const & tuple_type) -> llvm::Type* {
-      std::vector<llvm::Type*> element_types;
-      std::transform(tuple_type.element_types.begin(), tuple_type.element_types.end(),
-        std::back_inserter(element_types),
-        [&](auto const & element_type){ return map_type_to_llvm(element_type.get(), scope); });
-      return llvm::StructType::get(llvm_context, element_types);
+      return map_tuple_to_llvm(tuple_type, scope);
     },
     pattern(as<CellType>(arg)) = [&](auto const & cell_type) -> llvm::Type* {
       return map_type_to_llvm(cell_type.ref.get(), scope);
     },
     pattern(as<ListType>(_)) = [&]() -> llvm::Type* {
       return get_vector_ty(scope);
+    },
+    pattern(as<EnumType>(arg)) = [&](auto const & enum_type) -> llvm::Type* {
+      Symbol* enum_symbol = scope.lookup_first_name(enum_type.identifier);
+      if (!enum_symbol->meta) {
+        enum_symbol->meta = std::make_shared<SymbolMetaEnum>(
+          map_enum_to_llvm(enum_type, scope));
+      }
+      return static_cast<SymbolMetaEnum*>(enum_symbol->meta.get())->type.general_type;
     },
     pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");

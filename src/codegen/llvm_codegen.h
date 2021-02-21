@@ -54,6 +54,18 @@ class LLVMCodeGen: public CodeGenerator {
       : type{type} {}
   };
 
+  struct EnumTypeLLVM {
+    llvm::Type* general_type;
+    std::vector<llvm::Type*> variants;
+  };
+
+  struct SymbolMetaEnum: SymbolMeta {
+    EnumTypeLLVM type;
+
+    SymbolMetaEnum(EnumTypeLLVM enum_type)
+      : type{enum_type} {}
+  };
+
   struct SymbolMetaBoundsCheck: SymbolMeta {
     // Hack to insert bounds checking code into the AST
     SourceLocation location;
@@ -95,6 +107,7 @@ class LLVMCodeGen: public CodeGenerator {
   std::unique_ptr<llvm::Module> llvm_module;
 
   /* Codegen state */
+  llvm::TargetMachine* target_machine = nullptr;
 
   std::optional<llvm::orc::VModuleKey> jit_module_handle;
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit_engine;
@@ -209,7 +222,9 @@ public:
   llvm::Type* get_vector_ty(Scope& scope);
 
   llvm::Type* map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope);
-  llvm::Type* map_pod_to_llvm(PodType const & pod_type, Scope& scope);
+  llvm::Type* map_pod_to_llvm(PodType const & pod_type, Scope& scope, bool unnamed = false);
+  EnumTypeLLVM map_enum_to_llvm(EnumType const & enum_type, Scope& scope);
+  llvm::Type* map_tuple_to_llvm(TupleType const & tuple_type, Scope& scope);
   llvm::Type* map_primative_to_llvm(PrimativeType::Tag primative);
   llvm::Type* map_type_to_llvm(Type const * type, Scope& scope);
 
@@ -329,7 +344,8 @@ public:
 
   inline llvm::Value* codegen_expression(Ast_Path& path, Scope& scope) {
     (void) path; (void) scope;
-    assert(false && "??? path codegen");
+    // assert(false && "??? path codegen");
+    return nullptr;
   }
 
 public:

@@ -88,9 +88,9 @@ class AstPrinter {
     void print_stmt(Ast_Loop_Control& loop_control);
     void print_stmt(Ast_Constant_Declaration& const_decl);
 
-    void print_binding(Ast_Binding& binding);
-    void print_binding(Ast_Tuple_Binds& tuple_binds);
-    void print_binding(Ast_Pod_Binds& pod_binds);
+    void print_binding(Ast_Binding const & binding);
+    void print_binding(Ast_Tuple_Binds const & tuple_binds);
+    void print_binding(Ast_Pod_Binds const & pod_binds);
 
     void print_const(PrimativeValue const_value);
 
@@ -114,6 +114,9 @@ class AstPrinter {
     void print_expr(Ast_Spawn& spawn);
     void print_expr(Ast_Specialized_Identifier& special_ident);
     void print_expr(Ast_Path& path);
+    void print_expr(Ast_Switch_Expr& switch_expr);
+
+    void print_switch_cases(std::vector<SwitchCase>& cases);
 
     DepthUpdate operator -> () {
       return DepthUpdate(this);

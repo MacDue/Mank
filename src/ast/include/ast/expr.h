@@ -7,6 +7,8 @@
 #include "ast/node.h"
 #include "ast/block.h"
 #include "ast/lambda.h"
+#include "ast/bindings.h"
+#include "ast/enum_type.h"
 #include "ast/construct.h"
 #include "ast/primative_types.h"
 
@@ -91,12 +93,16 @@ DEF_EXPR(Ast_Spawn) {
   Expr_Ptr initializer;
 };
 
-// foo::bar::baz
-DEF_EXPR(Ast_Path) {
-  bool leading_colons = false;
-  std::vector<Ast_Identifier> path;
+struct SwitchCase {
+  Expr_Ptr match;
+  std::optional<Ast_Binding> bindings;
+  Ast_Block body;
 };
 
+DEF_EXPR(Ast_Switch_Expr) {
+  Expr_Ptr switched;
+  std::vector<SwitchCase> cases;
+};
 
 // Just want something different to make errors easier
 struct Ast_Macro_Identifier: Ast_Identifier {};
@@ -124,7 +130,8 @@ using Ast_Expression_Type = std::variant<
   Ast_Array_Repeat,
   Ast_Spawn,
   Ast_Specialized_Identifier,
-  Ast_Path>;
+  Ast_Path,
+  Ast_Switch_Expr>;
 
 class Ast_Expression {
   template<typename Expr>

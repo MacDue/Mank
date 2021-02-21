@@ -249,3 +249,14 @@ void BaseAstVisitor::operator()(Ast_Path& path) {
   visit(path);
   after(path);
 }
+
+void BaseAstVisitor::operator()(Ast_Switch_Expr& switch_expr) {
+  before(switch_expr);
+  visit(switch_expr);
+  std::visit(recur, switch_expr.switched->v);
+  for (auto& switch_case: switch_expr.cases) {
+    std::visit(recur, switch_case.match->v);
+    recur(switch_case.body);
+  }
+  after(switch_expr);
+}

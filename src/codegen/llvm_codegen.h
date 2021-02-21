@@ -331,6 +331,7 @@ public:
   llvm::Value* codegen_expression(Ast_As_Cast& as_cast, Scope& scope);
   llvm::Value* codegen_expression(Ast_Array_Repeat& array_repeat, Scope& scope);
   llvm::Value* codegen_expression(Ast_Spawn& spawn, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Switch_Expr& switch_expr, Scope& scope);
 
   inline llvm::Value* codegen_expression(Ast_Macro_Identifier& macro, Scope& scope) {
     (void) macro; (void) scope;

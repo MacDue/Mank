@@ -2316,6 +2316,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Spawn& spawn, Scope& scope) {
   return spawn_ptr;
 }
 
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope& scope) {
+  (void) switch_expr; (void) scope;
+  assert(false && "todo switch expr codegen");
+}
+
 /* JIT tools */
 
 llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {

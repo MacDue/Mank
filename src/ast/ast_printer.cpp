@@ -180,7 +180,7 @@ void AstPrinter::print_stmt(Ast_For_Loop& for_loop) {
 
 #define BINDS_PATTERN anyof(as<Ast_Tuple_Binds>(arg), as<Ast_Pod_Binds>(arg))
 
-void AstPrinter::print_binding(Ast_Tuple_Binds& tuple_binds) {
+void AstPrinter::print_binding(Ast_Tuple_Binds const & tuple_binds) {
   using namespace mpark::patterns;
   putf("* Tuple bindings");
   for (auto& binding: tuple_binds.binds) {
@@ -195,7 +195,7 @@ void AstPrinter::print_binding(Ast_Tuple_Binds& tuple_binds) {
   }
 }
 
-void AstPrinter::print_binding(Ast_Pod_Binds& pod_binds) {
+void AstPrinter::print_binding(Ast_Pod_Binds const & pod_binds) {
   using namespace mpark::patterns;
   putf("* Pod bindings");
   for (auto& binding: pod_binds.binds) {
@@ -215,7 +215,7 @@ void AstPrinter::print_binding(Ast_Pod_Binds& pod_binds) {
   }
 }
 
-void AstPrinter::print_binding(Ast_Binding& binding) {
+void AstPrinter::print_binding(Ast_Binding const & binding) {
   std::visit([&](auto& bindings){
     this->print_binding(bindings);
   }, binding);
@@ -462,4 +462,22 @@ void AstPrinter::print_expr(Ast_Path& path) {
     putf("{}. {}", access_order_no, p.name);
     ++access_order_no;
   }
+}
+
+void AstPrinter::print_switch_cases(std::vector<SwitchCase>& cases) {
+  for (auto& switch_case: cases) {
+    putf("- Case:");
+    self->print_expr(*switch_case.match);
+    if (switch_case.bindings) {
+      putf("- Bindings:");
+      self->print_binding(*switch_case.bindings);
+    }
+    putf("- Body:");
+    self->print_expr(switch_case.body);
+  }
+}
+
+void AstPrinter::print_expr(Ast_Switch_Expr& switch_expr) {
+  putf("* Switch expr");
+  self->print_switch_cases(switch_expr.cases);
 }

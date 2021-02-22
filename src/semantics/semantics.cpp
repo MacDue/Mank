@@ -919,9 +919,17 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
       return ctx->new_type(tuple_type);
     },
     pattern(as<Ast_Pod_Literal>(arg)) = [&](auto& pod_init) {
-      resolve_type_or_fail(scope, pod_init.pod, "undeclared pod type {}");
+      auto type = scope.resolve_type_from_path(pod_init.pod);
       std::unordered_set<std::string_view> seen_fields;
-      auto& pod_type = std::get<PodType>(pod_init.pod->v);
+      auto& pod_type = match(type->v)(
+        pattern(as<PodType>(arg)) = [](auto& pod_type) -> PodType& { return pod_type; },
+        pattern(as<EnumType>(arg)) = [&](auto& enum_type) -> PodType& {
+          auto& member = enum_type.get_member(pod_init.pod);
+          if (!member.data || !std::holds_alternative<PodType>(member.data->v)) {
+            throw_error_at(pod_init.pod, "not a pod enum member");
+          }
+          return std::get<PodType>(member.data->v);
+        });
       for (auto& init: pod_init.fields) {
         if (seen_fields.contains(init.field.name)) {
           throw_error_at(init.field, "repeated field in initializer");
@@ -937,7 +945,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
       if (seen_fields.size() != pod_type.fields.size()) {
         throw_error_at(pod_init, "incomplete pod initialization");
       }
-      return pod_init.pod;
+      return type;
     },
     pattern(as<Ast_As_Cast>(arg)) = [&](auto& as_cast){
       return analyse_as_cast(as_cast, scope);

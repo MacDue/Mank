@@ -32,6 +32,7 @@ void Scope::destroy_locals() {
 
 Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
   // VERY wonky path resolution (will only work now)
+  // Like really really really really really bad.
   using namespace mpark::patterns;
   Symbol* first_lookup = lookup_first_name(path.path.at(0));
 
@@ -76,6 +77,15 @@ Scope::PathResolution Scope::resolve_path(Ast_Path const & path) {
   }
 
   return res;
+}
+
+Type_Ptr Scope::resolve_type_from_path(Ast_Path const & path) {
+  auto res = resolve_path(path);
+  if (auto ty = std::get_if<Type_Ptr>(&res)) {
+    return *ty;
+  } else {
+    throw_error_at(path, "not a type");
+  }
 }
 
 namespace AstHelper {

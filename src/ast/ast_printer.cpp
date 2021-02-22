@@ -414,7 +414,8 @@ void AstPrinter::print_expr(Ast_Tuple_Literal& tuple) {
 
 void AstPrinter::print_expr(Ast_Pod_Literal& pod) {
   putf("* Pod literal");
-  putf("- Pod: {}", type_to_string(pod.pod));
+  putf("- Pod:");
+  print_expr(pod.pod);
   if (pod.specializations.size() > 0) {
     putf("- Speilizations:");
     self->print_types(pod.specializations);

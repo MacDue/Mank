@@ -649,22 +649,30 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
     auto ident = *this->parse_identifier();
+    // ABSOLUTE PURE UTTER TRASH. I HAVE NO IDEA HOW TO FIX SOMETHING SO BROKEN.
+    // There is no hope for this code.
     std::optional<Ast_Specialized_Identifier> special_ident;
+    std::optional<Ast_Path> ident_path;
     // FIXME! This is just hacked in.
     // Works fine for current macro impl though.
     if (this->consume(TokenType::EXCLAMATION_MARK)) {
       Ast_Macro_Identifier macro_ident;
       *static_cast<Ast_Identifier*>(macro_ident.get_raw_self()) = ident;
       return ctx->new_expr(macro_ident);
-    } else if (this->consume(TokenType::AT)) { // @([types])
+    }
+    if (this->consume(TokenType::AT)) { // @([types])
       Ast_Specialized_Identifier s_ident;
       *static_cast<Ast_Identifier*>(s_ident.get_raw_self()) = ident;
       s_ident.specializations = this->parse_type_list(
         TokenType::LEFT_PAREN, TokenType::RIGHT_PAREN);
       special_ident = s_ident;
-    } else if (this->peek(TokenType::DOUBLE_COLON)) {
+    }
+
+    if (this->peek(TokenType::DOUBLE_COLON)) {
       // TODO: Replace Ast_Identifiers in most places with Ast_Path
       //  -> (then maybe remove Ast_Identifier expressions)
+      // FIXME: Ignore specializations for now
+      // (should be okay since they'd only be needed for enum pod lits anyway)
       Ast_Path path;
       path.path.push_back(ident);
       while (this->consume(TokenType::DOUBLE_COLON)) {
@@ -672,17 +680,27 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
         if (!path_section) { throw_error_here("expected path section"); }
         path.path.push_back(*path_section);
       }
-      return ctx->new_expr(path);
+      mark_ast_location(path.path.at(0).location, path);
+      ident_path = path;
     }
 
     if (!brace_delimited && peek(TokenType::LEFT_BRACE)) {
       // Only valid in non-brace limited places (could be wrapped in parens)
       // e.g. not valid if cond or for loop ranges
-      return this->parse_pod_literal(ident,
+      Ast_Path pod_path;
+      if (ident_path) {
+        pod_path = *ident_path;
+      } else {
+        pod_path.path = { ident };
+      }
+      return this->parse_pod_literal(pod_path,
           special_ident ? special_ident->specializations : std::vector<Type_Ptr>{});
     }
 
-    if (special_ident) {
+    // FUCK THIS SHIT
+    if (ident_path) {
+      return ctx->new_expr(*ident_path);
+    } if (special_ident) {
       return ctx->new_expr(*special_ident);
     } else {
       return ctx->new_expr(ident);
@@ -707,7 +725,7 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
 }
 
 Expr_Ptr Parser::parse_pod_literal(
-  Ast_Identifier pod_name, std::vector<Type_Ptr> specializations
+  Ast_Path pod_name, std::vector<Type_Ptr> specializations
 ) {
   /*
     pod_literal = identifier "{" pod_field_initializer {"," pod_field_initializer} "}" ;
@@ -715,7 +733,7 @@ Expr_Ptr Parser::parse_pod_literal(
   */
   Ast_Pod_Literal parsed_pod;
   parsed_pod.specializations = specializations;
-  parsed_pod.pod = ctx->new_type(UncheckedType(pod_name));
+  parsed_pod.pod = pod_name;
   expect(TokenType::LEFT_BRACE);
   while (!peek(TokenType::RIGHT_BRACE)) {
     expect(TokenType::DOT);

@@ -74,7 +74,7 @@ struct PodFieldInitializer {
 };
 
 DEF_EXPR(Ast_Pod_Literal) {
-  Type_Ptr pod; // could just be ident
+  Ast_Path pod;
   std::vector<PodFieldInitializer> fields;
   std::vector<Type_Ptr> specializations;
 };

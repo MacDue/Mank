@@ -419,11 +419,27 @@ llvm::Type* LLVMCodeGen::map_tuple_to_llvm(TupleType const & tuple_type, Scope& 
   return llvm::StructType::get(llvm_context, element_types);
 }
 
+llvm::Type* LLVMCodeGen::map_enum_member_data_to_llvm(
+  EnumType::Member const & member, Scope& scope
+) {
+  using namespace mpark::patterns;
+  llvm::Type* variant_data = nullptr;
+  if (member.data) {
+    variant_data = match(member.data->v)(
+      pattern(as<PodType>(arg)) = [&](auto& pod_type){
+        return map_pod_to_llvm(pod_type, scope, true);
+      },
+      pattern(as<TupleType>(arg)) = [&](auto& tuple_type){
+        return map_tuple_to_llvm(tuple_type, scope);
+      }
+    );
+  }
+  return variant_data;
+}
+
 LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
   EnumType const & enum_type, Scope& scope
 ) {
-  using namespace mpark::patterns;
-
   auto get_enum_tag_type = [&](size_t enum_size) {
     return (
       enum_size <= 0xff       ? llvm::Type::getInt8Ty (llvm_context) :
@@ -436,19 +452,8 @@ LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
   llvm_enum_type.tag_type = get_enum_tag_type(enum_type.members.size());
   uint64_t max_data_size = 0;
   for (auto& [tag, member]: enum_type.members) {
-    llvm::Type* variant_data = nullptr;
-    if (member.data) {
-      variant_data = match(member.data->v)(
-        pattern(as<PodType>(arg)) = [&](auto& pod_type){
-          return map_pod_to_llvm(pod_type, scope, true);
-        },
-        pattern(as<TupleType>(arg)) = [&](auto& tuple_type){
-          return map_tuple_to_llvm(tuple_type, scope);
-        }
-      );
-    }
-
     std::vector<llvm::Type*> varaint;
+    llvm::Type* variant_data = map_enum_member_data_to_llvm(member, scope);
     if (variant_data) {
       uint64_t data_size = llvm_module->getDataLayout().getTypeAllocSize(variant_data);
       if (data_size > max_data_size) {
@@ -1482,14 +1487,15 @@ LLVMCodeGen::EnumTypeLLVM& LLVMCodeGen::get_llvm_enum_type(EnumType const & enum
 }
 
 LLVMCodeGen::EnumMemberCodegen LLVMCodeGen::codegen_enum_member(
-  Ast_Path& enum_member, Scope& scope
+  Ast_Path& enum_member, Scope& scope, llvm::Value* enum_alloca
 ) {
   auto [enum_type, member_info] = AstHelper::path_as_enum_member(enum_member, scope);
   auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
 
   EnumMemberCodegen enum_member_llvm {
-    .member_ptr = create_entry_alloca(
-      get_current_function(), enum_llvm.general_type, "temp_enum")
+    .member_ptr = !enum_alloca
+      ? create_entry_alloca(get_current_function(), enum_llvm.general_type, "temp_enum")
+      : enum_alloca
   };
 
   // Get pointers to enum tag and contained tuple
@@ -1506,7 +1512,7 @@ LLVMCodeGen::EnumMemberCodegen LLVMCodeGen::codegen_enum_member(
   if (member_info->data) {
     enum_member_llvm.member_data_ptr = ir_builder.CreateConstGEP2_32(
       enum_variant, enum_data, 0, 1);
-    enum_member_llvm.member_data_ty = map_type_to_llvm(member_info->data.get(), scope);
+    enum_member_llvm.member_data_ty = map_enum_member_data_to_llvm(*member_info, scope);
   }
 
   return enum_member_llvm;
@@ -1967,8 +1973,19 @@ void LLVMCodeGen::initialize_aggregate(
 
 void LLVMCodeGen::initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope) {
   using namespace mpark::patterns;
-  auto pod_type = initializer.pod;
-  llvm::Type* llvm_pod_type = map_type_to_llvm(pod_type.get(), scope);
+  auto pod_type = initializer.get_type();
+  llvm::Type* llvm_pod_type = match(pod_type->v)(
+    pattern(as<PodType>(_)) = [&]{
+      return map_type_to_llvm(pod_type.get(), scope);
+    },
+    pattern(as<EnumType>(arg)) = [&](auto& enum_type){
+      auto enum_member = codegen_enum_member(initializer.pod, scope, ptr);
+      pod_type = enum_type.get_member(initializer.pod).data;
+      ptr = enum_member.member_data_ptr;
+      return enum_member.member_data_ty;
+    }
+  );
+
   for (auto& init: initializer.fields) {
     llvm::Value* field_ptr = ir_builder.CreateConstGEP2_32(
       llvm_pod_type, ptr, 0, init.field_index, "pod_field");
@@ -2254,7 +2271,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Pod_Literal& pod, Scope& scope) {
   llvm::AllocaInst* pod_alloca = create_entry_alloca(
-    get_current_function(), scope, pod.pod.get(), "pod_temp");
+    get_current_function(), scope, pod.get_type().get(), "pod_temp");
   initialize_pod(pod_alloca, pod, scope);
   return ir_builder.CreateLoad(pod_alloca, "pod_expr");
 }

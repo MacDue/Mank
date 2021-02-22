@@ -224,6 +224,9 @@ public:
 
   llvm::Type* get_vector_ty(Scope& scope);
 
+  llvm::Type* map_enum_member_data_to_llvm(
+    EnumType::Member const & member, Scope& scope);
+
   llvm::Type* map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope);
   llvm::Type* map_pod_to_llvm(PodType const & pod_type, Scope& scope, bool unnamed = false);
   EnumTypeLLVM map_enum_to_llvm(EnumType const & enum_type, Scope& scope);
@@ -325,7 +328,8 @@ public:
     llvm::Type* member_data_ty = nullptr;
   };
 
-  EnumMemberCodegen codegen_enum_member(Ast_Path& enum_member, Scope& scope);
+  EnumMemberCodegen codegen_enum_member(
+    Ast_Path& enum_member, Scope& scope, llvm::Value* enum_alloca = nullptr);
 
   llvm::Value* codegen_enum_tuple_init(Ast_Call& enum_tuple, Scope& scope);
 

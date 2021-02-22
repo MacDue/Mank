@@ -362,7 +362,7 @@ inline Expr_Ptr make_pod_init(
   TFieldInits && ... field_inits
 ) {
   Ast_Pod_Literal pod_literal;
-  pod_literal.pod = make_type(pod_name);
+  pod_literal.pod.path = { Ast_Identifier(pod_name) };
   pod_literal.fields = std::vector<PodFieldInitializer> { field_inits... };
   return to_expr_ptr(pod_literal);
 }

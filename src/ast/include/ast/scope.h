@@ -71,4 +71,6 @@ public:
   using PathResolution = std::variant<Type_Ptr, Expr_Ptr>;
 
   PathResolution resolve_path(Ast_Path const & path);
+
+  Type_Ptr resolve_type_from_path(Ast_Path const & path);
 };

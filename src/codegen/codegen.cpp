@@ -1481,33 +1481,48 @@ LLVMCodeGen::EnumTypeLLVM& LLVMCodeGen::get_llvm_enum_type(EnumType const & enum
   return static_cast<SymbolMetaEnum*>(enum_sym->meta.get())->type;
 }
 
-llvm::Value* LLVMCodeGen::codegen_enum_tuple_init(Ast_Call& enum_tuple_init, Scope& scope) {
-  // Get enum information and LLVM types
-  auto& member_path = std::get<Ast_Path>(enum_tuple_init.callee->v);
-  auto [enum_type, member_info] = AstHelper::path_as_enum_member(member_path, scope);
+LLVMCodeGen::EnumMemberCodegen LLVMCodeGen::codegen_enum_member(
+  Ast_Path& enum_member, Scope& scope
+) {
+  auto [enum_type, member_info] = AstHelper::path_as_enum_member(enum_member, scope);
   auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
 
-  llvm::Value* enum_addr = create_entry_alloca(
-    get_current_function(), enum_llvm.general_type, "temp_enum");
+  EnumMemberCodegen enum_member_llvm {
+    .member_ptr = create_entry_alloca(
+      get_current_function(), enum_llvm.general_type, "temp_enum")
+  };
 
   // Get pointers to enum tag and contained tuple
   llvm::Type* enum_variant = enum_llvm.variants.at(member_info->ordinal);
-  llvm::Value* enum_tuple = ir_builder.CreateBitCast(enum_addr, enum_variant->getPointerTo());
-  llvm::Value* enum_tag = ir_builder.CreateConstGEP2_32(enum_variant, enum_tuple, 0, 0);
-  enum_tuple = ir_builder.CreateConstGEP2_32(enum_variant, enum_tuple, 0, 1);
+  llvm::Value* enum_data = ir_builder.CreateBitCast(
+    enum_member_llvm.member_ptr, enum_variant->getPointerTo());
+  llvm::Value* enum_tag = ir_builder.CreateConstGEP2_32(enum_variant, enum_data, 0, 0);
 
   // Fill in enum tag
   ir_builder.CreateStore(
     llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal),
     enum_tag);
 
+  if (member_info->data) {
+    enum_member_llvm.member_data_ptr = ir_builder.CreateConstGEP2_32(
+      enum_variant, enum_data, 0, 1);
+    enum_member_llvm.member_data_ty = map_type_to_llvm(member_info->data.get(), scope);
+  }
+
+  return enum_member_llvm;
+}
+
+llvm::Value* LLVMCodeGen::codegen_enum_tuple_init(Ast_Call& enum_tuple_init, Scope& scope) {
+  // Get enum information and LLVM types
+  auto& member_path = std::get<Ast_Path>(enum_tuple_init.callee->v);
+  auto member_llvm = codegen_enum_member(member_path, scope);
+
   // Fill in tuple
   Ast_Expression_List values;
   values.elements = enum_tuple_init.arguments;
-  initialize_aggregate(enum_tuple, values, scope,
-    map_type_to_llvm(member_info->data.get(), scope));
+  initialize_aggregate(member_llvm.member_data_ptr, values, scope, member_llvm.member_data_ty);
 
-  return ir_builder.CreateLoad(enum_addr, "enum_expr");
+  return ir_builder.CreateLoad(member_llvm.member_ptr, "enum_expr");
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
@@ -2373,6 +2388,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Spawn& spawn, Scope& scope) {
   //TODO: init
 
   return spawn_ptr;
+}
+
+inline llvm::Value* LLVMCodeGen::codegen_expression(Ast_Path& path, Scope& scope) {
+  assert(std::holds_alternative<EnumType>(path.get_type()->v) && "only plain/dataless enum members");
+  return ir_builder.CreateLoad(codegen_enum_member(path, scope).member_ptr, "enum_member");
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope& scope) {

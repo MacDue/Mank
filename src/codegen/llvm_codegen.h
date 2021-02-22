@@ -319,6 +319,14 @@ public:
     Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope);
 
 
+  struct EnumMemberCodegen {
+    llvm::Value* member_ptr;
+    llvm::Value* member_data_ptr = nullptr;
+    llvm::Type* member_data_ty = nullptr;
+  };
+
+  EnumMemberCodegen codegen_enum_member(Ast_Path& enum_member, Scope& scope);
+
   llvm::Value* codegen_enum_tuple_init(Ast_Call& enum_tuple, Scope& scope);
 
   /* Expressions */
@@ -339,6 +347,7 @@ public:
   llvm::Value* codegen_expression(Ast_Array_Repeat& array_repeat, Scope& scope);
   llvm::Value* codegen_expression(Ast_Spawn& spawn, Scope& scope);
   llvm::Value* codegen_expression(Ast_Switch_Expr& switch_expr, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Path& path, Scope& scope);
 
   inline llvm::Value* codegen_expression(Ast_Macro_Identifier& macro, Scope& scope) {
     (void) macro; (void) scope;
@@ -348,12 +357,6 @@ public:
   inline llvm::Value* codegen_expression(Ast_Specialized_Identifier& special_ident, Scope& scope) {
     (void) special_ident; (void) scope;
     assert(false && "??? don't think special idents need codegen!");
-  }
-
-  inline llvm::Value* codegen_expression(Ast_Path& path, Scope& scope) {
-    (void) path; (void) scope;
-    // assert(false && "??? path codegen");
-    return nullptr;
   }
 
 public:

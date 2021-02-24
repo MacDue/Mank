@@ -60,7 +60,8 @@ using Type_Type = std::variant<
   CellType,
   GenericType,
   ListType,
-  LValueConstraint>;
+  LValueConstraint,
+  SwitchableConstraint>;
 
 class Type {
   Type(Type_Type v)

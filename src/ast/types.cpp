@@ -189,3 +189,10 @@ Type_Ptr LValueConstraint::get(AstContext& ctx, Expr_Ptr expected_lvalue) {
   lc.expected_lvalue = expected_lvalue;
   return ctx.new_type(lc);
 }
+
+Type_Ptr SwitchableConstraint::get(AstContext& ctx, Expr_Ptr switched) {
+  SwitchableConstraint sc;
+  sc.type = switched->meta.type;
+  sc.switched = switched;
+  return ctx.new_type(sc);
+}

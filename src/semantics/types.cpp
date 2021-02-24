@@ -323,3 +323,27 @@ bool validate_type_cast(Type_Ptr source_type, Ast_As_Cast& as_cast) {
   }
   return valid_cast;
 }
+
+bool is_switchable_type(Type_Ptr type) {
+  using namespace mpark::patterns;
+  return match(remove_reference(type)->v)(
+    pattern(as<EnumType>(_)) = []{
+      return true;
+    },
+    pattern(as<PrimativeType>(arg)) = [](auto& primative){
+      WHEN(primative.is_integer_type()) {
+        return true;
+      };
+    },
+    pattern(_) = [&]{
+      return false;
+    }
+  );
+}
+
+void assert_has_switchable_type(Expr_Ptr expr) {
+  if (!is_switchable_type(expr->meta.type)) {
+    throw_error_at(expr,
+    "not a switchable type (is {}), expected integral type or enum");
+  }
+}

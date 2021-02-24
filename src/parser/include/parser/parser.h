@@ -107,6 +107,7 @@ private:
   Expr_Ptr parse_tuple_literal(Expr_Ptr first_element);
   Expr_Ptr parse_pod_literal(
     Ast_Path pod_name, std::vector<Type_Ptr> specializations = {});
+  Expr_Ptr parse_switch();
 
   /* Simple helpers */
   bool consume(TokenType token_type);

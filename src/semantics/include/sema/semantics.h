@@ -97,7 +97,8 @@ private:
     Ast_Tuple_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope);
   void check_pod_bindings(
     Ast_Pod_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope);
-  void analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope);
+  void check_bindings(
+    Ast_Binding& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope);
 
   Type_Ptr analyse_block(Ast_Block& block, Scope& scope);
   Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope, bool within_macro = false);
@@ -105,6 +106,7 @@ private:
   Type_Ptr analyse_binary_expression(Ast_Binary_Operation& expr, Scope& scope);
   Type_Ptr analyse_call(Ast_Call& expr, Scope& scope);
   Type_Ptr analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope);
+  Type_Ptr analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& scope);
 
   void expand_macro_expression(Ast_Expression& target, Ast_Call& macro_call, Scope& scope);
 

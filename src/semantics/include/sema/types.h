@@ -51,6 +51,10 @@ Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);
 
 bool validate_type_cast(Type_Ptr type, Ast_As_Cast& as_cast);
 
+bool is_switchable_type(Type_Ptr type);
+
+void assert_has_switchable_type(Expr_Ptr expr);
+
 template<typename T>
 void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
   auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);

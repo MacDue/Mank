@@ -147,7 +147,8 @@ MAPBOX_ETERNAL_CONSTEXPR const auto KEYWORDS = mapbox::eternal::map<mapbox::eter
   { "as"      , TokenType::AS        },
   { "test"    , TokenType::TEST      },
   { "const"   , TokenType::CONST     },
-  { "enum"    , TokenType::ENUM      }
+  { "enum"    , TokenType::ENUM      },
+  { "switch"  , TokenType::SWITCH    },
 });
 
 constexpr auto MAX_KEYWORD_LEN = 8; // continue
@@ -190,6 +191,7 @@ void Lexer::next_token() {
     || match("%=", TokenType::MODULO_EQUAL)
     /* Muti-char (misc) tokens */
     || match("->", TokenType::ARROW)
+    || match("=>", TokenType::FAT_ARROW)
     /* Single-char operators */
     || match("+", TokenType::PLUS)
     || match("-", TokenType::MINUS)

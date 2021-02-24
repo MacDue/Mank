@@ -549,7 +549,8 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
     },
     pattern(as<Ast_Structural_Binding>(arg)) = [&](auto& binding) {
-      analyse_binding_decl(binding, scope);
+      auto init_type = analyse_expression(*binding.initializer, scope);
+      check_bindings(binding.bindings, binding.initializer, init_type, scope);
     },
     pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {
       LOOP_ANALYSIS(loop, ANALYSE_LOOP_BODY(loop.body));
@@ -700,15 +701,16 @@ void Semantics::check_pod_bindings(
   }
 }
 
-void Semantics::analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope) {
+void Semantics::check_bindings(
+  Ast_Binding& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope
+) {
   using namespace mpark::patterns;
-  auto init_type = analyse_expression(*binding.initializer, scope);
-  match(binding.bindings)(
+  match(bindings)(
     pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
-      check_tuple_bindings(tuple_binds, binding.initializer, init_type, scope);
+      check_tuple_bindings(tuple_binds, init, init_type, scope);
     },
     pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds){
-      check_pod_bindings(pod_binds, binding.initializer, init_type, scope);
+      check_pod_bindings(pod_binds, init, init_type, scope);
     }
   );
 }
@@ -1002,6 +1004,9 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
         pattern(as<Expr_Ptr>(arg)) = [](auto constant) { return constant->meta.type; }
       );
     },
+    pattern(as<Ast_Switch_Expr>(arg)) = [&](auto& switch_expr) {
+      return analyse_switch_expr(switch_expr, scope);
+    },
     pattern(anyof(as<Ast_Macro_Identifier>(_), as<Ast_Specialized_Identifier>(_))) = [&]{
       throw_error_at(expr, "this is not valid here!");
       return Type_Ptr(nullptr);
@@ -1016,7 +1021,6 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
 }
 
 Type_Ptr Semantics::analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope) {
-  using namespace mpark::patterns;
   resolve_type_or_fail(scope, as_cast.type, "undeclared cast target {}");
   auto source_type = analyse_expression(*as_cast.object, scope);
   if (is_tvar(source_type)) {
@@ -1027,6 +1031,56 @@ Type_Ptr Semantics::analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope) {
     validate_type_cast(source_type, as_cast);
   }
   return as_cast.type;
+}
+
+Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& scope) {
+  // TODO: returing values in bodys (covering all cases), duplicate checking.
+  using namespace mpark::patterns;
+  auto switched_type = analyse_expression(*switch_expr.switched, scope);
+  if (is_tvar(switched_type)) {
+    auto switch_constraint = SwitchableConstraint::get(*ctx, switch_expr.switched);
+    infer->add_constraint(AstHelper::extract_location(switch_expr.switched),
+      switched_type, switch_constraint);
+  } else {
+    assert_has_switchable_type(switch_expr.switched);
+  }
+  Type_Ptr switch_return = Type::void_ty(); // Just void for now.
+  for (auto& switch_case: switch_expr.cases) {
+    // auto match_type = analyse_expression(switch_case.match, scope);
+    auto match_type = match(switch_case.match->v)(
+      pattern(as<Ast_Path>(arg)) = [&](auto& enum_path){
+        auto [enum_type, member_info] = AstHelper::path_as_enum_member(enum_path, scope);
+        if (switch_case.bindings) {
+          if (!member_info->data) {
+            throw_error_at(switch_case.match, "enum member does not have data to bind");
+          }
+          check_bindings(*switch_case.bindings, switch_case.match, member_info->data, scope);
+        }
+        return enum_type->get_self().class_ptr();
+      },
+      pattern(_) = [&]{
+        if (switch_case.bindings) {
+          throw_error_at(switch_case.match, "type does not support bindings");
+        }
+        auto match_type = analyse_expression(*switch_case.match, scope);
+        AstHelper::constant_expr_eval(*switch_case.match);
+        if (!switch_case.match->meta.is_const()) {
+          throw_error_at(switch_case.match, "not a constant expression");
+        }
+        return match_type;
+      }
+    );
+    // Case type
+    infer->match_or_constrain_types_at(switch_case.match,
+      match_type, switched_type, "case type {} does not match switched type {}");
+
+    // Case body type
+    auto body_type = analyse_block(switch_case.body, scope);
+    infer->match_or_constrain_types_at(switch_case.body,
+      body_type, switch_return, "[TODO] currently all cases must return void");
+  }
+
+  return switch_return;
 }
 
 static bool match_special_constraint_at(SourceLocation loc,

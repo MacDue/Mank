@@ -719,6 +719,8 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
     Ast_Spawn spawn;
     spawn.initializer = this->parse_expression();
     return ctx->new_expr(spawn);
+  } else if (peek(TokenType::SWITCH)) {
+    return this->parse_switch();
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }
@@ -1052,6 +1054,31 @@ Expr_Ptr Parser::parse_lambda() {
   }
   parsed_lambda.body = *body;
   return ctx->new_expr(parsed_lambda);
+}
+
+Expr_Ptr Parser::parse_switch() {
+  Ast_Switch_Expr parsed_switch;
+  expect(TokenType::SWITCH);
+  parsed_switch.switched = this->parse_expression(true);
+  expect(TokenType::LEFT_BRACE);
+  while (!peek(TokenType::RIGHT_BRACE)) {
+    SwitchCase switch_case;
+    switch_case.match = this->parse_expression(true);
+    if (consume(TokenType::FAT_ARROW)) {
+      switch_case.bindings = this->parse_binding();
+    }
+    auto body = this->parse_block();
+    if (!body) {
+      throw_error_here("expected switch body");
+    }
+    switch_case.body = *body;
+    parsed_switch.cases.push_back(switch_case);
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(TokenType::RIGHT_BRACE);
+  return ctx->new_expr(parsed_switch);
 }
 
 /* Types */

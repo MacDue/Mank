@@ -403,9 +403,9 @@ Stmt_Ptr Parser::parse_for_loop() {
 
     expect(TokenType::IN);
 
-    for_loop.start_range = this->parse_expression(true);
+    for_loop.start_range = this->parse_expression(Parser::NO_STRUCTS);
     expect(TokenType::DOUBLE_DOT);
-    for_loop.end_range = this->parse_expression(true);
+    for_loop.end_range = this->parse_expression(Parser::NO_STRUCTS);
 
     for_loop.body = PARSE_LOOP_BODY();
 
@@ -425,7 +425,7 @@ Stmt_Ptr Parser::parse_loop() {
 Stmt_Ptr Parser::parse_while_loop() {
   expect(TokenType::WHILE);
   Ast_While_Loop parsed_while;
-  parsed_while.cond = this->parse_expression(true);
+  parsed_while.cond = this->parse_expression(Parser::NO_STRUCTS);
   parsed_while.body = PARSE_LOOP_BODY();
   return ctx->new_stmt(parsed_while);
 }
@@ -558,7 +558,7 @@ Stmt_Ptr Parser::parse_const_decl() {
 
 /* Expressions */
 
-Expr_Ptr Parser::parse_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_expression(Parser::ExprFlags flags) {
   /*
     (* this ebnf is abridged to avoid describing precedence which is easier done with a table *)
     expression = literal
@@ -571,17 +571,17 @@ Expr_Ptr Parser::parse_expression(bool brace_delimited) {
                | parenthesised_expression ;
   */
   auto expr_start = this->current_location();
-  auto expr = this->parse_binary_expression(brace_delimited);
+  auto expr = this->parse_binary_expression(flags);
   return mark_ast_location(expr_start, expr);
 }
 
-Expr_Ptr Parser::parse_postfix_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_postfix_expression(Parser::ExprFlags flags) {
   auto postfix_start = this->current_location();
-  auto expr = this->parse_primary_expression(brace_delimited);
+  auto expr = this->parse_primary_expression(flags);
   while (true) {
     mark_ast_location(postfix_start, expr);
 
-    if (peek(TokenType::LEFT_PAREN)) {
+    if (!flags.paren_delimited && peek(TokenType::LEFT_PAREN)) {
       expr = this->parse_call(std::move(expr));
     } else if (peek(TokenType::DOT)) {
       expr = this->parse_field_access(std::move(expr));
@@ -644,7 +644,7 @@ Expr_Ptr Parser::parse_index_access(Expr_Ptr object) {
   return ctx->new_expr(parsed_index);
 }
 
-Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_primary_expression(Parser::ExprFlags flags) {
   if (peek(TokenType::LITERAL) || peek(TokenType::TRUE) || peek(TokenType::FALSE)) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
@@ -684,7 +684,7 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
       ident_path = path;
     }
 
-    if (!brace_delimited && peek(TokenType::LEFT_BRACE)) {
+    if (!flags.brace_delimited && peek(TokenType::LEFT_BRACE)) {
       // Only valid in non-brace limited places (could be wrapped in parens)
       // e.g. not valid if cond or for loop ranges
       Ast_Path pod_path;
@@ -800,7 +800,7 @@ Expr_Ptr Parser::parse_if() {
   */
   Ast_If_Expr parsed_if;
   if (consume(TokenType::IF)) {
-    auto condition = this->parse_expression(true);
+    auto condition = this->parse_expression(Parser::NO_STRUCTS);
     if (!condition) {
       throw_error_here("unexpected \"{}\", expecting a condition expression");
     }
@@ -938,12 +938,12 @@ static Expr_Ptr fix_precedence_and_association(
     });
 }
 
-Expr_Ptr Parser::parse_binary_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_binary_expression(Parser::ExprFlags flags) {
   /*
     binary_operation = expression, operation, expression ;
     operation = (* use your imagination *) ;
   */
-  auto lhs = this->parse_unary(brace_delimited);
+  auto lhs = this->parse_unary(flags);
   if (consume(TokenType::AS)) {
     // FIXME: Hack special case: "as" cast
     Ast_As_Cast parsed_as_cast;
@@ -957,13 +957,13 @@ Expr_Ptr Parser::parse_binary_expression(bool brace_delimited) {
   auto bin_op = this->lexer.peek_next_token().type;
   if (is_binary_op(bin_op)) {
     lexer.consume_token();
-    auto rhs = this->parse_expression(brace_delimited);
+    auto rhs = this->parse_expression(flags);
     lhs = fix_precedence_and_association(*ctx, lhs, rhs, static_cast<Ast_Operator>(bin_op));
   }
   return lhs;
 }
 
-Expr_Ptr Parser::parse_unary(bool brace_delimited) {
+Expr_Ptr Parser::parse_unary(Parser::ExprFlags flags) {
   /*
     unary_operation = operation, expression ;
   */
@@ -974,13 +974,13 @@ Expr_Ptr Parser::parse_unary(bool brace_delimited) {
     unary_op = TokenType::LOGICAL_NOT;
   }
   if (!is_unary_op(unary_op)) {
-    return this->parse_postfix_expression(brace_delimited);
+    return this->parse_postfix_expression(flags);
   }
   Ast_Unary_Operation parsed_unary;
   parsed_unary.operation = static_cast<Ast_Operator>(unary_op);
   this->lexer.consume_token();
   // For nested unary expressions e.g. -------------10 (if you want that?)
-  parsed_unary.operand = this->parse_unary(brace_delimited);
+  parsed_unary.operand = this->parse_unary(flags);
   auto unary = ctx->new_expr(parsed_unary);
   return mark_ast_location(unary_start, unary);
 }
@@ -1059,14 +1059,15 @@ Expr_Ptr Parser::parse_lambda() {
 Expr_Ptr Parser::parse_switch() {
   Ast_Switch_Expr parsed_switch;
   expect(TokenType::SWITCH);
-  parsed_switch.switched = this->parse_expression(true);
+  parsed_switch.switched = this->parse_expression(Parser::NO_STRUCTS);
   expect(TokenType::LEFT_BRACE);
   while (!peek(TokenType::RIGHT_BRACE)) {
     SwitchCase switch_case;
-    switch_case.match = this->parse_expression(true);
-    if (consume(TokenType::FAT_ARROW)) {
+    switch_case.match = this->parse_expression(Parser::NO_CALLS_OR_STRUCTS);
+    if (!peek(TokenType::FAT_ARROW)) {
       switch_case.bindings = this->parse_binding();
     }
+    expect(TokenType::FAT_ARROW);
     auto body = this->parse_block();
     if (!body) {
       throw_error_here("expected switch body");

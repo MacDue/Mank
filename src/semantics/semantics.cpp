@@ -443,6 +443,9 @@ static bool expression_may_have_side_effects(Ast_Expression& expr) {
       }
       return then_has;
     },
+    pattern(as<Ast_Switch_Expr>(_)) = []{
+      return true; // TODO/FIXME: properly check switch side effects
+    },
     pattern(_) = []() { return false; }
   );
 }

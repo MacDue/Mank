@@ -344,6 +344,7 @@ bool is_switchable_type(Type_Ptr type) {
 void assert_has_switchable_type(Expr_Ptr expr) {
   if (!is_switchable_type(expr->meta.type)) {
     throw_error_at(expr,
-    "not a switchable type (is {}), expected integral type or enum");
+      "not a switchable type (is {}), expected integral type or enum",
+      type_to_string(expr->meta.type.get()));
   }
 }

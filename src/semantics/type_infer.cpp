@@ -21,7 +21,8 @@ using SpecialConstraints = std::vector<SpecialConstraint>;
 #define TYPE_PROPERTY_CONSTRAINT anyof( \
   as<TypeFieldConstraint>(arg), \
   as<TypeIndexConstraint>(arg), \
-  as<TypeCastConstraint>(arg))
+  as<TypeCastConstraint>(arg),  \
+  as<SwitchableConstraint>(arg))
 
 #define TYPE_LIST anyof( \
   as<FixedSizeArrayType>(arg), \
@@ -250,6 +251,13 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
     return Substitution{};
   };
 
+  auto unify_switchable_constraint = [&](Type_Ptr other_type, SwitchableConstraint& switch_constraint) {
+    (void) other_type;
+    switch_constraint.switched->meta.type = switch_constraint.type;
+    assert_has_switchable_type(switch_constraint.switched);
+    return Substitution{};
+  };
+
   return match(c.t1->v, c.t2->v)(
     pattern(as<PrimativeType>(arg), as<PrimativeType>(arg)) = [](auto& p1, auto& p2){
       WHEN(p1.tag == p2.tag) {
@@ -294,6 +302,8 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
     pattern(_, as<TypeIndexConstraint>(arg)) = std::bind(unify_index_constraint, c.t1, _1),
     pattern(as<TypeCastConstraint>(arg), _) = std::bind(unify_cast_constraint, c.t2, _1),
     pattern(_, as<TypeCastConstraint>(arg)) = std::bind(unify_cast_constraint, c.t1, _1),
+    pattern(as<SwitchableConstraint>(arg), _) = std::bind(unify_switchable_constraint, c.t2, _1),
+    pattern(_, as<SwitchableConstraint>(arg)) = std::bind(unify_switchable_constraint, c.t1, _1),
     pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) = [&](auto& a1, auto& a2) {
       WHEN(a1.size == a2.size) {
         Constraint ec{a1.element_type, a2.element_type};

@@ -1057,7 +1057,9 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
           if (!member_info->data) {
             throw_error_at(switch_case.match, "enum member does not have data to bind");
           }
-          check_bindings(*switch_case.bindings, switch_case.match, member_info->data, scope);
+          switch_case.body.scope.set_parent(scope);
+          check_bindings(
+            *switch_case.bindings, switch_case.match, member_info->data, switch_case.body.scope);
         }
         return enum_type->get_self().class_ptr();
       },

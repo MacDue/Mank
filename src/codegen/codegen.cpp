@@ -1189,6 +1189,22 @@ void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& sco
   );
 }
 
+llvm::Constant* LLVMCodeGen::codegen_constant_expression(
+  Ast_Expression& const_expr, Scope& scope
+) {
+  // This will need to be changed if we ever get to constant arrays/structs/pods
+  auto primative_type = std::get<PrimativeType>(const_expr.meta.type->v);
+  auto const_init = ast_builder.make_literal(primative_type.tag, "");
+  const_init->meta.const_value = *const_expr.meta.get_const_value();
+
+  if (!primative_type.is_string_type()) {
+    return static_cast<llvm::Constant*>(codegen_expression(*const_init, scope));
+  } else {
+    return create_const_string(
+      std::get<std::string>(const_init->meta.const_value), scope);
+  }
+}
+
 void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope& scope) {
   // Very limited const global support for primative types
   assert(scope.get_parent() == nullptr && "is global scope");
@@ -1197,20 +1213,8 @@ void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope&
     const_decl.constant.name,
     map_type_to_llvm(const_decl.type.get(), scope));
   global->setConstant(true);
-  // This will need to be changed if we ever get to constant arrays/structs/pods
-  auto primative_type = std::get<PrimativeType>(const_decl.type->v);
-  auto const_init = ast_builder.make_literal(primative_type.tag, "");
-  const_init->meta.const_value = *const_decl.const_expression->meta.get_const_value();
-
-  llvm::Constant* global_int = nullptr;
-  if (!primative_type.is_string_type()) {
-    global_int = static_cast<llvm::Constant*>(codegen_expression(*const_init, scope));
-  } else {
-    global_int = create_const_string(
-      std::get<std::string>(const_init->meta.const_value), scope);
-  }
-
-  global->setInitializer(global_int);
+  global->setInitializer(
+    codegen_constant_expression(*const_decl.const_expression, scope));
 }
 
 /* Expressions */
@@ -1499,20 +1503,22 @@ LLVMCodeGen::EnumMemberCodegen LLVMCodeGen::codegen_enum_member(
   };
 
   // Get pointers to enum tag and contained tuple
-  llvm::Type* enum_variant = enum_llvm.variants.at(member_info->ordinal);
-  llvm::Value* enum_data = ir_builder.CreateBitCast(
-    enum_member_llvm.member_ptr, enum_variant->getPointerTo());
-  llvm::Value* enum_tag = ir_builder.CreateConstGEP2_32(enum_variant, enum_data, 0, 0);
+  llvm::Value* enum_tag = ir_builder.CreateConstGEP2_32(
+    enum_llvm.general_type, enum_member_llvm.member_ptr, 0, 0);
 
   // Fill in enum tag
   ir_builder.CreateStore(
-    llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal),
-    enum_tag);
+    llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal), enum_tag);
 
   if (member_info->data) {
+    llvm::StructType* enum_variant =
+      static_cast<llvm::StructType*>(enum_llvm.variants.at(member_info->ordinal));
+    llvm::Type* enum_data_type = enum_variant->getElementType(Builtin::Enum::DATA);
     enum_member_llvm.member_data_ptr = ir_builder.CreateConstGEP2_32(
-      enum_variant, enum_data, 0, 1);
-    enum_member_llvm.member_data_ty = map_enum_member_data_to_llvm(*member_info, scope);
+       enum_llvm.general_type, enum_member_llvm.member_ptr, 0, 1);
+    enum_member_llvm.member_data_ptr = ir_builder.CreateBitCast(
+      enum_member_llvm.member_data_ptr, enum_data_type->getPointerTo());
+    enum_member_llvm.member_data_ty = enum_data_type;
   }
 
   return enum_member_llvm;
@@ -2413,8 +2419,88 @@ inline llvm::Value* LLVMCodeGen::codegen_expression(Ast_Path& path, Scope& scope
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope& scope) {
-  (void) switch_expr; (void) scope;
-  assert(false && "todo switch expr codegen");
+  using namespace mpark::patterns;
+  bool void_return = switch_expr.get_type()->is_void();
+
+  llvm::Function* current_function = get_current_function();
+  auto switched_type = remove_reference(switch_expr.switched->meta.type);
+
+  // will be a ptr or value (depending on if switched is lvalue)
+  llvm::Value* enum_data = nullptr;
+
+  llvm::Value* switch_index = match(switched_type->v)(
+    pattern(as<EnumType>(_)) = [&]{
+      auto enum_extractor = get_value_extractor(*switch_expr.switched, scope);
+      enum_data = enum_extractor.get_bind({ Builtin::Enum::DATA }, "enum_data");
+      return enum_extractor.get_value({ Builtin::Enum::TAG }, "enum_tag");
+    },
+    pattern(_) = [&]{
+      return codegen_expression(*switch_expr.switched, scope);
+    });
+
+  // default will be block after the switch (for now -- until implemented)
+  llvm::BasicBlock* switch_end = llvm::BasicBlock::Create(llvm_context, "switch_end");
+
+  auto case_count = switch_expr.cases.size();
+  llvm::SwitchInst* switch_inst = ir_builder.CreateSwitch(
+    switch_index, switch_end, case_count);
+
+  llvm::PHINode* switch_value = nullptr;
+
+  for (auto& switch_case: switch_expr.cases) {
+    llvm::BasicBlock* case_bb = llvm::BasicBlock::Create(
+      llvm_context, "switch_case", current_function);
+    ir_builder.SetInsertPoint(case_bb);
+
+    llvm::ConstantInt* case_index;
+    if (auto enum_member = std::get_if<Ast_Path>(&switch_case.match->v)) {
+      // Enums
+      auto [enum_type, member_info] = AstHelper::path_as_enum_member(*enum_member, scope);
+      auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
+      case_index = llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal);
+
+      // Handle enum data bindings
+      if (switch_case.bindings) {
+        llvm::StructType* member_variant_type =
+          static_cast<llvm::StructType*>(enum_llvm.variants.at(member_info->ordinal));
+        // FIXME: Will break if switched value is not an lvalue
+        llvm::Value* member_data = ir_builder.CreateBitCast(
+          enum_data, member_variant_type->getElementType(Builtin::Enum::DATA)->getPointerTo());
+        ExpressionExtract enum_data_extractor(this, member_data, switch_expr.switched->is_lvalue());
+        match(*switch_case.bindings)(
+          pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds){
+            codegen_pod_bindings(pod_binds, enum_data_extractor, {}, scope);
+          },
+          pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto tuple_binds){
+            codegen_tuple_bindings(tuple_binds, enum_data_extractor, {}, scope);
+          }
+        );
+      }
+    } else {
+      case_index = llvm::cast<llvm::ConstantInt>
+        (codegen_constant_expression(*switch_case.match, scope));
+    }
+
+    llvm::Value* case_value = codegen_expression(switch_case.body, scope);
+    create_exit_br(switch_end);
+
+    switch_inst->addCase(case_index, case_bb);
+    if (case_value && !void_return) {
+      if (!switch_value) {
+        switch_value = llvm::PHINode::Create(
+          map_type_to_llvm(switch_expr.get_type().get(), scope), case_count);
+      }
+      switch_value->addIncoming(case_value, case_bb);
+    }
+  }
+
+  current_function->getBasicBlockList().push_back(switch_end);
+  ir_builder.SetInsertPoint(switch_end);
+
+  if (switch_value) {
+    return ir_builder.Insert(switch_value, "switch_value");
+  }
+  return nullptr;
 }
 
 /* JIT tools */

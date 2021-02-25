@@ -253,6 +253,8 @@ public:
   void codegen_tuple_assign(
     Ast_Tuple_Literal& tuple_pattern, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
 
+  llvm::Constant* codegen_constant_expression(Ast_Expression& const_expr, Scope& scope);
+
   /* Statements */
   void codegen_statement(Ast_Statement& stmt, Scope& scope);
   void codegen_statement(Ast_Expression_Statement& expr_stmt, Scope& scope);

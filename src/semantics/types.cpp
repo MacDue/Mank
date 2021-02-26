@@ -181,6 +181,11 @@ static std::pair<Type_Ptr,int> get_field_type(
           return cell_type.ref;
         };
       },
+      pattern(as<EnumType>(_)) = [&]{
+        WHEN(field.name == "tag") {
+          return PrimativeType::int_ty();
+        };
+      },
       pattern(as<TypeVar>(_)) = [&]() -> Type_Ptr {
         throw_error_at(object, TYPE_MUST_BE_KNOWN);
         return nullptr;

@@ -183,9 +183,11 @@ bool all_paths_return(Ast_Expression& block_like, Ast_Statement** unreachable_st
       return all_paths_return(*spawn.initializer, unreachable_stmt);
     },
     pattern(as<Ast_Switch_Expr>(arg)) = [&](auto& switch_expr){
-      return all_paths_return(*switch_expr.switched, unreachable_stmt)
-        || std::any_of(switch_expr.cases.begin(), switch_expr.cases.end(),
-            [&](auto& switch_case){ return all_paths_return(switch_case.body, unreachable_stmt); });
+      (void) switch_expr;
+      return false; // TODO: FIXME
+      // return all_paths_return(*switch_expr.switched, unreachable_stmt)
+      //   || std::all_of(switch_expr.cases.begin(), switch_expr.cases.end(),
+      //       [&](auto& switch_case){ return all_paths_return(switch_case.body, unreachable_stmt); });
     },
     pattern(_) = []{
       assert(false && "fix me! unknown expression in reachability checking");

@@ -106,7 +106,7 @@ bool Infer::substitute(
   };
 
   return match(current_type->v)(
-    pattern(anyof(as<PrimativeType>(_), as<PodType>(_))) = [&]{
+    pattern(anyof(as<PrimativeType>(_), as<PodType>(_), as<EnumType>(_))) = [&]{
       return false;
     },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
@@ -293,6 +293,11 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
     },
     pattern(as<PodType>(arg), as<PodType>(arg)) = [&](auto& p1, auto& p2) {
       WHEN(p1.identifier.name == p2.identifier.name) {
+        return Substitution{};
+      };
+    },
+    pattern(as<EnumType>(arg), as<EnumType>(arg)) = [&](auto& e1, auto& e2) {
+      WHEN(e1.identifier.name == e2.identifier.name) {
         return Substitution{};
       };
     },

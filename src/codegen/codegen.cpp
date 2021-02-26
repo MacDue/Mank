@@ -469,10 +469,8 @@ LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
   }
 
   std::vector<llvm::Type*> enum_obj = { llvm_enum_type.tag_type };
-  if (max_data_size > 0) {
-    enum_obj.push_back(llvm::ArrayType::get(
-      llvm::Type::getInt8Ty(llvm_context), max_data_size));
-  }
+  enum_obj.push_back(llvm::ArrayType::get(
+    llvm::Type::getInt8Ty(llvm_context), max_data_size));
 
   llvm_enum_type.general_type = llvm::StructType::create(
     llvm_context, enum_obj, enum_type.identifier.name);
@@ -1928,6 +1926,10 @@ llvm::Value* LLVMCodeGen::get_special_field_value(
       llvm::Value* vec_data = get_value_extractor(agg, scope)
         .get_value({static_cast<uint>(Builtin::Vector::DATA)}, "data");
       return get_vector_length(vec_data);
+    },
+    pattern(as<EnumType>(_)) = [&]() -> llvm::Value* {
+      return fix_string_length(
+        get_value_extractor(agg, scope).get_value({Builtin::Enum::TAG}, "tag"));
     },
     pattern(_) = []() -> llvm::Value* { return nullptr; });
 }

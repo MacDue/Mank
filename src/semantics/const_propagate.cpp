@@ -171,7 +171,7 @@ static char parse_char_literal(std::string_view literal) {
       case 't':
         return '\t';
       case 'f':
-        return '\t';
+        return '\f';
       case 'r':
         return '\r';
       case 'e':

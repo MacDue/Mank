@@ -7,12 +7,17 @@ proc main {
     code := prompt(">>>");
     parser := new_parser(code);
     program := parser_parse(parser);
+    final_state := eval_program(program, new_program_state());
+    print("> ");
+    print_program_state(final_state);
   }
 }
 
 fun eval_program: ProgramState (S: StmtPtr, state: ProgramState) {
   step := 0;
   while ¬is_null_stmt(S) {
+    println!("{step}:\n\t", int_to_string(step));
+    print_program_state(state);
     (S, state) = eval_statement(S, state);
     step += 1;
   }
@@ -22,14 +27,16 @@ fun eval_program: ProgramState (S: StmtPtr, state: ProgramState) {
 fun eval_statement: (StmtPtr, ProgramState) (S: StmtPtr, state: ProgramState) {
   switch S.v[0] {
     Stmt::Assign {.var, .right} => {
-      return (null_stmt_ptr(), add_or_update_var(state, var, A(right, state)));
+      add_or_update_var(state, var, A(right, state));
+      # doing call add_or_update_var directly in tuple broken
+      return (null_stmt_ptr(), state);
     },
     Stmt::Concat {.left, .right} => {
       bind (new_left, new_state) = eval_statement(left, state);
       if is_null_stmt(new_left) {
         return (right, new_state);
       }
-      return (to_stmt_ptr(Stmt::Concat{.left = new_left, .right = right}), state);
+      return (to_stmt_ptr(Stmt::Concat{.left = new_left, .right = right}), new_state);
     },
     Stmt::If {.cond, .then_branch, .else_branch} => {
       if as_bool(B(cond, state)) {
@@ -105,15 +112,17 @@ fun B: ProgramValue (bexpr: ExprPtr, state: ProgramState) {
       return ProgramValue::Bool(¬operand_value);
     },
     Expr::BinaryExpr {.left, .op, .right} => {
-      left_value := as_bool(B(left, state));
-      right_value := as_bool(B(right, state));
-      switch op {
-        TokenType::OR => {
-          return ProgramValue::Bool(left_value || right_value);
-        },
-        TokenType::AND => {
-          return ProgramValue::Bool(left_value && right_value);
-        }
+      if op.tag == TokenType::OR.tag || op.tag == TokenType::AND.tag {
+        left_value := as_bool(B(left, state));
+        right_value := as_bool(B(right, state));
+        return ProgramValue::Bool(
+          if op.tag == TokenType::OR.tag {
+            left_value || right_value
+          } else {
+            left_value && right_value
+          });
+      } else {
+        return ProgramValue::Bool(as_bool(A(bexpr, state)));
       }
     }
   }
@@ -137,7 +146,8 @@ fun new_program_state: ProgramState {
   ProgramState { .vars = new_vec@((str, ProgramValue))() }
 }
 
-fun add_or_update_var: ref ProgramState (state: ref ProgramState, name: str, value: ProgramValue) {
+# returning state as ref broken
+proc add_or_update_var (state: ref ProgramState, name: str, value: ProgramValue) {
   lookup_idx := lookup_var(state, name);
   if lookup_idx == -1 {
     var := (name, value);
@@ -147,12 +157,11 @@ fun add_or_update_var: ref ProgramState (state: ref ProgramState, name: str, val
     bind (_, val: ref) = state.vars[lookup_idx];
     val = value;
   }
-  state
 }
 
 fun get_var: ProgramValue (state: ref ProgramState, name: str) {
   lookup_idx := lookup_var(state, name);
-  assert!(lookup_idx != -1, "var must exist");
+  assert!(lookup_idx != -1, "var " + name + " must exist");
   bind (_, val) = state.vars[lookup_idx];
   val
 }
@@ -181,6 +190,30 @@ fun as_bool: bool (val: ProgramValue) {
   }
   fail("not a bool");
   false
+}
+
+proc print_program_state(state: ProgramState) {
+  putchar('{');
+  for var_idx in 0 .. state.vars.length {
+    bind (name, val) = state.vars[var_idx];
+    if var_idx != 0 {
+      print(", ");
+    }
+    print!("{name}: {val}", name, program_value_to_str(val));
+  }
+  print("}\n");
+}
+
+fun program_value_to_str: str (val: ProgramValue) {
+  switch val {
+    ProgramValue::Number(num) => {
+      return int_to_string(num);
+    },
+    ProgramValue::Bool(boolean) => {
+      return if boolean { "true" } else { "false" };
+    }
+  }
+  ""
 }
 
 ## Ast
@@ -254,7 +287,7 @@ fun parser_parse_skip: StmtPtr (self: ref Parser) {
 fun parser_parse_concat: StmtPtr (self: ref Parser, prev: StmtPtr) {
   parser_expect(self, TokenType::SEMICOLON);
   to_stmt_ptr(Stmt::Concat{
-    .left = prev, .right = null_stmt_ptr() })
+    .left = prev, .right = parser_parse_stmt(self, null_stmt_ptr()) })
 }
 
 fun parser_parse_if: StmtPtr (self: ref Parser) {

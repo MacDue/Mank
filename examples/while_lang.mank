@@ -377,8 +377,12 @@ fun parser_parse_skip: StmtPtr (self: ref Parser) {
 
 fun parser_parse_concat: StmtPtr (self: ref Parser, prev: StmtPtr) {
   parser_expect(self, TokenType::SEMICOLON);
-  to_stmt_ptr(Stmt::Concat{
-    .left = prev, .right = parser_parse_stmt(self, null_stmt_ptr()) })
+  if ¬parser_peek(self, TokenType::EOF) {
+    to_stmt_ptr(Stmt::Concat{
+      .left = prev, .right = parser_parse_stmt(self, null_stmt_ptr()) })
+  } else {
+    prev # allow ; at ends of lines
+  }
 }
 
 fun parser_parse_if: StmtPtr (self: ref Parser) {
@@ -507,7 +511,7 @@ fun parser_parse_primary_expr: ExprPtr (self: ref Parser) {
 }
 
 fun parser_parse_parenthesised_expr: ExprPtr (self: ref Parser) {
-  parser_expect(self, TokenType::LPAREN);
+  # parser_expect(self, TokenType::LPAREN); -- already consumed
   expr := parser_parse_expr(self);
   parser_expect(self, TokenType::RPAREN);
   expr

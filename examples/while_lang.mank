@@ -2,22 +2,46 @@
 ## Eval/Main
 
 proc main {
-  println("While v0.1\n[Mank v0.1] on linux");
+  println("MankScript v0.1\n[Mank v0.1] on linux");
+  state := new_program_state();
+  show_steps := false;
   loop {
     code := prompt(">>>");
+    # Very basic commands checking/resetting state
+    if str_equal(code, "clr") {
+      state = new_program_state();
+      continue;
+    } else if str_equal(code, "env") {
+      print_program_state(state);
+      continue;
+    } else if str_equal(code, "show_steps") {
+      show_steps = true;
+      println("-> steps on");
+      continue;
+    } else if str_equal(code, "hide_steps") {
+      show_steps = false;
+      println("-> steps hidden");
+      continue;
+    }
+    # Running code
     parser := new_parser(code);
     program := parser_parse(parser);
-    final_state := eval_program(program, new_program_state());
+    state = eval_program(program, state, show_steps);
     print("> ");
-    print_program_state(final_state);
+    print_program_state(state);
   }
 }
 
-fun eval_program: ProgramState (S: StmtPtr, state: ProgramState) {
+fun eval_program: ProgramState (S: StmtPtr, state: ProgramState, show_steps: bool) {
   step := 0;
   while ¬is_null_stmt(S) {
-    println!("{step}:\n\t", int_to_string(step));
-    print_program_state(state);
+    if show_steps {
+      print!("{step}:\n\t", int_to_string(step));
+      print_program_state(state);
+      print("\t");
+      print_stmt(S);
+      print("\n");
+    };
     (S, state) = eval_statement(S, state);
     step += 1;
   }
@@ -232,6 +256,73 @@ enum Stmt {
   If     { cond: ExprPtr, then_branch: StmtPtr, else_branch: StmtPtr },
   While  { cond: ExprPtr, body: StmtPtr },
   Skip,
+}
+
+# Ast printer
+
+proc print_stmt (stmt: StmtPtr) {
+  if is_null_stmt(stmt) {
+    return;
+  }
+  switch stmt.v[0] {
+    Stmt::Assign {.var, .right} => {
+      print!("{var} := ", var);
+      print_expr(right);
+    },
+    Stmt::Concat {.left, .right} => {
+      print_stmt(left);
+      print("; ");
+      print_stmt(right);
+    },
+    Stmt::If {.cond, .then_branch, .else_branch} => {
+      print("if ");
+      print_expr(cond);
+      print(" then {");
+      print_stmt(then_branch);
+      print("} else {");
+      print_stmt(else_branch);
+      print("}");
+    },
+    Stmt::While { .cond, .body } => {
+      print("while ");
+      print_expr(cond);
+      print(" do {");
+      print_stmt(body);
+      print("}");
+    },
+    Stmt::Skip => {
+      print("skip");
+    }
+  }
+}
+
+proc print_expr (expr: ExprPtr) {
+  if is_null_expr(expr) {
+    return;
+  }
+  print("(");
+  switch expr.v[0] {
+    Expr::Bool(boolean) => {
+      if boolean { print("true") } else { print("false") };
+    },
+    Expr::Number(num) => {
+      print(int_to_string(num));
+    },
+    Expr::Var(var) => {
+      print(var);
+    },
+    Expr::UnaryExpr {.operand, .op} => {
+      # Only not
+      print(get_operator_str(op));
+      print_expr(operand);
+    },
+    Expr::BinaryExpr { .left, .op, .right } => {
+      print_expr(left);
+      print!(" {op} ", get_operator_str(op));
+      print_expr(right);
+    }
+  }
+  print(")");
 }
 
 ## Parser
@@ -722,7 +813,45 @@ fun get_operator_precedence: i32 (op: TokenType) {
     TokenType::OR => {
       return 3;
     }
-  }
-  return -1;
+  };
+  -1
 }
 
+fun get_operator_str: str (op: TokenType) {
+  switch op {
+    TokenType::PLUS => {
+      return "+";
+    },
+    TokenType::MINUS => {
+      return "-";
+    },
+    TokenType::TIMES => {
+      return "*";
+    },
+    TokenType::LE => {
+      return "<=";
+    },
+    TokenType::LT => {
+      return "<";
+    },
+    TokenType::GE => {
+      return ">=";
+    },
+    TokenType::GT => {
+      return ">";
+    },
+    TokenType::EQUAL => {
+      return "=";
+    },
+    TokenType::DOUBLE_EQUAL => {
+      return "==";
+    },
+    TokenType::AND => {
+      return "&&";
+    },
+    TokenType::OR => {
+      return "||";
+    }
+  }
+  "???"
+}

@@ -1,0 +1,695 @@
+
+## Eval/Main
+
+proc main {
+  println("While v0.1\n[Mank v0.1] on linux");
+  loop {
+    code := prompt(">>>");
+    parser := new_parser(code);
+    program := parser_parse(parser);
+  }
+}
+
+fun eval_program: ProgramState (S: StmtPtr, state: ProgramState) {
+  step := 0;
+  while ¬is_null_stmt(S) {
+    (S, state) = eval_statement(S, state);
+    step += 1;
+  }
+  state
+}
+
+fun eval_statement: (StmtPtr, ProgramState) (S: StmtPtr, state: ProgramState) {
+  switch S.v[0] {
+    Stmt::Assign {.var, .right} => {
+      return (null_stmt_ptr(), add_or_update_var(state, var, A(right, state)));
+    },
+    Stmt::Concat {.left, .right} => {
+      bind (new_left, new_state) = eval_statement(left, state);
+      if is_null_stmt(new_left) {
+        return (right, new_state);
+      }
+      return (to_stmt_ptr(Stmt::Concat{.left = new_left, .right = right}), state);
+    },
+    Stmt::If {.cond, .then_branch, .else_branch} => {
+      if as_bool(B(cond, state)) {
+        return (then_branch, state);
+      }
+      return (else_branch, state);
+    },
+    Stmt::While { .cond, .body } => {
+      return (to_stmt_ptr(
+        Stmt::If { .cond = cond,
+          .then_branch = to_stmt_ptr(Stmt::Concat{.left = body, .right = S}),
+          .else_branch = to_stmt_ptr(Stmt::Skip)
+        }
+      ), state);
+    },
+    Stmt::Skip => {
+      return (null_stmt_ptr(), state);
+    }
+  }
+  fail("eval statement failed!");
+  (null_stmt_ptr(), state)
+}
+
+fun A: ProgramValue (aexpr: ExprPtr, state: ProgramState) {
+  switch aexpr.v[0] {
+    Expr::Number(num) => {
+      return ProgramValue::Number(num);
+    },
+    Expr::Var(var) => {
+      return get_var(state, var);
+    },
+    Expr::BinaryExpr{.left, .op, .right} => {
+      left_value := as_number(A(left, state));
+      right_value := as_number(A(right, state));
+      switch op {
+        TokenType::PLUS => {
+          return ProgramValue::Number(left_value + right_value);
+        },
+        TokenType::MINUS => {
+          return ProgramValue::Number(left_value - right_value);
+        },
+        TokenType::TIMES => {
+          return ProgramValue::Number(left_value * right_value);
+        },
+        TokenType::LE => {
+          return ProgramValue::Bool(left_value <= right_value);
+        },
+        TokenType::LT => {
+          return ProgramValue::Bool(left_value < right_value);
+        },
+        TokenType::GE => {
+          return ProgramValue::Bool(left_value >= right_value);
+        },
+        TokenType::GT => {
+          return ProgramValue::Bool(left_value > right_value);
+        },
+        TokenType::DOUBLE_EQUAL => {
+          return ProgramValue::Bool(left_value == right_value);
+        }
+      }
+    }
+  }
+  fail("aexpr eval failed!");
+  ProgramValue::Number(-1)
+}
+
+fun B: ProgramValue (bexpr: ExprPtr, state: ProgramState) {
+  switch bexpr.v[0] {
+    Expr::Bool(boolean) => { return ProgramValue::Bool(boolean); },
+    Expr::UnaryExpr {.operand, .op} => {
+      assert!(op.tag == TokenType::NOT.tag);
+      operand_value := as_bool(B(operand, state));
+      return ProgramValue::Bool(¬operand_value);
+    },
+    Expr::BinaryExpr {.left, .op, .right} => {
+      left_value := as_bool(B(left, state));
+      right_value := as_bool(B(right, state));
+      switch op {
+        TokenType::OR => {
+          return ProgramValue::Bool(left_value || right_value);
+        },
+        TokenType::AND => {
+          return ProgramValue::Bool(left_value && right_value);
+        }
+      }
+    }
+  }
+  fail("bexpr eval failed!");
+  ProgramValue::Bool(false)
+}
+
+# State/scope
+
+enum ProgramValue {
+  Number(i32),
+  Bool(bool),
+  None
+}
+
+pod ProgramState {
+  vars: |(str, ProgramValue)|[]
+}
+
+fun new_program_state: ProgramState {
+  ProgramState { .vars = new_vec@((str, ProgramValue))() }
+}
+
+fun add_or_update_var: ref ProgramState (state: ref ProgramState, name: str, value: ProgramValue) {
+  lookup_idx := lookup_var(state, name);
+  if lookup_idx == -1 {
+    var := (name, value);
+    push_back(state.vars, var);
+    # push_back(state.vars, (name, value)) -- broken for some reason?
+  } else {
+    bind (_, val: ref) = state.vars[lookup_idx];
+    val = value;
+  }
+  state
+}
+
+fun get_var: ProgramValue (state: ref ProgramState, name: str) {
+  lookup_idx := lookup_var(state, name);
+  assert!(lookup_idx != -1, "var must exist");
+  bind (_, val) = state.vars[lookup_idx];
+  val
+}
+
+fun lookup_var: i32 (state: ref ProgramState, name: str) {
+  for var_idx in 0 .. state.vars.length {
+    bind (found_name, _) = state.vars[var_idx];
+    if str_equal(found_name, name) {
+      return var_idx;
+    }
+  }
+  -1
+}
+
+fun as_number: i32 (val: ProgramValue) {
+  switch val {
+    ProgramValue::Number(num) => { return num; }
+  }
+  fail("not a number");
+  -1
+}
+
+fun as_bool: bool (val: ProgramValue) {
+  switch val {
+    ProgramValue::Bool(boolean) => { return boolean; }
+  }
+  fail("not a bool");
+  false
+}
+
+## Ast
+
+enum Expr {
+  Bool(bool),
+  Number(i32),
+  Var(str),
+  BinaryExpr { left: ExprPtr, right: ExprPtr, op: TokenType },
+  UnaryExpr  { operand: ExprPtr, op: TokenType }
+}
+
+enum Stmt {
+  Assign { var: str, right: ExprPtr },
+  Concat { left: StmtPtr, right: StmtPtr },
+  If     { cond: ExprPtr, then_branch: StmtPtr, else_branch: StmtPtr },
+  While  { cond: ExprPtr, body: StmtPtr },
+  Skip,
+}
+
+## Parser
+
+pod Parser {
+  lexer: Lexer
+}
+
+fun new_parser: Parser (source: str) {
+  Parser {
+    .lexer = new_lexer(source)
+  }
+}
+
+fun parser_parse: StmtPtr (self: ref Parser) {
+  prev := null_stmt_ptr();
+  while ¬parser_peek(self, TokenType::EOF) && ¬parser_peek(self, TokenType::RBRACE) {
+    prev = parser_parse_stmt(self, prev);
+  }
+  prev
+}
+
+# Stmts
+
+fun parser_parse_stmt: StmtPtr (self: ref Parser, prev: StmtPtr) {
+  next_token := lexer_peek_next_token(self.lexer).type;
+  switch next_token {
+    TokenType::SKIP => {
+      return parser_parse_skip(self);
+    },
+    TokenType::SEMICOLON => {
+      return parser_parse_concat(self, prev);
+    },
+    TokenType::IF => {
+      return parser_parse_if(self);
+    },
+    TokenType::WHILE => {
+      return parser_parse_while(self);
+    },
+    TokenType::VAR => {
+      return parser_parse_ass(self);
+    }
+  }
+  fail("syntax error :- invalid statement");
+  null_stmt_ptr()
+}
+
+fun parser_parse_skip: StmtPtr (self: ref Parser) {
+  parser_expect(self, TokenType::SKIP);
+  to_stmt_ptr(Stmt::Skip)
+}
+
+fun parser_parse_concat: StmtPtr (self: ref Parser, prev: StmtPtr) {
+  parser_expect(self, TokenType::SEMICOLON);
+  to_stmt_ptr(Stmt::Concat{
+    .left = prev, .right = null_stmt_ptr() })
+}
+
+fun parser_parse_if: StmtPtr (self: ref Parser) {
+  parser_expect(self, TokenType::IF);
+  cond := parser_parse_expr(self);
+  parser_expect(self, TokenType::THEN);
+  then_block := parser_parse_block(self);
+  else_block := if parser_consume(self, TokenType::ELSE) {
+    parser_parse_block(self)
+  } else {
+    to_stmt_ptr(Stmt::Skip)
+  };
+  to_stmt_ptr(
+    Stmt::If { .cond = cond, .then_branch = then_block, .else_branch = else_block })
+}
+
+fun parser_parse_while: StmtPtr (self: ref Parser) {
+  parser_expect(self, TokenType::WHILE);
+  cond := parser_parse_expr(self);
+  parser_expect(self, TokenType::DO);
+  body := parser_parse_block(self);
+  to_stmt_ptr(
+    Stmt::While { .cond = cond, .body = body })
+}
+
+fun parser_parse_block: StmtPtr (self: ref Parser) {
+  parser_expect(self, TokenType::LBRACE);
+  body := parser_parse(self);
+  parser_expect(self, TokenType::RBRACE);
+  body
+}
+
+fun parser_parse_ass: StmtPtr (self: ref Parser) {
+  parser_expect(self, TokenType::VAR);
+  switch self.lexer.last_token.data {
+    TokenData::Var(var) => {
+      parser_expect(self, TokenType::ASS);
+      rhs := parser_parse_expr(self);
+      return to_stmt_ptr(Stmt::Assign { .var = var, .right = rhs });
+    }
+  }
+  fail("ahhh! idk");
+  null_stmt_ptr()
+}
+
+# Exprs
+
+fun parser_parse_expr: ExprPtr (self: ref Parser) {
+  lhs := parser_parse_unary(self);
+  parser_parse_binary_rhs(self, 0, lhs)
+}
+
+fun parser_parse_binary_rhs: ExprPtr (self: ref Parser, pior_prec: i32, lhs: ExprPtr) {
+  loop {
+    op := lexer_peek_next_token(self.lexer).type;
+    prec := get_operator_precedence(op);
+    if prec < pior_prec {
+      return lhs;
+    }
+
+    lexer_next_token(self.lexer);
+
+    rhs := parser_parse_unary(self);
+    next_prec := get_operator_precedence(lexer_peek_next_token(self.lexer).type);
+
+    if prec < next_prec {
+      # our rhs is really the lhs of the next op
+      rhs = parser_parse_binary_rhs(self, prec + 1, rhs);
+    }
+    lhs = to_expr_ptr(
+      Expr::BinaryExpr{
+        .left = lhs, .op = op, .right = rhs
+      });
+  }
+}
+
+fun parser_parse_unary: ExprPtr (self: ref Parser) {
+  if ¬parser_peek(self, TokenType::NOT) && ¬parser_peek(self, TokenType::MINUS) {
+    parser_parse_primary_expr(self)
+  } else {
+    op := self.lexer.last_token.type;
+    lexer_next_token(self.lexer);
+    operand := parser_parse_unary(self);
+    to_expr_ptr(
+      if op.tag == TokenType::NOT.tag {
+        Expr::UnaryExpr  {.operand = operand, .op = TokenType::NOT}
+      } else {
+        Expr::BinaryExpr {
+          .left = to_expr_ptr(Expr::Number(0)), .op = TokenType::MINUS, .right = operand }
+      })
+  }
+}
+
+fun parser_parse_primary_expr: ExprPtr (self: ref Parser) {
+  next_token := lexer_peek_next_token(self.lexer).type;
+  lexer_consume_token(self.lexer);
+  data := self.lexer.last_token.data;
+  switch next_token {
+    TokenType::VAR => {
+      switch data {
+        TokenData::Var(var) => {
+          return to_expr_ptr(Expr::Var(var));
+        }
+      }
+    },
+    TokenType::NUMBER => {
+      switch data {
+        TokenData::Number(num) => {
+          return to_expr_ptr(Expr::Number(num));
+        }
+      }
+    },
+    TokenType::BOOL => {
+      switch data {
+        TokenData::Bool(boolean) => {
+          return to_expr_ptr(Expr::Bool(boolean));
+        }
+      }
+    },
+    TokenType::LPAREN => {
+      return parser_parse_parenthesised_expr(self);
+    }
+  }
+  fail("syntax error :- unknown primary expr");
+  null_expr_ptr()
+}
+
+fun parser_parse_parenthesised_expr: ExprPtr (self: ref Parser) {
+  parser_expect(self, TokenType::LPAREN);
+  expr := parser_parse_expr(self);
+  parser_expect(self, TokenType::RPAREN);
+  expr
+}
+
+# Helpers
+
+fun parser_consume: bool (self: ref Parser, token_type: TokenType) {
+  if parser_peek(self, token_type) {
+    lexer_consume_token(self.lexer);
+    true
+  } else {
+    false
+  }
+}
+
+fun parser_peek: bool (self: ref Parser, token_type: TokenType) {
+  lexer_peek_next_token(self.lexer).type.tag == token_type.tag
+}
+
+proc parser_expect (self: ref Parser, token_type: TokenType) {
+  if ¬parser_consume(self, token_type) {
+    eprintln!(
+      "syntax error expected: {} got {}",
+      int_to_string(token_type.tag),
+      int_to_string(self.lexer.last_token.type.tag));
+    fail("all is lost");
+  }
+}
+
+## Lexer
+
+enum TokenType {
+  SKIP,               # 0 skip
+  ASS,                # 1 :=
+  SEMICOLON,          # 2 ;
+  IF,                 # 3 if
+  ELSE,               # 4 else
+  WHILE,              # 5 while
+  DO,                 # 6 do
+  LPAREN,             # 7 (
+  RPAREN,             # 8 )
+  LE,                 # 9 <=
+  NOT,                # 10 ¬
+  PLUS,               # 11 +
+  MINUS,              # 12 -
+  TIMES,              # 13 *
+  VAR,                # 14 [str]
+  NUMBER,             # 15 [digits]+
+  BOOL,               # 16 true/false
+  THEN,               # 17 then
+  RBRACE,             # 18 }
+  LBRACE,             # 19 {
+  EQUAL,              # 20 =
+  AND,                # 21 &
+  LT,                 # 22 <
+  GT,                 # 23 >
+  GE,                 # 24 >=
+  DOUBLE_EQUAL,       # 25 ==
+  OR,                 # 26 ||
+  EOF,                # 27 <EOF>
+  EMPTY,              # 28 <not parsed yet>/consumed
+  UNKNOWN,            # 29 bad
+}
+
+enum TokenData {
+  Number(i32),
+  Bool(bool),
+  Var(str),
+  None
+}
+
+pod Token {
+  type: TokenType,
+  data: TokenData
+}
+
+pod Lexer {
+  source: str,
+  pos: i32,
+  last_token: Token
+}
+
+fun new_lexer: Lexer (source: str) {
+  Lexer {
+    .source = source,
+    .pos = 0,
+    .last_token = Token { .type = TokenType::EMPTY, .data = TokenData::None }
+  }
+}
+
+const LEX_EOF := -1;
+fun lexer_peek_next_char: i32 (self: ref Lexer) {
+  if self.pos >= self.source.length {
+    LEX_EOF
+  } else {
+    self.source[self.pos] as i32
+  }
+}
+
+proc lexer_consume_char(self: ref Lexer) {
+  self.pos += 1;
+}
+
+fun lexer_peek_next_token: ref Token (self: ref Lexer) {
+  if (self.last_token.type.tag == TokenType::EMPTY.tag) {
+    lexer_next_token(self);
+  }
+  self.last_token
+}
+
+proc lexer_consume_token (self: ref Lexer) {
+  self.last_token.type = TokenType::EMPTY;
+}
+
+proc lexer_next_token (self: ref Lexer) {
+  while is_space(lexer_peek_next_char(self)) {
+    lexer_consume_char(self);
+  }
+  self.last_token.type = if lexer_match(self, ":=") {
+    TokenType::ASS
+  } else if lexer_match(self, "<=") {
+    TokenType::LE
+  } else if lexer_match(self, ">=") {
+    TokenType::LT
+  } else if lexer_match(self, "==") {
+    TokenType::DOUBLE_EQUAL
+  } else if lexer_match(self, "||") {
+    TokenType::OR
+  } else if lexer_match(self, ";") {
+    TokenType::SEMICOLON
+  } else if lexer_match(self, "(") {
+    TokenType::LPAREN
+  } else if lexer_match(self, ")") {
+    TokenType::RPAREN
+  } else if lexer_match(self, "¬") {
+    TokenType::NOT
+  } else if lexer_match(self, "+") {
+    TokenType::PLUS
+  } else if lexer_match(self, "-") {
+    TokenType::MINUS
+  } else if lexer_match(self, "*") {
+    TokenType::TIMES
+  } else if lexer_match(self, "{") {
+    TokenType::LBRACE
+  } else if lexer_match(self, "}") {
+    TokenType::RBRACE
+  } else if lexer_match(self, "=") {
+    TokenType::EQUAL
+  } else if lexer_match(self, "&") {
+    TokenType::AND
+  } else if lexer_match(self, "<") {
+    TokenType::LT
+  } else if lexer_match(self, ">") {
+    TokenType::GT
+  } else if is_alpha(lexer_peek_next_char(self)) {
+    var := "";
+    while is_alpha(lexer_peek_next_char(self)) {
+      var += lexer_peek_next_char(self) as str;
+      lexer_consume_char(self);
+    }
+    if str_equal(var, "skip") {
+      TokenType::SKIP
+    } else if str_equal(var, "if") {
+      TokenType::IF
+    } else if str_equal(var, "else") {
+      TokenType::ELSE
+    } else if str_equal(var, "then") {
+      TokenType::THEN
+    } else if str_equal(var, "while") {
+      TokenType::WHILE
+    } else if str_equal(var, "do") {
+      TokenType::DO
+    } else if str_equal(var, "true") {
+      self.last_token.data = TokenData::Bool(true);
+      TokenType::BOOL
+    } else if str_equal(var, "false") {
+      self.last_token.data = TokenData::Bool(false);
+      TokenType::BOOL
+    } else if str_equal(var, "do") {
+      TokenType::DO
+    } else {
+      self.last_token.data = TokenData::Var(var);
+      TokenType::VAR
+    }
+  } else if is_digit(lexer_peek_next_char(self)) {
+    number := "";
+    while is_digit(lexer_peek_next_char(self)) {
+      number += lexer_peek_next_char(self) as str;
+      lexer_consume_char(self);
+    }
+    bind (int_value, s) = parse_int(number);
+    self.last_token.data = TokenData::Number(int_value);
+    TokenType::NUMBER
+  } else if lexer_peek_next_char(self) == LEX_EOF {
+    TokenType::EOF
+  } else {
+    TokenType::UNKNOWN
+  };
+}
+
+fun lexer_match: bool (self: ref Lexer, value: str) {
+  old_pos := self.pos;
+  for idx in 0 .. value.length {
+    if lexer_peek_next_char(self) == value[idx] as i32 {
+      lexer_consume_char(self);
+    } else {
+      self.pos = old_pos;
+      return false;
+    }
+  }
+  true
+}
+
+## Helpers
+
+# Chars
+
+fun is_space: bool (c: i32) {
+     c == ' '  as i32 || c == '\t' as i32
+  || c == '\n' as i32 || c == '\r' as i32 || c == '\f' as i32
+}
+
+fun is_alpha: bool (c: i32) {
+  (c >= 'A' as i32 && c <= 'Z' as i32) || (c >= 'a' as i32 && c <= 'z' as i32)
+}
+
+fun is_digit: bool (c: i32) {
+  c >= '0' as i32 && c <= '9' as i32
+}
+
+# Fake pointers
+
+
+pod ExprPtr {
+  v: Expr[]
+}
+
+pod StmtPtr {
+  v: Stmt[]
+}
+
+fun null_expr_ptr: ExprPtr {
+  ExprPtr { .v = new_vec@(Expr)() }
+}
+
+fun to_expr_ptr: ExprPtr (expr: Expr) {
+  ptr := null_expr_ptr();
+  push_back(ptr.v, expr);
+  ptr
+}
+
+fun is_null_expr: bool (ptr: ExprPtr) {
+  ptr.v.length < 1
+}
+
+fun null_stmt_ptr: StmtPtr {
+  StmtPtr { .v = new_vec@(Stmt)() }
+}
+
+fun to_stmt_ptr: StmtPtr (stmt: Stmt) {
+  ptr := null_stmt_ptr();
+  push_back(ptr.v, stmt);
+  ptr
+}
+
+fun is_null_stmt: bool (ptr: StmtPtr) {
+  ptr.v.length < 1
+}
+
+fun get_operator_precedence: i32 (op: TokenType) {
+  switch op {
+    TokenType::PLUS => {
+      return 10;
+    },
+    TokenType::MINUS => {
+      return 10;
+    },
+    TokenType::TIMES => {
+      return 20;
+    },
+    TokenType::LE => {
+      return 6;
+    },
+    TokenType::LT => {
+      return 6;
+    },
+    TokenType::GE => {
+      return 6;
+    },
+    TokenType::GT => {
+      return 6;
+    },
+    TokenType::EQUAL => {
+      return 7;
+    },
+    TokenType::DOUBLE_EQUAL => {
+      return 7;
+    },
+    TokenType::AND => {
+      return 4;
+    },
+    TokenType::OR => {
+      return 3;
+    }
+  }
+  return -1;
+}
+

@@ -1262,7 +1262,7 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) -> llvm::Value* {
       // Must be a reference returned (so that is an address)
-      return codegen_expression(call, scope);
+      return codegen_expression(call, scope, true);
     },
     pattern(anyof(as<Ast_Block>(arg), as<Ast_If_Expr>(arg))) =
     [&](auto& block_expr) -> llvm::Value* {
@@ -1296,7 +1296,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope,
   return std::visit([&](auto& expr) {
     using T = std::decay_t<decltype(expr)>;
     // Kinda a hack
-    if constexpr (std::is_same_v<T, Ast_Block> || std::is_same_v<T, Ast_If_Expr>) {
+    if constexpr (
+           std::is_same_v<T, Ast_Block>
+        || std::is_same_v<T, Ast_If_Expr>
+        || std::is_same_v<T, Ast_Call>
+    ) {
       return codegen_expression(expr, scope, as_lvalue);
     }
     return codegen_expression(expr, scope);
@@ -1533,7 +1537,9 @@ llvm::Value* LLVMCodeGen::codegen_enum_tuple_init(Ast_Call& enum_tuple_init, Sco
   return ir_builder.CreateLoad(member_llvm.member_ptr, "enum_expr");
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
+llvm::Value* LLVMCodeGen::codegen_expression(
+  Ast_Call& call, Scope& scope, bool as_lvalue
+) {
   using namespace mpark::patterns;
   auto callee_type = remove_reference(call.callee->meta.type);
   LambdaType* lambda_type = nullptr;
@@ -1592,10 +1598,20 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
     call_args.push_back(env_ptr);
   }
 
-  bool has_return = (lambda_type && lambda_type->return_type.get())
-    || (function_type && !function_type->procedure);
+  Type_Ptr return_type;
+  if (lambda_type) {
+    return_type = lambda_type->return_type;
+  } else {
+    return_type = function_type->return_type;
+  }
 
-  return ir_builder.CreateCall(callee, call_args, has_return ? "call_ret" : "");
+  llvm::Value* ret = ir_builder.CreateCall(
+    callee, call_args, return_type ? "call_ret" : "");
+
+  if (!as_lvalue && is_reference_type(return_type)) {
+    ret = dereference(ret, return_type);
+  }
+  return ret;
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {

@@ -51,9 +51,7 @@ fun eval_program: ProgramState (S: StmtPtr, state: ProgramState, show_steps: boo
 fun eval_statement: (StmtPtr, ProgramState) (S: StmtPtr, state: ProgramState) {
   switch S.v[0] {
     Stmt::Assign {.var, .right} => {
-      add_or_update_var(state, var, A(right, state));
-      # doing call add_or_update_var directly in tuple broken
-      return (null_stmt_ptr(), state);
+      return (null_stmt_ptr(), add_or_update_var(state, var, A(right, state)));
     },
     Stmt::Concat {.left, .right} => {
       bind (new_left, new_state) = eval_statement(left, state);
@@ -170,8 +168,9 @@ fun new_program_state: ProgramState {
   ProgramState { .vars = new_vec@((str, ProgramValue))() }
 }
 
-# returning state as ref broken
-proc add_or_update_var (state: ref ProgramState, name: str, value: ProgramValue) {
+fun add_or_update_var: ref ProgramState (
+  state: ref ProgramState, name: str, value: ProgramValue
+) {
   lookup_idx := lookup_var(state, name);
   if lookup_idx == -1 {
     push_back(state.vars, (name, value));
@@ -179,6 +178,7 @@ proc add_or_update_var (state: ref ProgramState, name: str, value: ProgramValue)
     bind (_, val: ref) = state.vars[lookup_idx];
     val = value;
   }
+  state
 }
 
 fun get_var: ProgramValue (state: ref ProgramState, name: str) {

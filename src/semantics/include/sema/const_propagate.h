@@ -10,6 +10,7 @@ struct ConstantVisitor: BaseAstVisitor {
   void after(Ast_Binary_Operation& binop) override;
   void after(Ast_Unary_Operation& unary) override;
   void after(Ast_Index_Access& index) override;
+  void after(Ast_Tuple_Literal& tuple_literal) override;
   void visit(Ast_Literal& literal) override;
 };
 

@@ -814,16 +814,9 @@ void LLVMCodeGen::codegen_tuple_assign(
   }
 }
 
-LLVMCodeGen::ExpressionExtract LLVMCodeGen::get_tuple_extractor(
-  Ast_Expression& tuple, Scope& scope
-) {
-  tuple.fix_tuple_hack();
-  return get_value_extractor(tuple, scope);
-}
-
 void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
   if (auto tuple_pattern = std::get_if<Ast_Tuple_Literal>(&assign.target->v)) {
-    auto tuple_extract = get_tuple_extractor(*assign.expression, scope);
+    auto tuple_extract = get_value_extractor(*assign.expression, scope);
     codegen_tuple_assign(*tuple_pattern, tuple_extract, {}, scope);
     return;
   }
@@ -1175,14 +1168,13 @@ void LLVMCodeGen::codegen_pod_bindings(
 
 void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& scope) {
   using namespace mpark::patterns;
+  auto binding_extractor = get_value_extractor(*bindings.initializer, scope);
   match(bindings.bindings)(
     pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
-      auto tuple_extract = get_tuple_extractor(*bindings.initializer, scope);
-      codegen_tuple_bindings(tuple_binds, tuple_extract, {}, scope);
+      codegen_tuple_bindings(tuple_binds, binding_extractor, {}, scope);
     },
     pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds) {
-      auto pod_extract = get_value_extractor(*bindings.initializer, scope);
-      codegen_pod_bindings(pod_binds, pod_extract, {}, scope);
+      codegen_pod_bindings(pod_binds, binding_extractor, {}, scope);
     }
   );
 }

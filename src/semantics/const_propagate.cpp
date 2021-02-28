@@ -159,6 +159,11 @@ void ConstantVisitor::after(Ast_Index_Access& index) {
   static_check_array_bounds(index, true);
 }
 
+void ConstantVisitor::after(Ast_Tuple_Literal& tuple_literal) {
+  // Fixes lvalue tuples (not needed after semantics checking)
+  tuple_literal.get_self().class_ptr()->set_value_type(Expression_Meta::RVALUE);
+}
+
 static char parse_char_literal(std::string_view literal) {
   // 'a'
   // '\a'

@@ -174,9 +174,7 @@ fun new_program_state: ProgramState {
 proc add_or_update_var (state: ref ProgramState, name: str, value: ProgramValue) {
   lookup_idx := lookup_var(state, name);
   if lookup_idx == -1 {
-    var := (name, value);
-    push_back(state.vars, var);
-    # push_back(state.vars, (name, value)) -- broken for some reason?
+    push_back(state.vars, (name, value));
   } else {
     bind (_, val: ref) = state.vars[lookup_idx];
     val = value;

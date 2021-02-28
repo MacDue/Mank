@@ -494,7 +494,7 @@ static bool is_explict_reference(Ast_Expression& expr) {
 #define ANALYSE_LOOP_BODY(body) { \
   auto body_type = analyse_block(body, scope);     \
   if (!body_type->is_void()) {                     \
-    throw_error_at(body.get_final_expr(),     \
+    throw_error_at(body.get_final_expr(),          \
       "loop body should not evaluate to a value"); \
   }                                                \
 }

@@ -1166,17 +1166,23 @@ void LLVMCodeGen::codegen_pod_bindings(
   }
 }
 
-void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& scope) {
+void LLVMCodeGen::codegen_bindings(
+  Ast_Binding& binding, ExpressionExtract& agg, Scope& scope
+) {
   using namespace mpark::patterns;
-  auto binding_extractor = get_value_extractor(*bindings.initializer, scope);
-  match(bindings.bindings)(
-    pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
-      codegen_tuple_bindings(tuple_binds, binding_extractor, {}, scope);
+  match(binding)(
+    pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds) {
+      codegen_tuple_bindings(tuple_binds, agg, {}, scope);
     },
     pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds) {
-      codegen_pod_bindings(pod_binds, binding_extractor, {}, scope);
+      codegen_pod_bindings(pod_binds, agg, {}, scope);
     }
   );
+}
+
+void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& scope) {
+  auto binding_extractor = get_value_extractor(*bindings.initializer, scope);
+  codegen_bindings(bindings.bindings, binding_extractor, scope);
 }
 
 llvm::Constant* LLVMCodeGen::codegen_constant_expression(
@@ -2461,14 +2467,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope
         llvm::Value* member_data = ir_builder.CreateBitCast(
           enum_data, member_variant_type->getElementType(Builtin::Enum::DATA)->getPointerTo());
         ExpressionExtract enum_data_extractor(this, member_data, switch_expr.switched->is_lvalue());
-        match(*switch_case.bindings)(
-          pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds){
-            codegen_pod_bindings(pod_binds, enum_data_extractor, {}, scope);
-          },
-          pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto tuple_binds){
-            codegen_tuple_bindings(tuple_binds, enum_data_extractor, {}, scope);
-          }
-        );
+        codegen_bindings(*switch_case.bindings, enum_data_extractor, scope);
       }
     } else {
       case_index = llvm::cast<llvm::ConstantInt>

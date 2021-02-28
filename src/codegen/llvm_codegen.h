@@ -282,6 +282,8 @@ public:
   void codegen_pod_bindings(
     Ast_Pod_Binds& pod_binds, ExpressionExtract& pod, std::vector<unsigned> idxs, Scope& scope);
 
+  void codegen_bindings(Ast_Binding& binding, ExpressionExtract& agg, Scope& scope);
+
   void codegen_statement(Ast_Structural_Binding& binding, Scope& scope);
 
   Ast_Expression& flatten_nested_array_indexes(

@@ -1,5 +1,3 @@
-
-
 enum Test {
   VectorInEnum(i32[])
 }

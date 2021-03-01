@@ -335,9 +335,13 @@ fun new_parser: Parser (source: str) {
   }
 }
 
+fun parser_peek_stmt_eof: bool (self: ref Parser) {
+  parser_peek(self, TokenType::EOF) || parser_peek(self, TokenType::RBRACE)
+}
+
 fun parser_parse: StmtPtr (self: ref Parser) {
   prev := null_stmt_ptr();
-  while ¬parser_peek(self, TokenType::EOF) && ¬parser_peek(self, TokenType::RBRACE) {
+  while ¬parser_peek_stmt_eof(self) {
     prev = parser_parse_stmt(self, prev);
   }
   prev
@@ -375,7 +379,7 @@ fun parser_parse_skip: StmtPtr (self: ref Parser) {
 
 fun parser_parse_concat: StmtPtr (self: ref Parser, prev: StmtPtr) {
   parser_expect(self, TokenType::SEMICOLON);
-  if ¬parser_peek(self, TokenType::EOF) {
+  if ¬parser_peek_stmt_eof(self) {
     to_stmt_ptr(Stmt::Concat{
       .left = prev, .right = parser_parse_stmt(self, null_stmt_ptr()) })
   } else {

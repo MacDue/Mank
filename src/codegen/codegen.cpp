@@ -440,16 +440,23 @@ llvm::Type* LLVMCodeGen::map_enum_member_data_to_llvm(
 LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
   EnumType const & enum_type, Scope& scope
 ) {
-  auto get_enum_tag_type = [&](size_t enum_size) {
-    return (
-      enum_size <= 0xff       ? llvm::Type::getInt8Ty (llvm_context) :
-      enum_size <= 0xffff     ? llvm::Type::getInt16Ty(llvm_context) :
-      enum_size <= 0xffffffff ? llvm::Type::getInt32Ty(llvm_context) :
-                                llvm::Type::getInt64Ty(llvm_context));
+  auto get_enum_tag_type = [&](EnumType const & enum_type) {
+    if (!enum_type.is_adt) {
+      auto enum_size = enum_type.members.size();
+      return (
+        enum_size <= 0xff       ? llvm::Type::getInt8Ty (llvm_context) :
+        enum_size <= 0xffff     ? llvm::Type::getInt16Ty(llvm_context) :
+        enum_size <= 0xffffffff ? llvm::Type::getInt32Ty(llvm_context) :
+                                  llvm::Type::getInt64Ty(llvm_context));
+    } else {
+      // Must use a 64bit tag for ADT enums or there will be alignment issues
+      // TODO: Probaly should return a word sized tag? (find out how to get that)
+      return llvm::Type::getInt64Ty(llvm_context);
+    }
   };
 
   EnumTypeLLVM llvm_enum_type;
-  llvm_enum_type.tag_type = get_enum_tag_type(enum_type.members.size());
+  llvm_enum_type.tag_type = get_enum_tag_type(enum_type);
   uint64_t max_data_size = 0;
   for (auto& [tag, member]: enum_type.members) {
     std::vector<llvm::Type*> varaint;

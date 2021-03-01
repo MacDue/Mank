@@ -17,6 +17,7 @@ DEF_TYPE(EnumType) {
 
   Ast_Identifier identifier;
   tsl::ordered_map<std::string, Member> members;
+  bool is_adt = false; // If it has any members with data
 
   inline bool has_member(Ast_Identifier const & tag) const {
     return members.contains(tag.name);

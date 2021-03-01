@@ -279,6 +279,7 @@ void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
     }
     Type_Ptr enum_data;
     if (member.data) {
+      enum_type.is_adt = true;
       enum_data = match(*member.data)(
         pattern(as<Ast_Enum_Declaration::Member::TupleData>(arg)) =
           [&](auto& tuple_data) {

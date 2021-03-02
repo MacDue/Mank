@@ -103,6 +103,12 @@ fun A: ProgramValue (aexpr: ExprPtr, state: ProgramState) {
         TokenType::TIMES => {
           return ProgramValue::Number(left_value * right_value);
         },
+        TokenType::DIVIDE => {
+          return ProgramValue::Number(left_value / right_value);
+        },
+        TokenType::MODULO => {
+          return ProgramValue::Number(left_value % right_value);
+        },
         TokenType::LE => {
           return ProgramValue::Bool(left_value <= right_value);
         },
@@ -117,6 +123,9 @@ fun A: ProgramValue (aexpr: ExprPtr, state: ProgramState) {
         },
         TokenType::DOUBLE_EQUAL => {
           return ProgramValue::Bool(left_value == right_value);
+        },
+        TokenType::NOT_EQUAL => {
+          return ProgramValue::Bool(left_value != right_value);
         }
       }
     }
@@ -561,22 +570,25 @@ enum TokenType {
   PLUS,               # 11 +
   MINUS,              # 12 -
   TIMES,              # 13 *
-  VAR,                # 14 [str]
-  NUMBER,             # 15 [digits]+
-  BOOL,               # 16 true/false
-  THEN,               # 17 then
-  RBRACE,             # 18 }
-  LBRACE,             # 19 {
-  EQUAL,              # 20 =
-  AND,                # 21 &
-  LT,                 # 22 <
-  GT,                 # 23 >
-  GE,                 # 24 >=
-  DOUBLE_EQUAL,       # 25 ==
-  OR,                 # 26 ||
-  EOF,                # 27 <EOF>
-  EMPTY,              # 28 <not parsed yet>/consumed
-  UNKNOWN,            # 29 bad
+  DIVIDE,             # 14 /
+  MODULO,             # 15 %
+  VAR,                # 16 [str]
+  NUMBER,             # 17 [digits]+
+  BOOL,               # 18 true/false
+  THEN,               # 19 then
+  RBRACE,             # 20 }
+  LBRACE,             # 21 {
+  EQUAL,              # 22 =
+  AND,                # 23 &
+  LT,                 # 24 <
+  GT,                 # 25 >
+  GE,                 # 26 >=
+  DOUBLE_EQUAL,       # 27 ==
+  NOT_EQUAL,          # 28 !=
+  OR,                 # 29 ||
+  EOF,                # 30 <EOF>
+  EMPTY,              # 31 <not parsed yet>/consumed
+  UNKNOWN,            # 32 bad
 }
 
 enum TokenData {
@@ -641,6 +653,8 @@ proc lexer_next_token (self: ref Lexer) {
     TokenType::LT
   } else if lexer_match(self, "==") {
     TokenType::DOUBLE_EQUAL
+  } else if lexer_match(self, "!=") {
+    TokenType::NOT_EQUAL
   } else if lexer_match(self, "||") {
     TokenType::OR
   } else if lexer_match(self, ";") {
@@ -657,6 +671,10 @@ proc lexer_next_token (self: ref Lexer) {
     TokenType::MINUS
   } else if lexer_match(self, "*") {
     TokenType::TIMES
+  } else if lexer_match(self, "/") {
+    TokenType::DIVIDE
+  } else if lexer_match(self, "%") {
+    TokenType::MODULO
   } else if lexer_match(self, "{") {
     TokenType::LBRACE
   } else if lexer_match(self, "}") {
@@ -669,9 +687,11 @@ proc lexer_next_token (self: ref Lexer) {
     TokenType::LT
   } else if lexer_match(self, ">") {
     TokenType::GT
-  } else if is_alpha(lexer_peek_next_char(self)) {
+  } else if
+    is_alpha(lexer_peek_next_char(self)) || lexer_peek_next_char(self) == '_' as i32
+  {
     var := "";
-    while is_alpha(lexer_peek_next_char(self)) {
+    while is_alnum(lexer_peek_next_char(self)) || lexer_peek_next_char(self) == '_' as i32 {
       var += lexer_peek_next_char(self) as str;
       lexer_consume_char(self);
     }
@@ -741,6 +761,10 @@ fun is_alpha: bool (c: i32) {
   (c >= 'A' as i32 && c <= 'Z' as i32) || (c >= 'a' as i32 && c <= 'z' as i32)
 }
 
+fun is_alnum: bool (c: i32) {
+  is_alpha(c) || is_digit(c)
+}
+
 fun is_digit: bool (c: i32) {
   c >= '0' as i32 && c <= '9' as i32
 }
@@ -795,6 +819,12 @@ fun get_operator_precedence: i32 (op: TokenType) {
     TokenType::TIMES => {
       return 20;
     },
+    TokenType::DIVIDE => {
+      return 20;
+    },
+    TokenType::MODULO => {
+      return 20;
+    },
     TokenType::LE => {
       return 6;
     },
@@ -811,6 +841,9 @@ fun get_operator_precedence: i32 (op: TokenType) {
       return 7;
     },
     TokenType::DOUBLE_EQUAL => {
+      return 7;
+    },
+    TokenType::NOT_EQUAL => {
       return 7;
     },
     TokenType::AND => {
@@ -834,6 +867,12 @@ fun get_operator_str: str (op: TokenType) {
     TokenType::TIMES => {
       return "*";
     },
+    TokenType::DIVIDE => {
+      return "/";
+    },
+    TokenType::MODULO => {
+      return "%";
+    },
     TokenType::LE => {
       return "<=";
     },
@@ -851,6 +890,9 @@ fun get_operator_str: str (op: TokenType) {
     },
     TokenType::DOUBLE_EQUAL => {
       return "==";
+    },
+    TokenType::NOT_EQUAL => {
+      return "!=";
     },
     TokenType::AND => {
       return "&&";

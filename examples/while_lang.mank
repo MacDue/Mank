@@ -657,6 +657,8 @@ proc lexer_next_token (self: ref Lexer) {
     TokenType::NOT_EQUAL
   } else if lexer_match(self, "||") {
     TokenType::OR
+  } else if lexer_match(self, "&&") {
+    TokenType::AND
   } else if lexer_match(self, ";") {
     TokenType::SEMICOLON
   } else if lexer_match(self, "(") {

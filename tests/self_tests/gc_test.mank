@@ -2,7 +2,7 @@ enum Test {
   VectorInEnum(i32[])
 }
 
-test test_that_enum_alignment_does_not_break_gc {
+test that_enum_alignment_does_not_break_gc {
   # Originally this code would fail and the vector nested within VectorInEnum
   # (within old_vector) would be free'd prematurely by the GC.
   # This was due to the enum tag and enum data not being 64bit/word aligned.

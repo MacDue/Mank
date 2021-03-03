@@ -876,6 +876,8 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
               "element type {} does not match array type of {}");
             return false;
           });
+      } else {
+        throw_error_at(array, "cannot construct empty array");
       }
       return ctx->new_type(array_type);
     },

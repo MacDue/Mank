@@ -16,31 +16,40 @@ proc bf_interpret(program: str, state: ref ProgramState) {
     }
 
     instr := program[pc];
-    if instr == '+' {
-      cells[current_cell] += 1 as char;
-    } else if instr == '-' {
-      cells[current_cell] -= 1 as char;
-    } else if instr == '>' {
-      current_cell += 1;
-      if current_cell >= cells.length {
-        current_cell = 0;
-      }
-    } else if instr == '<' {
-      current_cell -= 1;
-      if current_cell < 0 {
-        current_cell = cells.length - 1;
-      }
-    } else if instr == '.' {
-      state.char_ouput(cells[current_cell]);
-    } else if instr == ',' {
-      cells[current_cell] = state.char_input();
-    } else if instr == '[' {
-      if cells[current_cell] == 0 as char {
-        pc = bracket_map[pc];
-      }
-    } else if instr == ']' {
-      if cells[current_cell] != 0 as char {
-        pc = bracket_map[pc] - 1;
+    switch instr {
+      '+' => {
+        cells[current_cell] += 1 as char;
+      },
+      '-' => {
+        cells[current_cell] -= 1 as char;
+      },
+      '>' => {
+        current_cell += 1;
+        if current_cell >= cells.length {
+          current_cell = 0;
+        }
+      },
+      '<' => {
+        current_cell -= 1;
+        if current_cell < 0 {
+          current_cell = cells.length - 1;
+        }
+      },
+      '.' => {
+        state.char_ouput(cells[current_cell]);
+      },
+      ',' => {
+        cells[current_cell] = state.char_input();
+      },
+      '[' => {
+        if cells[current_cell] == 0 as char {
+          pc = bracket_map[pc];
+        }
+      },
+      ']' => {
+        if cells[current_cell] != 0 as char {
+          pc = bracket_map[pc] - 1;
+        }
       }
     }
     pc += 1;

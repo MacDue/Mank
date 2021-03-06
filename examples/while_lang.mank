@@ -76,9 +76,9 @@ fun eval_statement: (StmtPtr, ProgramState) (S: StmtPtr, state: ProgramState) {
     },
     Stmt::Skip => {
       return (null_stmt_ptr(), state);
-    }
-  }
-  fail("eval statement failed!");
+    },
+    else => { fail("eval statement failed!") }
+  };
   (null_stmt_ptr(), state)
 }
 
@@ -126,11 +126,12 @@ fun A: ProgramValue (aexpr: ExprPtr, state: ProgramState) {
         },
         TokenType::NOT_EQUAL => {
           return ProgramValue::Bool(left_value != right_value);
-        }
+        },
+        else => { fail("invalid binary operator") }
       }
-    }
+    },
+    else => { fail("aexpr eval failed!") }
   }
-  fail("aexpr eval failed!");
   ProgramValue::Number(-1)
 }
 
@@ -155,9 +156,9 @@ fun B: ProgramValue (bexpr: ExprPtr, state: ProgramState) {
       } else {
         return ProgramValue::Bool(as_bool(A(bexpr, state)));
       }
-    }
+    },
+    else => { fail("bexpr eval failed!") }
   }
-  fail("bexpr eval failed!");
   ProgramValue::Bool(false)
 }
 
@@ -209,18 +210,16 @@ fun lookup_var: i32 (state: ref ProgramState, name: str) {
 
 fun as_number: i32 (val: ProgramValue) {
   switch val {
-    ProgramValue::Number(num) => { return num; }
+    ProgramValue::Number(num) => { return num; },
+    else => { fail("not a number"); return - 1; }
   }
-  fail("not a number");
-  -1
 }
 
 fun as_bool: bool (val: ProgramValue) {
   switch val {
-    ProgramValue::Bool(boolean) => { return boolean; }
+    ProgramValue::Bool(boolean) => { return boolean; },
+    else => { fail("not a bool"); return false; }
   }
-  fail("not a bool");
-  false
 }
 
 proc print_program_state(state: ProgramState) {
@@ -242,9 +241,9 @@ fun program_value_to_str: str (val: ProgramValue) {
     },
     ProgramValue::Bool(boolean) => {
       return if boolean { "true" } else { "false" };
-    }
+    },
+    ProgramValue::None => { return "None"; }
   }
-  ""
 }
 
 ## Ast
@@ -375,9 +374,9 @@ fun parser_parse_stmt: StmtPtr (self: ref Parser, prev: StmtPtr) {
     },
     TokenType::VAR => {
       return parser_parse_ass(self);
-    }
+    },
+    else => { fail("syntax error :- invalid statement") }
   }
-  fail("syntax error :- invalid statement");
   null_stmt_ptr()
 }
 
@@ -433,9 +432,9 @@ fun parser_parse_ass: StmtPtr (self: ref Parser) {
       parser_expect(self, TokenType::ASS);
       rhs := parser_parse_expr(self);
       return to_stmt_ptr(Stmt::Assign { .var = var, .right = rhs });
-    }
+    },
+    else => { fail("ahhh! idk") }
   }
-  fail("ahhh! idk");
   null_stmt_ptr()
 }
 
@@ -496,28 +495,28 @@ fun parser_parse_primary_expr: ExprPtr (self: ref Parser) {
       switch data {
         TokenData::Var(var) => {
           return to_expr_ptr(Expr::Var(var));
-        }
+        }, else => {}
       }
     },
     TokenType::NUMBER => {
       switch data {
         TokenData::Number(num) => {
           return to_expr_ptr(Expr::Number(num));
-        }
+        }, else => {}
       }
     },
     TokenType::BOOL => {
       switch data {
         TokenData::Bool(boolean) => {
           return to_expr_ptr(Expr::Bool(boolean));
-        }
+        }, else => {}
       }
     },
     TokenType::LPAREN => {
       return parser_parse_parenthesised_expr(self);
-    }
+    },
+    else => { fail("syntax error :- unknown primary expr") }
   }
-  fail("syntax error :- unknown primary expr");
   null_expr_ptr()
 }
 
@@ -853,9 +852,9 @@ fun get_operator_precedence: i32 (op: TokenType) {
     },
     TokenType::OR => {
       return 3;
-    }
+    },
+    else => { return -1; }
   };
-  -1
 }
 
 fun get_operator_str: str (op: TokenType) {
@@ -901,7 +900,7 @@ fun get_operator_str: str (op: TokenType) {
     },
     TokenType::OR => {
       return "||";
-    }
+    },
+    else => { return "???"; }
   }
-  "???"
 }

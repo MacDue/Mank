@@ -1050,43 +1050,98 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
   } else {
     assert_has_switchable_type(switch_expr.switched);
   }
+
+  std::map<uint64_t, Expr_Ptr> covered_cases;
+  auto add_covered_case = [&](Expr_Ptr matched, uint64_t matched_value) {
+    auto [existing_match, new_case] = covered_cases.insert({matched_value, matched});
+    if (!new_case) {
+      auto previous_case_location = AstHelper::extract_location(existing_match->second);
+      throw_error_at(matched, "duplicate switch case (previously matched on line {})",
+        previous_case_location.start_line + 1);
+    }
+  };
+
+  SwitchCase* default_switch_case = nullptr;
   Type_Ptr switch_return = Type::void_ty(); // Just void for now.
+  Type_Ptr assumed_switched_type; //
   for (auto& switch_case: switch_expr.cases) {
     // auto match_type = analyse_expression(switch_case.match, scope);
-    auto match_type = match(switch_case.match->v)(
-      pattern(as<Ast_Path>(arg)) = [&](auto& enum_path){
-        auto [enum_type, member_info] = AstHelper::path_as_enum_member(enum_path, scope);
-        if (switch_case.bindings) {
-          if (!member_info->data) {
-            throw_error_at(switch_case.match, "enum member does not have data to bind");
+    if (!switch_case.is_default_case) {
+      auto match_type = match(switch_case.match->v)(
+        pattern(as<Ast_Path>(arg)) = [&](auto& enum_path){
+          auto [enum_type, member_info] = AstHelper::path_as_enum_member(enum_path, scope);
+          if (switch_case.bindings) {
+            if (!member_info->data) {
+              throw_error_at(switch_case.match, "enum member does not have data to bind");
+            }
+            switch_case.body.scope.set_parent(scope);
+            check_bindings(
+              *switch_case.bindings, switch_case.match, member_info->data, switch_case.body.scope);
           }
-          switch_case.body.scope.set_parent(scope);
-          check_bindings(
-            *switch_case.bindings, switch_case.match, member_info->data, switch_case.body.scope);
+          add_covered_case(switch_case.match, member_info->ordinal);
+          return enum_type->get_self().class_ptr();
+        },
+        pattern(_) = [&]{
+          if (switch_case.bindings) {
+            throw_error_at(switch_case.match, "type does not support bindings");
+          }
+          auto match_type = analyse_expression(*switch_case.match, scope);
+          AstHelper::constant_expr_eval(*switch_case.match);
+          if (!switch_case.match->meta.is_const()) {
+            throw_error_at(switch_case.match, "not a constant expression");
+          } else {
+            std::visit([&](auto matched_value){
+              using T = std::decay_t<decltype(matched_value)>;
+              if constexpr (std::is_integral_v<T>) {
+                add_covered_case(switch_case.match, matched_value);
+              } else {
+                // Invalid (will error later)
+              }
+            }, switch_case.match->meta.const_value);
+          }
+          return match_type;
         }
-        return enum_type->get_self().class_ptr();
-      },
-      pattern(_) = [&]{
-        if (switch_case.bindings) {
-          throw_error_at(switch_case.match, "type does not support bindings");
-        }
-        auto match_type = analyse_expression(*switch_case.match, scope);
-        AstHelper::constant_expr_eval(*switch_case.match);
-        if (!switch_case.match->meta.is_const()) {
-          throw_error_at(switch_case.match, "not a constant expression");
-        }
-        return match_type;
+      );
+      // the matched types have to match the switched typed (so if valid this holds)
+      assumed_switched_type = match_type;
+      // Case type
+      infer->match_or_constrain_types_at(switch_case.match,
+        match_type, switched_type, "case type {} does not match switched type {}");
+    } else {
+      if (!default_switch_case) {
+        default_switch_case = &switch_case;
+      } else {
+        // TODO: Better error
+        throw_error_at(switch_expr.switched, "multiple default cases provided");
       }
-    );
-    // Case type
-    infer->match_or_constrain_types_at(switch_case.match,
-      match_type, switched_type, "case type {} does not match switched type {}");
+    }
 
     // Case body type
     auto body_type = analyse_block(switch_case.body, scope);
     infer->match_or_constrain_types_at(switch_case.body,
       body_type, switch_return, "[TODO] currently all cases must return void");
   }
+
+  // Check if switch is exhaustive
+  // How to handle -> error? or warn and make sure void switch?
+  switch_expr.default_case = default_switch_case;
+  switch_expr.exhaustive = default_switch_case != nullptr;
+  if (!switch_expr.exhaustive)
+  match(assumed_switched_type->v)(
+    pattern(as<EnumType>(arg)) = [&](auto& enum_type) {
+      if (enum_type.members.size() != covered_cases.size()) {
+        throw_error_at(switch_expr.switched, "not all enum members covered in switch");
+      }
+      switch_expr.exhaustive = true;
+    },
+    pattern(as<PrimativeType>(arg)) = [&](auto& primative) {
+      // Assume needs default?
+
+    },
+    pattern(_) = [&]{
+      // Invalid
+    }
+  );
 
   return switch_return;
 }

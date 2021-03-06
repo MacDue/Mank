@@ -467,8 +467,12 @@ void AstPrinter::print_expr(Ast_Path& path) {
 
 void AstPrinter::print_switch_cases(std::vector<SwitchCase>& cases) {
   for (auto& switch_case: cases) {
-    putf("- Case:");
-    self->print_expr(*switch_case.match);
+    if (!switch_case.is_default_case) {
+      putf("- Case:");
+      self->print_expr(*switch_case.match);
+    } else {
+      putf("- Default case:");
+    }
     if (switch_case.bindings) {
       putf("- Bindings:");
       self->print_binding(*switch_case.bindings);

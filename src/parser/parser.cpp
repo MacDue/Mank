@@ -1063,9 +1063,11 @@ Expr_Ptr Parser::parse_switch() {
   expect(TokenType::LEFT_BRACE);
   while (!peek(TokenType::RIGHT_BRACE)) {
     SwitchCase switch_case;
-    switch_case.match = this->parse_expression(Parser::NO_CALLS_OR_STRUCTS);
-    if (!peek(TokenType::FAT_ARROW)) {
-      switch_case.bindings = this->parse_binding();
+    if (!(switch_case.is_default_case = consume(TokenType::ELSE))) {
+      switch_case.match = this->parse_expression(Parser::NO_CALLS_OR_STRUCTS);
+      if (!peek(TokenType::FAT_ARROW)) {
+        switch_case.bindings = this->parse_binding();
+      }
     }
     expect(TokenType::FAT_ARROW);
     auto body = this->parse_block();

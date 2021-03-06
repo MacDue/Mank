@@ -2463,44 +2463,58 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope
 
   // default will be block after the switch (for now -- until implemented)
   llvm::BasicBlock* switch_end = llvm::BasicBlock::Create(llvm_context, "switch_end");
+  llvm::BasicBlock* switch_default = nullptr;
+  if (switch_expr.default_case) {
+    switch_default = llvm::BasicBlock::Create(llvm_context, "switch_default");
+  }
 
   auto case_count = switch_expr.cases.size();
   llvm::SwitchInst* switch_inst = ir_builder.CreateSwitch(
-    switch_index, switch_end, case_count);
+    switch_index, switch_default ? switch_default : switch_end,
+    case_count - (switch_default ? 1 : 0));
 
   llvm::PHINode* switch_value = nullptr;
 
   for (auto& switch_case: switch_expr.cases) {
-    llvm::BasicBlock* case_bb = llvm::BasicBlock::Create(
-      llvm_context, "switch_case", current_function);
+    llvm::BasicBlock* case_bb;
+    if (!switch_case.is_default_case) {
+      case_bb = llvm::BasicBlock::Create(
+        llvm_context, "switch_case", current_function);
+    } else {
+      case_bb = switch_default;
+      current_function->getBasicBlockList().push_back(switch_default);
+    }
+
     ir_builder.SetInsertPoint(case_bb);
 
-    llvm::ConstantInt* case_index;
-    if (auto enum_member = std::get_if<Ast_Path>(&switch_case.match->v)) {
-      // Enums
-      auto [enum_type, member_info] = AstHelper::path_as_enum_member(*enum_member, scope);
-      auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
-      case_index = llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal);
+    if (!switch_case.is_default_case) {
+      llvm::ConstantInt* case_index;
+      if (auto enum_member = std::get_if<Ast_Path>(&switch_case.match->v)) {
+        // Enums
+        auto [enum_type, member_info] = AstHelper::path_as_enum_member(*enum_member, scope);
+        auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
+        case_index = llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal);
 
-      // Handle enum data bindings
-      if (switch_case.bindings) {
-        llvm::StructType* member_variant_type =
-          static_cast<llvm::StructType*>(enum_llvm.variants.at(member_info->ordinal));
-        // FIXME: Will break if switched value is not an lvalue
-        llvm::Value* member_data = ir_builder.CreateBitCast(
-          enum_data, member_variant_type->getElementType(Builtin::Enum::DATA)->getPointerTo());
-        ExpressionExtract enum_data_extractor(this, member_data, switch_expr.switched->is_lvalue());
-        codegen_bindings(*switch_case.bindings, enum_data_extractor, scope);
+        // Handle enum data bindings
+        if (switch_case.bindings) {
+          llvm::StructType* member_variant_type =
+            static_cast<llvm::StructType*>(enum_llvm.variants.at(member_info->ordinal));
+          // FIXME: Will break if switched value is not an lvalue
+          llvm::Value* member_data = ir_builder.CreateBitCast(
+            enum_data, member_variant_type->getElementType(Builtin::Enum::DATA)->getPointerTo());
+          ExpressionExtract enum_data_extractor(this, member_data, switch_expr.switched->is_lvalue());
+          codegen_bindings(*switch_case.bindings, enum_data_extractor, scope);
+        }
+      } else {
+        case_index = llvm::cast<llvm::ConstantInt>
+          (codegen_constant_expression(*switch_case.match, scope));
       }
-    } else {
-      case_index = llvm::cast<llvm::ConstantInt>
-        (codegen_constant_expression(*switch_case.match, scope));
+      switch_inst->addCase(case_index, case_bb);
     }
 
     llvm::Value* case_value = codegen_expression(switch_case.body, scope);
     create_exit_br(switch_end);
 
-    switch_inst->addCase(case_index, case_bb);
     if (case_value && !void_return) {
       if (!switch_value) {
         switch_value = llvm::PHINode::Create(

@@ -97,11 +97,14 @@ struct SwitchCase {
   Expr_Ptr match;
   std::optional<Ast_Binding> bindings;
   Ast_Block body;
+  bool is_default_case = false; // match == nullptr
 };
 
 DEF_EXPR(Ast_Switch_Expr) {
   Expr_Ptr switched;
   std::vector<SwitchCase> cases;
+  bool exhaustive = false;
+  SwitchCase* default_case = nullptr;
 };
 
 // Just want something different to make errors easier

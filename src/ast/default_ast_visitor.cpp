@@ -255,7 +255,9 @@ void BaseAstVisitor::operator()(Ast_Switch_Expr& switch_expr) {
   visit(switch_expr);
   std::visit(recur, switch_expr.switched->v);
   for (auto& switch_case: switch_expr.cases) {
-    std::visit(recur, switch_case.match->v);
+    if (!switch_case.is_default_case) {
+      std::visit(recur, switch_case.match->v);
+    }
     recur(switch_case.body);
   }
   after(switch_expr);

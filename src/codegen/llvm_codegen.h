@@ -23,7 +23,9 @@
 
 // TODO: Replace with my own JIT
 // TODO: Don't jit here make a friend class
+#ifdef MANK_ENABLE_JIT
 #include "kaleidoscope_jit.h"
+#endif
 #pragma GCC diagnostic pop
 
 #include "ast/ast.h"
@@ -110,8 +112,10 @@ class LLVMCodeGen: public CodeGenerator {
   /* Codegen state */
   llvm::TargetMachine* target_machine = nullptr;
 
+#ifdef MANK_ENABLE_JIT
   std::optional<llvm::orc::VModuleKey> jit_module_handle;
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit_engine;
+#endif
 
   struct ClosureInfo {
     Scope* parent;
@@ -146,7 +150,9 @@ class LLVMCodeGen: public CodeGenerator {
 
   void create_exit_br(llvm::BasicBlock* target);
 
+#ifdef MANK_ENABLE_JIT
   llvm::orc::VModuleKey jit_current_module();
+#endif
 
   void create_module();
 

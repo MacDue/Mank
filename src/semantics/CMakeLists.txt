@@ -20,3 +20,5 @@ target_link_libraries(MankSemantics
   formatxx
   MankAST
 )
+
+set_target_properties(MankSemantics PROPERTIES COMPILE_FLAGS "-s USE_BOOST_HEADERS=1")

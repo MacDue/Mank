@@ -1,6 +1,7 @@
 #include <cassert>
 #include <iterator>
 #include <algorithm>
+#include <functional>
 
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
@@ -1917,7 +1918,7 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
   llvm_idx_list.reserve(idx_list.size() + 1);
   llvm_idx_list.push_back(create_llvm_idx(0)); // First base index for GEP
   std::transform(idx_list.begin(), idx_list.end(), std::back_inserter(llvm_idx_list),
-    std::bind1st(std::mem_fn(&LLVMCodeGen::create_llvm_idx), this));
+    std::bind(&LLVMCodeGen::create_llvm_idx, this, std::placeholders::_1));
 
   return llvm_idx_list;
 }
@@ -2535,6 +2536,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope
 
 /* JIT tools */
 
+#ifdef MANK_ENABLE_JIT
 llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {
   assert(llvm_module && "module to jit cannot be null!");
   if (!jit_engine) {
@@ -2546,12 +2548,14 @@ llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {
   llvm_module->setDataLayout(jit_engine->getTargetMachine().createDataLayout());
   return jit_engine->addModule(std::move(llvm_module));
 }
+#endif
 
 void* CodeGen::find_jit_symbol(std::string name) {
   return static_cast<LLVMCodeGen*>(impl.get())->jit_find_symbol(name);
 }
 
 void* LLVMCodeGen::jit_find_symbol(std::string name) {
+#ifdef MANK_ENABLE_JIT
   if (!jit_module_handle) {
     jit_module_handle = jit_current_module();
   }
@@ -2563,11 +2567,17 @@ void* LLVMCodeGen::jit_find_symbol(std::string name) {
   }
 
   return reinterpret_cast<void*>(symbol_adress.get());
+#else
+  assert(false && "mank jit support disabled!");
+  return nullptr;
+#endif
 }
 
 LLVMCodeGen::~LLVMCodeGen() {
   // Not sure it this is needed
+#ifdef MANK_ENABLE_JIT
   if (jit_engine && jit_module_handle) {
     jit_engine->removeModule(*jit_module_handle);
   }
+#endif
 }

@@ -1,10 +1,10 @@
-find_package(Boost COMPONENTS program_options REQUIRED)
+# find_package(Boost COMPONENTS program_options REQUIRED)
 
 include_directories(
   ../parser/include
   ../semantics/include
   ../codegen/include
-  ${Boost_INCLUDE_DIR}
+  # ${Boost_INCLUDE_DIR}
 )
 
 add_executable(mankc
@@ -15,7 +15,8 @@ target_link_libraries(mankc
   MankParser
   MankSemantics
   MankCodegen
-  ${Boost_LIBRARIES})
+  # ${Boost_LIBRARIES})
+)
 
 set_target_properties(mankc
   PROPERTIES

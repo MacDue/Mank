@@ -1,3 +1,4 @@
+#include <string>
 #include "ast/stmt.h"
 #include "ast/block.h"
 

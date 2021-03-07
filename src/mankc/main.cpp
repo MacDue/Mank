@@ -2,7 +2,7 @@
 #include <string>
 #include <optional>
 #include <iostream>
-#include <boost/program_options.hpp>
+// #include <boost/program_options.hpp>
 
 #include "parser/parser.h"
 #include "sema/semantics.h"
@@ -27,41 +27,44 @@ struct CompilerOptions {
 
 // See: https://valelab4.ucsf.edu/svn/3rdpartypublic/boost/doc/html/program_options/tutorial.html
 static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
-  namespace po = boost::program_options;
-  po::options_description desc("Mank compiler options");
+  // namespace po = boost::program_options;
+  // po::options_description desc("Mank compiler options");
   CompilerOptions selected_options;
-  desc.add_options()
-    ("help", "show help")
-    ("print-ast", "print AST of the input source")
-    ("check-sema", "check the semantics of the input")
-    ("codegen", "generate LLVM IR")
-    ("suppress-warnings", "don't output warnings")
-    ("tests", "build tests and test runner")
-    ("input-file", po::value<std::vector<std::string>>(), "input file");
+  // desc.add_options()
+  //   ("help", "show help")
+  //   ("print-ast", "print AST of the input source")
+  //   ("check-sema", "check the semantics of the input")
+  //   ("codegen", "generate LLVM IR")
+  //   ("suppress-warnings", "don't output warnings")
+  //   ("tests", "build tests and test runner")
+  //   ("input-file", po::value<std::vector<std::string>>(), "input file");
 
-  po::positional_options_description p;
-  p.add("input-file", -1);
+  // po::positional_options_description p;
+  // p.add("input-file", -1);
 
-  po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv)
-            .options(desc).positional(p).run(), vm);
-  po::notify(vm);
+  // po::variables_map vm;
+  // po::store(po::command_line_parser(argc, argv)
+  //           .options(desc).positional(p).run(), vm);
+  // po::notify(vm);
 
-  if (vm.count("help")) {
-    std::cout << desc << '\n';
-    selected_options.show_help = true;
-    return selected_options;
-  }
+  // if (vm.count("help")) {
+  //   std::cout << desc << '\n';
+  //   selected_options.show_help = true;
+  //   return selected_options;
+  // }
 
-  selected_options.print_ast = ARG_GIVEN("print-ast");
-  selected_options.code_gen = ARG_GIVEN("codegen");
-  selected_options.check_sema = selected_options.code_gen || ARG_GIVEN("check-sema");
-  selected_options.suppress_warnings = ARG_GIVEN("suppress-warnings");
-  selected_options.build_tests = ARG_GIVEN("tests");
+  // selected_options.print_ast = ARG_GIVEN("print-ast");
+  // selected_options.code_gen = ARG_GIVEN("codegen");
+  // selected_options.check_sema = selected_options.code_gen || ARG_GIVEN("check-sema");
+  // selected_options.suppress_warnings = ARG_GIVEN("suppress-warnings");
+  // selected_options.build_tests = ARG_GIVEN("tests");
 
-  if (vm.count("input-file")) {
-    selected_options.input_files = vm["input-file"].as<std::vector<std::string>>();
-  }
+  // if (vm.count("input-file")) {
+  //   selected_options.input_files = vm["input-file"].as<std::vector<std::string>>();
+  // }
+
+  selected_options.print_ast = true;
+  selected_options.code_gen = true;
 
   return selected_options;
 }

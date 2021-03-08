@@ -4,7 +4,10 @@ add_library(MankCodegen
   mangle.cpp
 )
 
-set(LLVM_DIR "/usr/local/lib/llvm-10-wasm/lib/cmake/llvm")
+if (WASM_BUILD)
+  # A specially built wasm version of LLVM 10
+  set(LLVM_DIR "/usr/local/lib/llvm-10-wasm/lib/cmake/llvm")
+endif()
 
 find_package(LLVM REQUIRED CONFIG)
 
@@ -19,6 +22,10 @@ target_link_libraries(MankCodegen
   mpark_patterns
   MankParser
   formatxx
-  ${llvm_libs}
-  # LLVM-10
 )
+
+if (WASM_BUILD)
+  target_link_libraries(MankCodegen ${llvm_libs})
+else()
+  target_link_libraries(MankCodegen LLVM-10)
+endif()

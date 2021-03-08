@@ -21,4 +21,6 @@ target_link_libraries(MankSemantics
   MankAST
 )
 
-set_target_properties(MankSemantics PROPERTIES COMPILE_FLAGS "-s USE_BOOST_HEADERS=1")
+if (WASM_BUILD)
+  set_target_properties(MankSemantics PROPERTIES COMPILE_FLAGS "-s USE_BOOST_HEADERS=1")
+endif()

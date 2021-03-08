@@ -37,10 +37,10 @@ void Lexer::load_file(std::string const & file_path) {
   this->source = read_entire_file(file_path);
 }
 
-void Lexer::set_input_to_string(std::string source) {
+void Lexer::set_input_to_string(std::string source, std::string name) {
   this->reset();
   this->source = source;
-  this->source_name = "<string>";
+  this->source_name = name.empty() ? "<string>" : name;
 }
 
 /* Token actions */
@@ -315,7 +315,7 @@ bool Lexer::match_string_literal() {
 
     int next_char;
     while ((next_char = this->peek_next_char() != '"')) {
-      if (next_char == EOF) {
+      if (next_char == EOF || next_char == '\n') {
         // TODO: Unclosed string literal
         this->last_token.type = TokenType::INVALID;
         break;

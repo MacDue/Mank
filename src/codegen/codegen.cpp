@@ -39,8 +39,11 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
     this->codegen_function_body(*func);
   }
 
+#ifdef MANK_CODEGEN_PRINT_IR
+  // Lazy hack I use for my CLI tools
   llvm_module->print(llvm::outs(), nullptr);
   llvm::outs() << ";--fin\n";
+#endif
 }
 
 void LLVMCodeGen::create_module() {
@@ -68,6 +71,13 @@ void LLVMCodeGen::create_module() {
   // this->llvm_module->setTargetTriple(target_triple);
 
   /* TODO: set up optimizations */
+}
+
+std::string LLVMCodeGen::get_module_as_string() const {
+  std::string module_ir;
+  llvm::raw_string_ostream ss(module_ir);
+  this->llvm_module->print(ss, nullptr);
+  return module_ir;
 }
 
 llvm::GlobalVariable* LLVMCodeGen::create_global(
@@ -2552,6 +2562,10 @@ llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {
 
 void* CodeGen::find_jit_symbol(std::string name) {
   return static_cast<LLVMCodeGen*>(impl.get())->jit_find_symbol(name);
+}
+
+std::string CodeGen::get_generated_code() const {
+  return static_cast<LLVMCodeGen*>(impl.get())->get_module_as_string();
 }
 
 void* LLVMCodeGen::jit_find_symbol(std::string name) {

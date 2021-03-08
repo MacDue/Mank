@@ -2,7 +2,6 @@
 #include <string>
 #include <optional>
 #include <iostream>
-// #include <boost/program_options.hpp>
 
 #include "parser/parser.h"
 #include "sema/semantics.h"
@@ -23,51 +22,51 @@ struct CompilerOptions {
     suppress_warnings:1 = false;
 };
 
+#ifndef __EMSCRIPTEN__
+#include <boost/program_options.hpp>
 #define ARG_GIVEN(name) vm.count(name)
 
 // See: https://valelab4.ucsf.edu/svn/3rdpartypublic/boost/doc/html/program_options/tutorial.html
 static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
-  // namespace po = boost::program_options;
-  // po::options_description desc("Mank compiler options");
+  namespace po = boost::program_options;
+  po::options_description desc("Mank compiler options");
   CompilerOptions selected_options;
-  // desc.add_options()
-  //   ("help", "show help")
-  //   ("print-ast", "print AST of the input source")
-  //   ("check-sema", "check the semantics of the input")
-  //   ("codegen", "generate LLVM IR")
-  //   ("suppress-warnings", "don't output warnings")
-  //   ("tests", "build tests and test runner")
-  //   ("input-file", po::value<std::vector<std::string>>(), "input file");
+  desc.add_options()
+    ("help", "show help")
+    ("print-ast", "print AST of the input source")
+    ("check-sema", "check the semantics of the input")
+    ("codegen", "generate LLVM IR")
+    ("suppress-warnings", "don't output warnings")
+    ("tests", "build tests and test runner")
+    ("input-file", po::value<std::vector<std::string>>(), "input file");
 
-  // po::positional_options_description p;
-  // p.add("input-file", -1);
+  po::positional_options_description p;
+  p.add("input-file", -1);
 
-  // po::variables_map vm;
-  // po::store(po::command_line_parser(argc, argv)
-  //           .options(desc).positional(p).run(), vm);
-  // po::notify(vm);
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv)
+            .options(desc).positional(p).run(), vm);
+  po::notify(vm);
 
-  // if (vm.count("help")) {
-  //   std::cout << desc << '\n';
-  //   selected_options.show_help = true;
-  //   return selected_options;
-  // }
+  if (vm.count("help")) {
+    std::cout << desc << '\n';
+    selected_options.show_help = true;
+    return selected_options;
+  }
 
-  // selected_options.print_ast = ARG_GIVEN("print-ast");
-  // selected_options.code_gen = ARG_GIVEN("codegen");
-  // selected_options.check_sema = selected_options.code_gen || ARG_GIVEN("check-sema");
-  // selected_options.suppress_warnings = ARG_GIVEN("suppress-warnings");
-  // selected_options.build_tests = ARG_GIVEN("tests");
+  selected_options.print_ast = ARG_GIVEN("print-ast");
+  selected_options.code_gen = ARG_GIVEN("codegen");
+  selected_options.check_sema = selected_options.code_gen || ARG_GIVEN("check-sema");
+  selected_options.suppress_warnings = ARG_GIVEN("suppress-warnings");
+  selected_options.build_tests = ARG_GIVEN("tests");
 
-  // if (vm.count("input-file")) {
-  //   selected_options.input_files = vm["input-file"].as<std::vector<std::string>>();
-  // }
-
-  selected_options.print_ast = true;
-  selected_options.code_gen = true;
+  if (vm.count("input-file")) {
+    selected_options.input_files = vm["input-file"].as<std::vector<std::string>>();
+  }
 
   return selected_options;
 }
+#endif
 
 static void print_ast(Ast_File& ast) {
   AstPrinter ast_printer(std::cout);
@@ -280,6 +279,7 @@ static bool compile(std::string program, CompilerOptions options, bool path = tr
   return true;
 }
 
+#ifndef __EMSCRIPTEN__
 int main(int argc, char* argv[]) {
   auto selected_options = parse_command_line_args(argc, argv);
   if (selected_options.show_help) {
@@ -308,3 +308,93 @@ int main(int argc, char* argv[]) {
   }
   return 0;
 }
+#else
+/*
+  Very simple bindings for a basic web UI
+*/
+
+#include <string>
+#include <sstream>
+#include <emscripten/bind.h>
+
+using namespace emscripten;
+
+class CompilerInterface {
+  Lexer lexer;
+  Parser parser{lexer};
+  Semantics sema;
+  std::optional<CompilerError> last_error;
+  std::optional<Ast_File> parsed_file;
+public:
+  CompilerInterface(std::string source) {
+    lexer.set_input_to_string(source, "explorer.mank");
+    try {
+      parsed_file.emplace(parser.parse_file());
+    } catch (CompilerError& parse_error) {
+      last_error = parse_error;
+    }
+  }
+  void check_semantics() {
+    try {
+      sema.set_source(lexer);
+      sema.analyse_file(*parsed_file);
+    } catch (CompilerError& sema_error) {
+      last_error = sema_error;
+    }
+  }
+
+  bool has_errors() const {
+    return last_error.has_value();
+  }
+
+  std::vector<std::string> get_warnings() {
+    std::stringstream ss;
+    std::vector<std::string> warnings;
+    warnings.reserve(sema.get_warnings().size());
+    for (auto& warning: sema.get_warnings()) {
+      warning.source_lexer = &lexer;
+      ss << warning;
+      warnings.push_back(ss.str());
+      ss.clear();
+    }
+    return warnings;
+  }
+
+  std::string get_error_message() {
+    std::stringstream ss;
+    last_error->set_lexing_context(lexer);
+    ss << *last_error;
+    return ss.str();
+  }
+
+  std::string get_ast_as_string() {
+    std::stringstream ss;
+    AstPrinter ast_printer(ss);
+    ast_printer.print_file(*parsed_file);
+    return ss.str();
+  }
+
+  std::string to_llvm_ir() {
+    try {
+      CodeGen codegen(*parsed_file);
+      return codegen.get_generated_code();
+    } catch (CompilerError& codegen_error) {
+      last_error = codegen_error;
+    }
+    return ""; // very unlikely
+  }
+};
+
+EMSCRIPTEN_BINDINGS(compiler_interface_bindings) {
+  class_<CompilerInterface>("CompilerInterface")
+    .constructor<std::string>()
+    .function("checkSemantics", &CompilerInterface::check_semantics)
+    .function("hasErrors", &CompilerInterface::has_errors)
+    .function("getWarnings", &CompilerInterface::get_warnings)
+    .function("getErrorMessage", &CompilerInterface::get_error_message)
+    .function("getAstAsString", &CompilerInterface::get_ast_as_string)
+    .function("toLlvmIR", &CompilerInterface::to_llvm_ir);
+    register_vector<std::string>("Vector<String>");
+}
+
+#endif

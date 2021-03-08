@@ -375,6 +375,7 @@ public:
   LLVMCodeGen(Ast_File& file_ast);
   /* JIT tools */
   void* jit_find_symbol(std::string name);
+  std::string get_module_as_string() const;
 
   ~LLVMCodeGen();
 };

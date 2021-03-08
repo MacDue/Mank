@@ -15,6 +15,7 @@ public:
   CodeGen(Ast_File& file_ast);
 
   void emit_object(std::string const & path);
+  std::string get_generated_code() const;
 
   template<typename TFunc>
   TFunc* extract_function_from_jit(std::string name, bool mank = true) {

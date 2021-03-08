@@ -314,7 +314,7 @@ bool Lexer::match_string_literal() {
     this->last_token.literal_type = PrimativeType::STRING;
 
     int next_char;
-    while ((next_char = this->peek_next_char() != '"')) {
+    while ((next_char = this->peek_next_char()) != '"') {
       if (next_char == EOF || next_char == '\n') {
         // TODO: Unclosed string literal
         this->last_token.type = TokenType::INVALID;
@@ -324,8 +324,9 @@ bool Lexer::match_string_literal() {
         this->consume_char();
       }
     }
-
-    this->consume_char();
+    if (this->last_token.type != TokenType::INVALID) {
+      this->consume_char();
+    }
     return true;
   } else {
     return false;

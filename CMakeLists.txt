@@ -6,12 +6,21 @@ cmake_minimum_required (VERSION 3.6)
 project(Mank)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wpessimizing-move -Wno-init-list-lifetime")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wpessimizing-move -Wno-init-list-lifetime -fexceptions")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -export-dynamic")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+option(WASM_BUILD "Enable WASM/Emscripten specific configurations" OFF)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto -fexceptions")
+endif()
+
+if (WASM_BUILD)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fexceptions")
+else()
+  # The wasm build can't do JIT
+  add_compile_definitions(MANK_ENABLE_JIT MANK_CODEGEN_PRINT_IR)
 endif()
 
 include_directories(

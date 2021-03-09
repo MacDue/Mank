@@ -38,6 +38,10 @@ set_target_properties(mankc_web
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
   LINK_FLAGS "--bind -s MODULARIZE=1 -s 'EXPORT_NAME=\"Mankc\"' --closure 0")
 
+add_custom_command(TARGET mankc_web
+  POST_BUILD
+  COMMAND ${CMAKE_SOURCE_DIR}/tools/fix_mankc_web.py ${PROJECT_BINARY_DIR}/mankc_web.js)
+
 set_target_properties(mankc
   PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")

@@ -348,14 +348,13 @@ public:
   }
 
   std::vector<std::string> get_warnings() {
-    std::stringstream ss;
     std::vector<std::string> warnings;
     warnings.reserve(sema.get_warnings().size());
     for (auto& warning: sema.get_warnings()) {
+      std::stringstream ss;
       warning.source_lexer = &lexer;
       ss << warning;
       warnings.push_back(ss.str());
-      ss.clear();
     }
     return warnings;
   }

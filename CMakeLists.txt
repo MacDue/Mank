@@ -8,9 +8,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wpessimizing-move -Wno-init-list-lifetime -fexceptions")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -export-dynamic")
+
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+option(ENABLE_UBSAN "Enable undefined behaviour sanitizer" OFF)
 option(WASM_BUILD "Enable WASM/Emscripten specific configurations" OFF)
+
+if (ENABLE_UBSAN)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
+endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto -fexceptions")

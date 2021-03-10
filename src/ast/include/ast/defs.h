@@ -32,3 +32,5 @@ struct Ast_Return_Statement;
 struct Type;
 struct UncheckedType;
 struct PrimativeType;
+
+using uint = unsigned int;

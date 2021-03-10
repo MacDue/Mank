@@ -2,6 +2,7 @@
 
 #include "ast/expr.h"
 #include "ast/types.h"
+#include "ast/context_full.h"
 #include "ast/primative_types.h"
 
 Type_Ptr PrimativeType::get(PrimativeType::Tag tag) {

@@ -1126,6 +1126,9 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
   // How to handle -> error? or warn and make sure void switch?
   switch_expr.default_case = default_switch_case;
   switch_expr.exhaustive = default_switch_case != nullptr;
+  if (!switch_expr.exhaustive && !assumed_switched_type) {
+    throw_error_at(switch_expr.switched, "empty switch");
+  }
   if (!switch_expr.exhaustive)
   match(assumed_switched_type->v)(
     pattern(as<EnumType>(arg)) = [&](auto& enum_type) {

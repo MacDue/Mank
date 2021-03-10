@@ -2,7 +2,6 @@
 #include <string>
 #include <optional>
 #include <iostream>
-#include <boost/program_options.hpp>
 
 #include "parser/parser.h"
 #include "sema/semantics.h"
@@ -23,6 +22,8 @@ struct CompilerOptions {
     suppress_warnings:1 = false;
 };
 
+#ifndef __EMSCRIPTEN__
+#include <boost/program_options.hpp>
 #define ARG_GIVEN(name) vm.count(name)
 
 // See: https://valelab4.ucsf.edu/svn/3rdpartypublic/boost/doc/html/program_options/tutorial.html
@@ -65,6 +66,7 @@ static CompilerOptions parse_command_line_args(int argc, char* argv[]) {
 
   return selected_options;
 }
+#endif
 
 static void print_ast(Ast_File& ast) {
   AstPrinter ast_printer(std::cout);
@@ -277,6 +279,7 @@ static bool compile(std::string program, CompilerOptions options, bool path = tr
   return true;
 }
 
+#ifndef __EMSCRIPTEN__
 int main(int argc, char* argv[]) {
   auto selected_options = parse_command_line_args(argc, argv);
   if (selected_options.show_help) {
@@ -305,3 +308,92 @@ int main(int argc, char* argv[]) {
   }
   return 0;
 }
+#else
+/*
+  Very simple bindings for a basic web UI
+*/
+
+#include <string>
+#include <sstream>
+#include <emscripten/bind.h>
+
+using namespace emscripten;
+
+class CompilerInterface {
+  Lexer lexer;
+  Parser parser{lexer};
+  Semantics sema;
+  std::optional<CompilerError> last_error;
+  std::optional<Ast_File> parsed_file;
+public:
+  CompilerInterface(std::string source) {
+    lexer.set_input_to_string(source, "explorer.mank");
+    try {
+      parsed_file.emplace(parser.parse_file());
+    } catch (CompilerError& parse_error) {
+      last_error = parse_error;
+    }
+  }
+  void check_semantics() {
+    try {
+      sema.set_source(lexer);
+      sema.analyse_file(*parsed_file);
+    } catch (CompilerError& sema_error) {
+      last_error = sema_error;
+    }
+  }
+
+  bool has_errors() const {
+    return last_error.has_value();
+  }
+
+  std::vector<std::string> get_warnings() {
+    std::vector<std::string> warnings;
+    warnings.reserve(sema.get_warnings().size());
+    for (auto& warning: sema.get_warnings()) {
+      std::stringstream ss;
+      warning.source_lexer = &lexer;
+      ss << warning;
+      warnings.push_back(ss.str());
+    }
+    return warnings;
+  }
+
+  std::string get_error_message() {
+    std::stringstream ss;
+    last_error->set_lexing_context(lexer);
+    ss << *last_error;
+    return ss.str();
+  }
+
+  std::string get_ast_as_string() {
+    std::stringstream ss;
+    AstPrinter ast_printer(ss);
+    ast_printer.print_file(*parsed_file);
+    return ss.str();
+  }
+
+  std::string to_llvm_ir() {
+    try {
+      CodeGen codegen(*parsed_file);
+      return codegen.get_generated_code();
+    } catch (CompilerError& codegen_error) {
+      last_error = codegen_error;
+    }
+    return ""; // very unlikely
+  }
+};
+
+EMSCRIPTEN_BINDINGS(compiler_interface_bindings) {
+  class_<CompilerInterface>("CompilerInterface")
+    .constructor<std::string>()
+    .function("checkSemantics", &CompilerInterface::check_semantics)
+    .function("hasErrors", &CompilerInterface::has_errors)
+    .function("getWarnings", &CompilerInterface::get_warnings)
+    .function("getErrorMessage", &CompilerInterface::get_error_message)
+    .function("getAstAsString", &CompilerInterface::get_ast_as_string)
+    .function("toLlvmIR", &CompilerInterface::to_llvm_ir);
+    register_vector<std::string>("Vector<String>");
+}
+
+#endif

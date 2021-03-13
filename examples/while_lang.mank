@@ -51,115 +51,117 @@ fun eval_program: ProgramState (S: StmtPtr, state: ProgramState, show_steps: boo
 fun eval_statement: (StmtPtr, ProgramState) (S: StmtPtr, state: ProgramState) {
   switch S.v[0] {
     Stmt::Assign {.var, .right} => {
-      return (null_stmt_ptr(), add_or_update_var(state, var, A(right, state)));
+      (null_stmt_ptr(), add_or_update_var(state, var, A(right, state)))
     },
     Stmt::Concat {.left, .right} => {
       bind (new_left, new_state) = eval_statement(left, state);
       if is_null_stmt(new_left) {
-        return (right, new_state);
+        (right, new_state)
+      } else {
+        (to_stmt_ptr(Stmt::Concat{.left = new_left, .right = right}), new_state)
       }
-      return (to_stmt_ptr(Stmt::Concat{.left = new_left, .right = right}), new_state);
     },
     Stmt::If {.cond, .then_branch, .else_branch} => {
       if as_bool(B(cond, state)) {
-        return (then_branch, state);
+        (then_branch, state)
+      } else {
+        (else_branch, state)
       }
-      return (else_branch, state);
     },
     Stmt::While { .cond, .body } => {
-      return (to_stmt_ptr(
+      (to_stmt_ptr(
         Stmt::If { .cond = cond,
           .then_branch = to_stmt_ptr(Stmt::Concat{.left = body, .right = S}),
           .else_branch = to_stmt_ptr(Stmt::Skip)
         }
-      ), state);
+      ), state)
     },
     Stmt::Skip => {
-      return (null_stmt_ptr(), state);
+      (null_stmt_ptr(), state)
     },
-    else => { fail("eval statement failed!") }
-  };
-  (null_stmt_ptr(), state)
+    else => {
+      fail("eval statement failed!");
+      (null_stmt_ptr(), state)
+    }
+  }
 }
 
 fun A: ProgramValue (aexpr: ExprPtr, state: ProgramState) {
   switch aexpr.v[0] {
     Expr::Number(num) => {
-      return ProgramValue::Number(num);
+      ProgramValue::Number(num)
     },
     Expr::Var(var) => {
-      return get_var(state, var);
+      get_var(state, var)
     },
     Expr::BinaryExpr{.left, .op, .right} => {
       left_value := as_number(A(left, state));
       right_value := as_number(A(right, state));
       switch op {
         TokenType::PLUS => {
-          return ProgramValue::Number(left_value + right_value);
+          ProgramValue::Number(left_value + right_value)
         },
         TokenType::MINUS => {
-          return ProgramValue::Number(left_value - right_value);
+          ProgramValue::Number(left_value - right_value)
         },
         TokenType::TIMES => {
-          return ProgramValue::Number(left_value * right_value);
+          ProgramValue::Number(left_value * right_value)
         },
         TokenType::DIVIDE => {
-          return ProgramValue::Number(left_value / right_value);
+          ProgramValue::Number(left_value / right_value)
         },
         TokenType::MODULO => {
-          return ProgramValue::Number(left_value % right_value);
+          ProgramValue::Number(left_value % right_value)
         },
         TokenType::LE => {
-          return ProgramValue::Bool(left_value <= right_value);
+          ProgramValue::Bool(left_value <= right_value)
         },
         TokenType::LT => {
-          return ProgramValue::Bool(left_value < right_value);
+          ProgramValue::Bool(left_value < right_value)
         },
         TokenType::GE => {
-          return ProgramValue::Bool(left_value >= right_value);
+          ProgramValue::Bool(left_value >= right_value)
         },
         TokenType::GT => {
-          return ProgramValue::Bool(left_value > right_value);
+          ProgramValue::Bool(left_value > right_value)
         },
         TokenType::DOUBLE_EQUAL => {
-          return ProgramValue::Bool(left_value == right_value);
+          ProgramValue::Bool(left_value == right_value)
         },
         TokenType::NOT_EQUAL => {
-          return ProgramValue::Bool(left_value != right_value);
+          ProgramValue::Bool(left_value != right_value)
         },
-        else => { fail("invalid binary operator") }
+        else => { fail("invalid binary operator"); ProgramValue::None }
       }
     },
-    else => { fail("aexpr eval failed!") }
+    else => { fail("aexpr eval failed!"); ProgramValue::None }
   }
-  ProgramValue::Number(-1)
 }
 
 fun B: ProgramValue (bexpr: ExprPtr, state: ProgramState) {
   switch bexpr.v[0] {
-    Expr::Bool(boolean) => { return ProgramValue::Bool(boolean); },
+    Expr::Bool(boolean) => { ProgramValue::Bool(boolean) },
     Expr::UnaryExpr {.operand, .op} => {
       assert!(op.tag == TokenType::NOT.tag);
       operand_value := as_bool(B(operand, state));
-      return ProgramValue::Bool(¬operand_value);
+      ProgramValue::Bool(¬operand_value)
     },
     Expr::BinaryExpr {.left, .op, .right} => {
       if op.tag == TokenType::OR.tag || op.tag == TokenType::AND.tag {
         left_value := as_bool(B(left, state));
         right_value := as_bool(B(right, state));
-        return ProgramValue::Bool(
+        ProgramValue::Bool(
           if op.tag == TokenType::OR.tag {
             left_value || right_value
           } else {
             left_value && right_value
-          });
+          })
       } else {
-        return ProgramValue::Bool(as_bool(A(bexpr, state)));
+        ProgramValue::Bool(as_bool(A(bexpr, state)))
       }
     },
-    else => { fail("bexpr eval failed!") }
+    else => { fail("bexpr eval failed!"); ProgramValue::None }
   }
-  ProgramValue::Bool(false)
 }
 
 # State/scope
@@ -210,15 +212,15 @@ fun lookup_var: i32 (state: ref ProgramState, name: str) {
 
 fun as_number: i32 (val: ProgramValue) {
   switch val {
-    ProgramValue::Number(num) => { return num; },
-    else => { fail("not a number"); return - 1; }
+    ProgramValue::Number(num) => { num },
+    else => { fail("not a number"); -1 }
   }
 }
 
 fun as_bool: bool (val: ProgramValue) {
   switch val {
-    ProgramValue::Bool(boolean) => { return boolean; },
-    else => { fail("not a bool"); return false; }
+    ProgramValue::Bool(boolean) => { boolean },
+    else => { fail("not a bool"); false }
   }
 }
 
@@ -237,12 +239,12 @@ proc print_program_state(state: ProgramState) {
 fun program_value_to_str: str (val: ProgramValue) {
   switch val {
     ProgramValue::Number(num) => {
-      return int_to_string(num);
+      int_to_string(num)
     },
     ProgramValue::Bool(boolean) => {
-      return if boolean { "true" } else { "false" };
+      if boolean { "true" } else { "false" }
     },
-    ProgramValue::None => { return "None"; }
+    ProgramValue::None => { "None" }
   }
 }
 
@@ -361,23 +363,25 @@ fun parser_parse_stmt: StmtPtr (self: ref Parser, prev: StmtPtr) {
   next_token := lexer_peek_next_token(self.lexer).type;
   switch next_token {
     TokenType::SKIP => {
-      return parser_parse_skip(self);
+      parser_parse_skip(self)
     },
     TokenType::SEMICOLON => {
-      return parser_parse_concat(self, prev);
+      parser_parse_concat(self, prev)
     },
     TokenType::IF => {
-      return parser_parse_if(self);
+      parser_parse_if(self)
     },
     TokenType::WHILE => {
-      return parser_parse_while(self);
+      parser_parse_while(self)
     },
     TokenType::VAR => {
-      return parser_parse_ass(self);
+      parser_parse_ass(self)
     },
-    else => { fail("syntax error :- invalid statement") }
+    else => {
+      fail("syntax error :- invalid statement");
+      null_stmt_ptr()
+    }
   }
-  null_stmt_ptr()
 }
 
 fun parser_parse_skip: StmtPtr (self: ref Parser) {
@@ -431,11 +435,10 @@ fun parser_parse_ass: StmtPtr (self: ref Parser) {
     TokenData::Var(var) => {
       parser_expect(self, TokenType::ASS);
       rhs := parser_parse_expr(self);
-      return to_stmt_ptr(Stmt::Assign { .var = var, .right = rhs });
+      to_stmt_ptr(Stmt::Assign { .var = var, .right = rhs })
     },
-    else => { fail("ahhh! idk") }
+    else => { fail("ahhh! idk"); null_stmt_ptr() }
   }
-  null_stmt_ptr()
 }
 
 # Exprs
@@ -811,96 +814,40 @@ fun is_null_stmt: bool (ptr: StmtPtr) {
 
 fun get_operator_precedence: i32 (op: TokenType) {
   switch op {
-    TokenType::PLUS => {
-      return 10;
-    },
-    TokenType::MINUS => {
-      return 10;
-    },
-    TokenType::TIMES => {
-      return 20;
-    },
-    TokenType::DIVIDE => {
-      return 20;
-    },
-    TokenType::MODULO => {
-      return 20;
-    },
-    TokenType::LE => {
-      return 6;
-    },
-    TokenType::LT => {
-      return 6;
-    },
-    TokenType::GE => {
-      return 6;
-    },
-    TokenType::GT => {
-      return 6;
-    },
-    TokenType::EQUAL => {
-      return 7;
-    },
-    TokenType::DOUBLE_EQUAL => {
-      return 7;
-    },
-    TokenType::NOT_EQUAL => {
-      return 7;
-    },
-    TokenType::AND => {
-      return 4;
-    },
-    TokenType::OR => {
-      return 3;
-    },
-    else => { return -1; }
-  };
+    TokenType::PLUS         => { 10 },
+    TokenType::MINUS        => { 10 },
+    TokenType::TIMES        => { 20 },
+    TokenType::DIVIDE       => { 20 },
+    TokenType::MODULO       => { 20 },
+    TokenType::LE           => { 6 },
+    TokenType::LT           => { 6 },
+    TokenType::GE           => { 6 },
+    TokenType::GT           => { 6 },
+    TokenType::EQUAL        => { 7 },
+    TokenType::DOUBLE_EQUAL => { 7 },
+    TokenType::NOT_EQUAL    => { 7 },
+    TokenType::AND          => { 4 },
+    TokenType::OR           => { 3 },
+    else                    => { -1 }
+  }
 }
 
 fun get_operator_str: str (op: TokenType) {
   switch op {
-    TokenType::PLUS => {
-      return "+";
-    },
-    TokenType::MINUS => {
-      return "-";
-    },
-    TokenType::TIMES => {
-      return "*";
-    },
-    TokenType::DIVIDE => {
-      return "/";
-    },
-    TokenType::MODULO => {
-      return "%";
-    },
-    TokenType::LE => {
-      return "<=";
-    },
-    TokenType::LT => {
-      return "<";
-    },
-    TokenType::GE => {
-      return ">=";
-    },
-    TokenType::GT => {
-      return ">";
-    },
-    TokenType::EQUAL => {
-      return "=";
-    },
-    TokenType::DOUBLE_EQUAL => {
-      return "==";
-    },
-    TokenType::NOT_EQUAL => {
-      return "!=";
-    },
-    TokenType::AND => {
-      return "&&";
-    },
-    TokenType::OR => {
-      return "||";
-    },
-    else => { return "???"; }
+    TokenType::PLUS         => { "+" },
+    TokenType::MINUS        => { "-" },
+    TokenType::TIMES        => { "*" },
+    TokenType::DIVIDE       => { "/" },
+    TokenType::MODULO       => { "%" },
+    TokenType::LE           => { "<=" },
+    TokenType::LT           => { "<"  },
+    TokenType::GE           => { ">=" },
+    TokenType::GT           => { ">"  },
+    TokenType::EQUAL        => { "="  },
+    TokenType::DOUBLE_EQUAL => { "==" },
+    TokenType::NOT_EQUAL    => { "!=" },
+    TokenType::AND          => { "&&" },
+    TokenType::OR           => { "||" },
+    else                    => { "???" }
   }
 }

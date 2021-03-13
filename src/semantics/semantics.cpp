@@ -1141,6 +1141,7 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
       switch_expr.exhaustive = true;
     },
     pattern(as<PrimativeType>(arg)) = [&](auto& primative) {
+      // TODO:
       // Assume needs default? -- only makes for char to be exhaustive (super rare)
     },
     pattern(_) = [&]{
@@ -1153,9 +1154,9 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
   }
 
   if (!switch_expr.exhaustive) {
-    infer->match_or_constrain_types_at(switch_expr.switched,
-      Type::void_ty(), switch_return,
-      "non-exhaustive switch must evaluate to {} (is {})");
+    infer->match_or_constrain_types_at(
+      switch_expr.switched, switch_return, Type::void_ty(),
+      "non-exhaustive switch cannot evaluate to {}");
     return Type::void_ty();
   }
 

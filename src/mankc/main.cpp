@@ -334,6 +334,7 @@ public:
       last_error = parse_error;
     }
   }
+
   void check_semantics() {
     try {
       sema.set_source(lexer);

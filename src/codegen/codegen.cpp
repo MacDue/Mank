@@ -2474,15 +2474,20 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope
 
   // default will be block after the switch (for now -- until implemented)
   llvm::BasicBlock* switch_end = llvm::BasicBlock::Create(llvm_context, "switch_end");
+  bool generate_unreachable_default = false;
   llvm::BasicBlock* switch_default = nullptr;
   if (switch_expr.default_case) {
     switch_default = llvm::BasicBlock::Create(llvm_context, "switch_default");
+  } else {
+    switch_default = llvm::BasicBlock::Create(
+      llvm_context, "exhaustive_switch_default");
+    generate_unreachable_default = true;
   }
 
   auto case_count = switch_expr.cases.size();
   llvm::SwitchInst* switch_inst = ir_builder.CreateSwitch(
-    switch_index, switch_default ? switch_default : switch_end,
-    case_count - (switch_default ? 1 : 0));
+    switch_index, switch_default,
+    case_count - (switch_expr.default_case ? 1 : 0));
 
   llvm::PHINode* switch_value = nullptr;
 
@@ -2531,8 +2536,16 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope
         switch_value = llvm::PHINode::Create(
           map_type_to_llvm(switch_expr.get_type().get(), scope), case_count);
       }
+      case_bb = ir_builder.GetInsertBlock();
       switch_value->addIncoming(case_value, case_bb);
     }
+  }
+
+  if (generate_unreachable_default) {
+    // For exhaustive switches that we know don't need a default
+    current_function->getBasicBlockList().push_back(switch_default);
+    ir_builder.SetInsertPoint(switch_default);
+    ir_builder.CreateUnreachable();
   }
 
   current_function->getBasicBlockList().push_back(switch_end);

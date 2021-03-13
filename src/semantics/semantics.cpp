@@ -1062,10 +1062,9 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
   };
 
   SwitchCase* default_switch_case = nullptr;
-  Type_Ptr switch_return = Type::void_ty(); // Just void for now.
-  Type_Ptr assumed_switched_type; //
+  Type_Ptr switch_return;
+  Type_Ptr assumed_switched_type;
   for (auto& switch_case: switch_expr.cases) {
-    // auto match_type = analyse_expression(switch_case.match, scope);
     if (!switch_case.is_default_case) {
       auto match_type = match(switch_case.match->v)(
         pattern(as<Ast_Path>(arg)) = [&](auto& enum_path){
@@ -1118,8 +1117,12 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
 
     // Case body type
     auto body_type = analyse_block(switch_case.body, scope);
-    infer->match_or_constrain_types_at(switch_case.body,
-      body_type, switch_return, "[TODO] currently all cases must return void");
+    if (!switch_return) {
+      switch_return = body_type;
+    } else {
+      infer->match_or_constrain_types_at(switch_case.body,
+        body_type, switch_return, "all switch cases must have the same type");
+    }
   }
 
   // Check if switch is exhaustive
@@ -1138,13 +1141,23 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
       switch_expr.exhaustive = true;
     },
     pattern(as<PrimativeType>(arg)) = [&](auto& primative) {
-      // Assume needs default?
-
+      // Assume needs default? -- only makes for char to be exhaustive (super rare)
     },
     pattern(_) = [&]{
-      // Invalid
+      assert(false && "switched type non enum or primative");
     }
   );
+
+  if (!switch_return) {
+    return Type::void_ty();
+  }
+
+  if (!switch_expr.exhaustive) {
+    infer->match_or_constrain_types_at(switch_expr.switched,
+      Type::void_ty(), switch_return,
+      "non-exhaustive switch must evaluate to {} (is {})");
+    return Type::void_ty();
+  }
 
   return switch_return;
 }

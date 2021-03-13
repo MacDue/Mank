@@ -719,6 +719,14 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol*
   return alloca;
 }
 
+llvm::AllocaInst* LLVMCodeGen::stack_allocate(
+  llvm::Function* func, llvm::Value* value, std::string name
+) {
+  llvm::AllocaInst* alloca = create_entry_alloca(func, value->getType(), name);
+  ir_builder.CreateStore(value, alloca);
+  return alloca;
+}
+
 #define FUNCTION_RETURN_LOCAL "!return_value"
 
 void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func) {
@@ -2466,6 +2474,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope
     pattern(as<EnumType>(_)) = [&]{
       auto enum_extractor = get_value_extractor(*switch_expr.switched, scope);
       enum_data = enum_extractor.get_bind({ Builtin::Enum::DATA }, "enum_data");
+      if (!switch_expr.switched->is_lvalue()) {
+        // AFAIK I have to alloca the enum data before bitcasing it
+        enum_data = stack_allocate(current_function, enum_data, "temp_enum_data");
+      }
       return enum_extractor.get_value({ Builtin::Enum::TAG }, "enum_tag");
     },
     pattern(_) = [&]{
@@ -2515,10 +2527,10 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope
         if (switch_case.bindings) {
           llvm::StructType* member_variant_type =
             static_cast<llvm::StructType*>(enum_llvm.variants.at(member_info->ordinal));
-          // FIXME: Will break if switched value is not an lvalue
           llvm::Value* member_data = ir_builder.CreateBitCast(
             enum_data, member_variant_type->getElementType(Builtin::Enum::DATA)->getPointerTo());
-          ExpressionExtract enum_data_extractor(this, member_data, switch_expr.switched->is_lvalue());
+          // member data is always a pointer
+          ExpressionExtract enum_data_extractor(this, member_data, true);
           codegen_bindings(*switch_case.bindings, enum_data_extractor, scope);
         }
       } else {

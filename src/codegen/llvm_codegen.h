@@ -249,6 +249,7 @@ public:
   llvm::AllocaInst* create_entry_alloca(
     llvm::Function* func, Scope& scope, Type* type, std::string name);
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);
+  llvm::AllocaInst* stack_allocate(llvm::Function* func, llvm::Value* value, std::string name);
   void codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func = nullptr);
 
   llvm::Value* create_heap_alloc(

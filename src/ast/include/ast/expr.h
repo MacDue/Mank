@@ -1,12 +1,15 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include <memory>
 #include <cassert>
 
 #include "ast/node.h"
 #include "ast/block.h"
 #include "ast/lambda.h"
+#include "ast/bindings.h"
+#include "ast/enum_type.h"
 #include "ast/construct.h"
 #include "ast/primative_types.h"
 
@@ -72,7 +75,7 @@ struct PodFieldInitializer {
 };
 
 DEF_EXPR(Ast_Pod_Literal) {
-  Type_Ptr pod; // could just be ident
+  Ast_Path pod;
   std::vector<PodFieldInitializer> fields;
   std::vector<Type_Ptr> specializations;
 };
@@ -89,6 +92,20 @@ DEF_EXPR(Ast_Array_Repeat) {
 
 DEF_EXPR(Ast_Spawn) {
   Expr_Ptr initializer;
+};
+
+struct SwitchCase {
+  Expr_Ptr match;
+  std::optional<Ast_Binding> bindings;
+  Ast_Block body;
+  bool is_default_case = false; // match == nullptr
+};
+
+DEF_EXPR(Ast_Switch_Expr) {
+  Expr_Ptr switched;
+  std::vector<SwitchCase> cases;
+  bool exhaustive = false;
+  SwitchCase* default_case = nullptr;
 };
 
 // Just want something different to make errors easier
@@ -116,7 +133,9 @@ using Ast_Expression_Type = std::variant<
   Ast_As_Cast,
   Ast_Array_Repeat,
   Ast_Spawn,
-  Ast_Specialized_Identifier>;
+  Ast_Specialized_Identifier,
+  Ast_Path,
+  Ast_Switch_Expr>;
 
 class Ast_Expression {
   template<typename Expr>

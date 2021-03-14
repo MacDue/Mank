@@ -1,7 +1,7 @@
 #include <mpark/patterns.hpp>
 
 #include "sema/macros.h"
-#include "sema/sema_errors.h"
+#include "errors/compiler_errors.h"
 
 #include "ast/ast_builder.h"
 
@@ -33,7 +33,7 @@ namespace Macros {
     // ^ prefix disables shadowing warnings
 
     if (vec_literal.arguments.size() != 1) {
-      throw_sema_error_at(vec_literal, "vec macro expects only a single array literal argument");
+      throw_error_at(vec_literal, "vec macro expects only a single array literal argument");
     }
 
     auto array_literal = vec_literal.arguments.at(0);
@@ -50,7 +50,7 @@ namespace Macros {
     match(array_literal->v)(
       pattern(as<Ast_Array_Literal>(arg)) = [&](auto& array){
         if (array.elements.size() <= 0) {
-          throw_sema_error_at(vec_literal, "cannot infer vector type from empty array");
+          throw_error_at(vec_literal, "cannot infer vector type from empty array");
         }
         auto el_type = array.elements.at(0)->meta.type;
         decl_vec(el_type);
@@ -69,7 +69,7 @@ namespace Macros {
               array_repeat.initializer, array_repeat.repetitions)));
       },
       pattern(_) = [&]{
-        throw_sema_error_at(array_literal, "invalid vector initializer");
+        throw_error_at(array_literal, "invalid vector initializer");
       }
     );
 

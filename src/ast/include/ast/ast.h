@@ -5,9 +5,6 @@
 /* Basics */
 #include "ast/node.h"
 
-/* Constructs */
-#include "ast/construct.h"
-
 /* Expressions */
 #include "ast/expr.h"
 
@@ -16,3 +13,7 @@
 
 /* Types */
 #include "ast/types.h"
+
+/* Constructs */
+#include "ast/construct.h"
+#include "ast/file.h"

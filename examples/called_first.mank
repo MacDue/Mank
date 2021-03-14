@@ -1,0 +1,62 @@
+proc main {
+  println("Testing f1");
+  called_first(a_to_bool, b_to_bool, f1);
+  println("Testing f2");
+  called_first(a_to_bool, b_to_bool, f2);
+}
+
+# Some pointless functions to test
+fun a_to_bool: bool (a: i32) {
+  a < 21
+}
+
+fun b_to_bool: bool (b: i32) {
+  b > 121
+}
+
+fun f1: bool (a: \i32 -> bool, b: \i32 -> bool) {
+  # call a & b separately to avoid short circuiting
+  a_val := a(10);
+  b_val := b(20);
+  a_val && b_val
+}
+
+fun f2: bool (a: \i32 -> bool, b: \i32 -> bool) {
+  # call a & b separately to avoid short circuiting
+  b_val := b(20);
+  a_val := a(10);
+  a_val && b_val
+}
+
+# Called first detector
+proc called_first(a: \i32 -> bool, b: \i32 -> bool, c: \|\i32 -> bool|, |\i32 -> bool| -> bool) {
+  v := new_vec@(i32)();
+
+  a_detector := \x -> {
+    if v.length > 0 {
+      println("a called second!");
+    } else {
+      println("a called first!");
+    }
+    push_back(v, 0);
+    a(x)
+  };
+
+  b_detector := \y -> {
+    if v.length > 0 {
+      println("b called second!");
+    } else {
+      println("b called first!");
+    }
+    push_back(v, 1);
+    b(y)
+  }
+
+  result := c(a_detector, b_detector);
+
+  if v[0] == 0 {
+    println("I see a was called first!");
+  } else {
+    println("I see b was called first!");
+  }
+}

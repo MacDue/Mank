@@ -38,11 +38,14 @@ std::string type_to_string(Type const & type, bool hide_details) {
     pattern(as<PrimativeType>(arg)) = [](auto const & primative_type) {
       return std::string(primative_type.name());
     },
-    pattern(as<Ast_Pod_Declaration>(arg)) = [](auto const & pod_type) {
+    pattern(as<PodType>(arg)) = [](auto const & pod_type) {
       return formatxx::format_string("pod {}", pod_type.identifier.name);
     },
+    pattern(as<EnumType>(arg)) = [](auto const & enum_type) {
+      return formatxx::format_string("enum {}", enum_type.identifier.name);
+    },
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto const & array_type) {
-      return formatxx::format_string("{}[{}]",
+      return formatxx::format_string("|{}|[{}]",
         type_to_string(array_type.element_type.get(), hide_details), array_type.size);
     },
     pattern(as<ReferenceType>(arg)) = [&](auto const & reference_type) {
@@ -77,12 +80,12 @@ std::string type_to_string(Type const & type, bool hide_details) {
       return formatxx::format_string(hide_details ? "T" : "T{}", type_var.id);
     },
     pattern(as<TypeFieldConstraint>(arg)) = [&](auto const & field_constraint) {
-      return formatxx::format_string("{}[.{}]",
+      return formatxx::format_string("|{}|[.{}]",
         type_to_string(field_constraint.type.get(), hide_details),
         field_constraint.get_field().name);
     },
     pattern(as<TypeIndexConstraint>(arg)) = [&](auto const & index_constraint) {
-      return formatxx::format_string("{}[Indexable]",
+      return formatxx::format_string("|{}|[Indexable]",
         type_to_string(index_constraint.type.get(), hide_details));
     },
     pattern(as<CellType>(arg)) = [&](auto const & cell) {
@@ -92,7 +95,7 @@ std::string type_to_string(Type const & type, bool hide_details) {
       return formatxx::format_string("generic type {}", generic.identifier.name);
     },
     pattern(as<ListType>(arg)) = [&](auto const & list_type) {
-      return formatxx::format_string("{}[]", type_to_string(list_type.element_type.get()));
+      return formatxx::format_string("|{}|[]", type_to_string(list_type.element_type.get()));
     },
     pattern(_) = []{
       return "???"s;
@@ -185,4 +188,11 @@ Type_Ptr LValueConstraint::get(AstContext& ctx, Expr_Ptr expected_lvalue) {
   LValueConstraint lc;
   lc.expected_lvalue = expected_lvalue;
   return ctx.new_type(lc);
+}
+
+Type_Ptr SwitchableConstraint::get(AstContext& ctx, Expr_Ptr switched) {
+  SwitchableConstraint sc;
+  sc.type = switched->meta.type;
+  sc.switched = switched;
+  return ctx.new_type(sc);
 }

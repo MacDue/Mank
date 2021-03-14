@@ -5,8 +5,8 @@
 
 #include "ast/ast.h"
 #include "sema/types.h"
-#include "sema/sema_errors.h"
 #include "sema/const_propagate.h"
+#include "errors/compiler_errors.h"
 
 namespace AstHelper {
 
@@ -103,7 +103,7 @@ void ConstantVisitor::after(Ast_Binary_Operation& binop) {
             return lhs * rhs;
           case Ast_Operator::DIVIDE:
             if (rhs == 0) {
-              throw_sema_error_at(binop, "division by zero");
+              throw_error_at(binop, "division by zero");
             }
             return lhs / rhs;
           default:
@@ -159,6 +159,11 @@ void ConstantVisitor::after(Ast_Index_Access& index) {
   static_check_array_bounds(index, true);
 }
 
+void ConstantVisitor::after(Ast_Tuple_Literal& tuple_literal) {
+  // Fixes lvalue tuples (not needed after semantics checking)
+  tuple_literal.get_self().class_ptr()->set_value_type(Expression_Meta::RVALUE);
+}
+
 static char parse_char_literal(std::string_view literal) {
   // 'a'
   // '\a'
@@ -171,7 +176,7 @@ static char parse_char_literal(std::string_view literal) {
       case 't':
         return '\t';
       case 'f':
-        return '\t';
+        return '\f';
       case 'r':
         return '\r';
       case 'e':

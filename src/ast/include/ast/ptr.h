@@ -107,3 +107,4 @@ public:
 using Type_Ptr = AstPtr<Type>;
 using Expr_Ptr = AstPtr<Ast_Expression>;
 using Stmt_Ptr = AstPtr<Ast_Statement>;
+using Item_Ptr = AstPtr<Ast_Item>;

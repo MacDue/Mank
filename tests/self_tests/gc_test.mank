@@ -1,0 +1,24 @@
+enum Test {
+  VectorInEnum(i32[])
+}
+
+test that_enum_alignment_does_not_break_gc {
+  # Originally this code would fail and the vector nested within VectorInEnum
+  # (within old_vector) would be free'd prematurely by the GC.
+  # This was due to the enum tag and enum data not being 64bit/word aligned.
+  # The GC cannot find pointers that are not stored aligned in memory
+  make_vector_in_enum_in_vector := \-> { vec!([Test::VectorInEnum(vec!([1,2,3,4,5]))]) };
+  old_vector := make_vector_in_enum_in_vector();
+  for i in 0 .. 1000 {
+    _ := make_vector_in_enum_in_vector();
+  }
+  switch old_vector[0] {
+    Test::VectorInEnum(vector) => {
+      assert!(vector.length == 5);
+      expected := [1,2,3,4,5];
+      for i in 0 .. vector.length {
+        assert!(vector[i] == expected[i]);
+      }
+    }
+  }
+}

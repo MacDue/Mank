@@ -12,7 +12,7 @@ pod Example {
 pod ExampleWithRef {
   thing: i32,
   goo: f64,
-  other_ref: Other
+  other_ref: ref Other
 }
 
 pod ExampleWithTuples {

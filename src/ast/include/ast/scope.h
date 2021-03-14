@@ -67,4 +67,10 @@ public:
   Symbol* lookup_first(std::string const & name);
 
   void destroy_locals();
+
+  using PathResolution = std::variant<Type_Ptr, Expr_Ptr>;
+
+  PathResolution resolve_path(Ast_Path const & path);
+
+  Type_Ptr resolve_type_from_path(Ast_Path const & path);
 };

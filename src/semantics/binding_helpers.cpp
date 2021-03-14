@@ -1,8 +1,8 @@
 
 #include "ast/util.h"
 #include "sema/types.h"
-#include "sema/sema_errors.h"
 #include "sema/semantics.h"
+#include "errors/compiler_errors.h"
 
 /*
   A binding is when a variable is first initialized.
@@ -24,7 +24,7 @@ bool Semantics::assert_valid_binding(
 
   if (is_reference_type(type)) {
     if (!to_bind) {
-      throw_sema_error_at(lvalue, "reference must be initialized");
+      throw_error_at(lvalue, "reference must be initialized");
     }
     infer->assert_lvalue(expression, "cannot bind rvalue to lvalue reference");
   }

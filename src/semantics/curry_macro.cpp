@@ -2,9 +2,9 @@
 #include <boost/range/adaptor/reversed.hpp>
 
 #include "sema/macros.h"
-#include "sema/sema_errors.h"
 
 #include "ast/ast_builder.h"
+#include "errors/compiler_errors.h"
 
 namespace Macros {
 
@@ -14,7 +14,7 @@ Ast_Expression_Type builtin_curry(
   (void) infer; // not used
 
   if (curry_call.arguments.size() != 1) {
-    throw_sema_error_at(curry_call, "curry expects one function");
+    throw_error_at(curry_call, "curry expects one function");
   }
 
   auto given = curry_call.arguments.at(0);
@@ -22,11 +22,11 @@ Ast_Expression_Type builtin_curry(
   auto lambda_type = std::get_if<LambdaType>(&given_type->v);
 
   if (!lambda_type) {
-    throw_sema_error_at(given, "expected a lambda");
+    throw_error_at(given, "expected a lambda");
   }
 
   if (lambda_type->argument_types.size() <= 1) {
-    throw_sema_error_at(given, "lambda must take at least two arguments to be curried");
+    throw_error_at(given, "lambda must take at least two arguments to be curried");
   }
 
   bool returns_value = lambda_type->return_type != nullptr;

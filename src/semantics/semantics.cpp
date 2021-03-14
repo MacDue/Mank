@@ -4,10 +4,10 @@
 #include <mpark/patterns.hpp>
 
 #include "ast/expr_helpers.h"
+#include "errors/compiler_errors.h"
 
 #include "sema/types.h"
 #include "sema/semantics.h"
-#include "sema/sema_errors.h"
 #include "sema/const_propagate.h"
 #include "sema/builtin_functions.h"
 #include "sema/return_reachability.h"
@@ -64,14 +64,15 @@ Ast_Identifier* get_symbol_identifer_if_type(Symbol* symbol) {
 #define MAIN_FUNCTION_IDENT "main"
 
 void Semantics::analyse_file(Ast_File& file) {
+  using namespace mpark::patterns;
+
   // Setup the context
   this->ctx = &file.ctx;
   this->builder.emplace(AstBuilder(file));
-  this->infer.emplace(Infer(*this->ctx, resolved_pods, [&](CompilerMessage msg){
-    warnings.emplace_back(msg);
-  }));
+  this->infer.emplace(Infer(*this->ctx,
+    [&](CompilerMessage msg){ warnings.emplace_back(msg); }));
 
-  Scope& global_scope = file.scope;
+  auto& global_scope = file.scope;
 
   // Add builtin types
   static std::array primative_types {
@@ -104,13 +105,11 @@ void Semantics::analyse_file(Ast_File& file) {
           }
         }
         // If there's not a pior ident then it must be something else...
-        throw_sema_error_at(ident,
-          "redeclaration of {} (previously on line {})",
+        throw_error_at(ident, "redeclaration of {} (previously on line {})",
           decl_name, pior_ident->location.start_line + 1);
       } else {
         // FIXME: a symbol of a different kind that shadows still overwrites the other
-        emit_warning_at(ident,
-          "{} declaration shadows existing symbol", decl_name);
+        emit_warning_at(ident, "{} declaration shadows existing symbol", decl_name);
       }
     }
   };
@@ -136,19 +135,36 @@ void Semantics::analyse_file(Ast_File& file) {
     infer->unify_and_apply(); // allow inference between constants
   }
 
-  /* Pod declarations */
+  /* Items/declarations */
   {
-    /* Add symbols for (yet to be checked) pods */
-    for (auto pod: file.pods) {
-      check_top_level_decl("pod", Symbol::TYPE, pod->identifier,
-        get_symbol_identifer_if_type<Ast_Pod_Declaration>);
-      file.scope.add(
-        Symbol(pod->identifier, pod.class_ptr(), Symbol::TYPE));
+    for (auto item: file.items) {
+      // Add (unresolved types into the global scope -- allows cross referencing)
+      match(item->v)(
+        pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_decl){
+          check_top_level_decl("pod", Symbol::TYPE, pod_decl.identifier,
+            get_symbol_identifer_if_type<PodType>);
+          ctx->new_identified_type<PodType>(pod_decl);
+          global_scope.add(Symbol(pod_decl.identifier, item->declared_type, Symbol::TYPE));
+        },
+        pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
+          check_top_level_decl("enum", Symbol::TYPE, enum_decl.identifier,
+            get_symbol_identifer_if_type<EnumType>);
+          ctx->new_identified_type<EnumType>(enum_decl);
+          global_scope.add(
+            Symbol(enum_decl.identifier, item->declared_type, Symbol::TYPE));
+        }
+      );
     }
 
-    /* Check pods */
-    for (auto pod: file.pods) {
-      analyse_pod(*pod, global_scope);
+    for (auto item: file.items) {
+      match(item->v)(
+        pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_decl){
+          analyse_pod(pod_decl, global_scope);
+        },
+        pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
+          analyse_enum(enum_decl, global_scope);
+        }
+      );
     }
   }
 
@@ -168,8 +184,7 @@ void Semantics::analyse_file(Ast_File& file) {
     for (auto func: file.functions) {
       check_top_level_decl("function", Symbol::FUNCTION, func->identifier,
         get_symbol_identifer_if_type<Ast_Function_Declaration>);
-      file.scope.add(
-        Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
+      global_scope.add(Symbol(func->identifier, func.class_ptr(), Symbol::FUNCTION));
       func->body.scope.set_parent(global_scope);
       analyse_function_header(*func);
     }
@@ -185,13 +200,13 @@ Type_Ptr Semantics::check_constant_initializer(
   Ast_Identifier constant, Ast_Expression& init, Scope& scope
 ) {
   if (global_eval.contains(constant)) {
-    throw_sema_error_at(init, "recursive constant initializer");
+    throw_error_at(init, "recursive constant initializer");
   }
   global_eval.insert(constant);
   auto init_type = analyse_expression(init, scope);
   AstHelper::constant_expr_eval(init);
   if (!init.meta.is_const()) {
-    throw_sema_error_at(init, "initializer not constant");
+    throw_error_at(init, "initializer not constant");
   }
   global_eval.erase(constant);
   return init_type;
@@ -205,7 +220,7 @@ void Semantics::analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scop
     "constant type {} does not match initializer of {}");
 }
 
-static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& nested_field) {
+static int pod_is_recursive(PodType& pod, PodType& nested_field) {
   /*
     0 if not recursive, 1 if directly recursive, indirection steps otherwise
     Simply counts how many steps into the structure we go till the top level pod is reached.
@@ -213,8 +228,8 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
   if (&pod == &nested_field) {
     return 1;
   } else {
-    for (auto& field: nested_field.fields) {
-      if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
+    for (auto& [_,  field]: nested_field.fields) {
+      if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
         if (auto steps = pod_is_recursive(pod, *pod_field)) {
           return 1 + steps;
         }
@@ -224,36 +239,67 @@ static int pod_is_recursive(Ast_Pod_Declaration& pod, Ast_Pod_Declaration& neste
   return 0;
 }
 
-void Semantics::analyse_pod(Ast_Pod_Declaration& pod, Scope& scope) {
-  PodInfo pod_info;
-  pod_info.type = pod.get_self();
-  uint field_index = 0;
-  for (auto& field: pod.fields) {
-    resolve_type_or_fail(scope, field.type, "undeclared field type {}");
-    if (pod_info.fields.contains(field.name.name)) {
-      throw_sema_error_at(field.name, "duplicate pod field");
+static void resolve_pod_field_types(
+  PodType& pod_type, std::vector<Ast_Argument>& fields, Scope& scope
+) {
+  for (size_t field_index = 0; field_index < fields.size(); ++field_index) {
+    auto& field = fields.at(field_index);
+    if (pod_type.has_field(field.name)) {
+      throw_error_at(field.name, "duplicate pod field");
     }
-    if (auto pod_field = std::get_if<Ast_Pod_Declaration>(&field.type->v)) {
-      if (auto steps = pod_is_recursive(pod, *pod_field)) {
+    resolve_type_or_fail(scope, field.type, "undeclared field type {}");
+    pod_type.add_field(field.name, field.type, field_index);
+  }
+}
+
+void Semantics::analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope) {
+  auto& pod_type = std::get<PodType>(pod_decl.get_self().class_ptr()->declared_type->v);
+  resolve_pod_field_types(pod_type, pod_decl.fields, scope);
+  for (auto& field: pod_decl.fields) {
+    if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
+      if (auto steps = pod_is_recursive(pod_type, *pod_field)) {
         if (steps == 1) {
-          throw_sema_error_at(field.name, "directly recursive pods are not allowed");
+          throw_error_at(field.name, "directly recursive pods are not allowed");
         } else {
-          throw_sema_error_at(field.name, "recursive cycle detected in pod declaration");
+          throw_error_at(field.name, "recursive cycle detected in pod declaration");
         }
         field.type = nullptr; // cycles bad
       }
     }
-    pod_info.fields.insert({
-      field.name.name,
-      std::make_pair(field.type, field_index)
-    });
-    field_index += 1;
   }
+}
 
-  this->resolved_pods.insert({
-    pod.identifier.name,
-    pod_info
-  });
+void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
+  using namespace mpark::patterns;
+  auto& enum_type = std::get<EnumType>(enum_decl.get_self().class_ptr()->declared_type->v);
+  for (size_t enum_ordinal = 0; enum_ordinal < enum_decl.members.size(); ++enum_ordinal) {
+    auto& member = enum_decl.members.at(enum_ordinal);
+    if (enum_type.has_member(member.tag)) {
+      throw_error_at(member.tag, "duplicate enum member");
+    }
+    Type_Ptr enum_data;
+    if (member.data) {
+      enum_type.is_adt = true;
+      enum_data = match(*member.data)(
+        pattern(as<Ast_Enum_Declaration::Member::TupleData>(arg)) =
+          [&](auto& tuple_data) {
+            for (auto& el_type: tuple_data.elements) {
+              resolve_type_or_fail(scope, el_type, "undeclared element type {}");
+            }
+            TupleType enum_tuple;
+            enum_tuple.element_types = tuple_data.elements;
+            return ctx->new_type(enum_tuple);
+          },
+        pattern(as<Ast_Enum_Declaration::Member::PodData>(arg)) =
+          [&](auto& pod_data) {
+            PodType enum_pod;
+            resolve_pod_field_types(enum_pod, pod_data.fields, scope);
+            return ctx->new_type(enum_pod);
+          }
+      );
+    }
+    enum_type.add_member(member.tag, enum_ordinal, enum_data);
+  }
 }
 
 void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
@@ -276,7 +322,7 @@ void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
       // Add args parameter (for compatibility with C boostrap)
       func.arguments.push_back(builder->make_argument(args_type, "args"));
     } else if (args_count != 1 || !match_types(func.arguments.at(0).type, args_type)) {
-      throw_sema_error_at(func.identifier, "invalid main function declaration");
+      throw_error_at(func.identifier, "invalid main function declaration");
     }
   }
 }
@@ -344,7 +390,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
       func.body.has_final_expr = false;
       func.return_type = Type::void_ty(); // quick fix
     } else if (!func.return_type->is_void()) {
-      throw_sema_error_at(func.identifier, "function possibly fails to return a value");
+      throw_error_at(func.identifier, "function possibly fails to return a value");
     }
   }
 
@@ -357,7 +403,7 @@ Type_Ptr Semantics::analyse_function_body(Ast_Function_Declaration& func) {
     try {
       infer->unify_and_apply();
     } catch (Infer::UnifyError const & e) {
-      throw_sema_error_at(func.identifier, "type inference failed ({})", e.what());
+      throw_error_at(func.identifier, "type inference failed ({})", e.what());
     }
   }
 
@@ -398,6 +444,9 @@ static bool expression_may_have_side_effects(Ast_Expression& expr) {
       }
       return then_has;
     },
+    pattern(as<Ast_Switch_Expr>(_)) = []{
+      return true; // TODO/FIXME: properly check switch side effects
+    },
     pattern(_) = []() { return false; }
   );
 }
@@ -419,7 +468,7 @@ void Semantics::analyse_expression_statement(Ast_Expression_Statement& expr_stmt
           return;
         }
       }
-      throw_sema_error_at(expr_stmt.expression, "return value discarded");
+      throw_error_at(expr_stmt.expression, "return value discarded");
     }
   }
 }
@@ -446,7 +495,7 @@ static bool is_explict_reference(Ast_Expression& expr) {
 #define ANALYSE_LOOP_BODY(body) { \
   auto body_type = analyse_block(body, scope);     \
   if (!body_type->is_void()) {                     \
-    throw_sema_error_at(body.get_final_expr(),     \
+    throw_error_at(body.get_final_expr(),          \
       "loop body should not evaluate to a value"); \
   }                                                \
 }
@@ -474,7 +523,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         return_stmt.expression = make_void_expr(*ctx, return_stmt.location);
       }
       if (expr_type->is_void() && !expected_return->is_void() && !is_tvar(expected_return)) {
-        throw_sema_error_at(return_stmt, "a function needs to return a value");
+        throw_error_at(return_stmt, "a function needs to return a value");
       }
       assert_valid_binding({} /* won't be used */, expected_return, return_stmt.expression);
     },
@@ -482,7 +531,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       if (var_decl.type) {
         resolve_type_or_fail(scope, var_decl.type, "undeclared type {}");
       } else if (!var_decl.initializer) {
-        throw_sema_error_at(var_decl, "cannot infer type of {} without initializer",
+        throw_error_at(var_decl, "cannot infer type of {} without initializer",
           var_decl.variable.name);
       }
       if (var_decl.initializer) {
@@ -496,7 +545,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
           var_decl.type = initializer_type;
         }
       } else {
-        throw_sema_error_at(var_decl, "uninitialized variable declaration");
+        throw_error_at(var_decl, "uninitialized variable declaration");
       }
       assert_valid_binding(var_decl.variable, var_decl.type, var_decl.initializer);
       emit_warning_if_shadows(var_decl.variable, scope, "declaration shadows existing symbol");
@@ -504,7 +553,8 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
         Symbol(var_decl.variable, var_decl.type, Symbol::LOCAL));
     },
     pattern(as<Ast_Structural_Binding>(arg)) = [&](auto& binding) {
-      analyse_binding_decl(binding, scope);
+      auto init_type = analyse_expression(*binding.initializer, scope);
+      check_bindings(binding.bindings, binding.initializer, init_type, scope);
     },
     pattern(as<Ast_Loop>(arg)) = [&](auto& loop) {
       LOOP_ANALYSIS(loop, ANALYSE_LOOP_BODY(loop.body));
@@ -521,7 +571,7 @@ void Semantics::analyse_statement(Ast_Statement& stmt, Scope& scope) {
       SpAstPtr<Ast_Statement, Ast_Loop> ast_loop; // loop {} (not any loop)
       auto loop = in_loop();
       if (!loop) {
-        throw_sema_error_at(loop_control, "must be within a loop!");
+        throw_error_at(loop_control, "must be within a loop!");
       } else if ((ast_loop = loop)) {
         if (loop_control.type == Ast_Loop_Control::BREAK) {
           ast_loop->may_break = true;
@@ -536,13 +586,13 @@ void Semantics::analyse_for_loop(Ast_For_Loop& for_loop, Scope& scope) {
   if (for_loop.type) {
     resolve_type_or_fail(scope, for_loop.type, "undeclared loop type {}");
     if (is_reference_type(for_loop.type)) {
-      throw_sema_error_at(for_loop.loop_variable, "reference loop variables are not yet supported");
+      throw_error_at(for_loop.loop_variable, "reference loop variables are not yet supported");
     }
     infer->match_or_constrain_types_at(for_loop.start_range, for_loop.type, start_range_type,
       "start range type type {1} does not match loop variable type {0}");
   } else {
     if (start_range_type->is_void()) {
-      throw_sema_error_at(for_loop.start_range, "loop variable cannot be type {}",
+      throw_error_at(for_loop.start_range, "loop variable cannot be type {}",
         type_to_string(start_range_type.get()));
     }
     for_loop.type = remove_reference(start_range_type);
@@ -587,7 +637,7 @@ void Semantics::check_tuple_bindings(
     bindings, init_type, bindings.location);
   if (auto tuple_type = std::get_if<TupleType>(&init_type->v)) {
     if (tuple_type->element_types.size() != bindings.binds.size()) {
-      throw_sema_error_at(init, "tuple not the right shape for binding");
+      throw_error_at(init, "tuple not the right shape for binding");
     }
     uint bind_idx = 0;
     for (auto el_type: tuple_type->element_types) {
@@ -612,7 +662,7 @@ void Semantics::check_tuple_bindings(
       bind_idx += 1;
     }
   } else {
-    throw_sema_error_at(init, "tuple bind initializer must be a tuple");
+    throw_error_at(init, "tuple bind initializer must be a tuple");
   }
   if (constraint) {
     infer->type_constraints.emplace_back(*constraint);
@@ -632,7 +682,7 @@ void Semantics::check_pod_bindings(
       field_type = ctx->new_tvar();
       infer->add_constraint(field_bind.field.location, field_type, field_constraint);
     } else {
-      field_type = get_field_type(field_bind, init, init_type, resolved_pods);
+      field_type = get_field_type(field_bind, init, init_type);
     }
     match(field_bind.replacement)(
       pattern(as<Ast_Bind>(arg)) = [&](auto& bind){
@@ -655,15 +705,16 @@ void Semantics::check_pod_bindings(
   }
 }
 
-void Semantics::analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope) {
+void Semantics::check_bindings(
+  Ast_Binding& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope
+) {
   using namespace mpark::patterns;
-  auto init_type = analyse_expression(*binding.initializer, scope);
-  match(binding.bindings)(
+  match(bindings)(
     pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
-      check_tuple_bindings(tuple_binds, binding.initializer, init_type, scope);
+      check_tuple_bindings(tuple_binds, init, init_type, scope);
     },
     pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds){
-      check_pod_bindings(pod_binds, binding.initializer, init_type, scope);
+      check_pod_bindings(pod_binds, init, init_type, scope);
     }
   );
 }
@@ -706,7 +757,7 @@ void Semantics::expand_macro_expression(Ast_Expression& target, Ast_Call& macro_
   auto& macro_name = std::get<Ast_Macro_Identifier>(macro_call.callee->v);
   auto* expander = Macros::get_expr_macro_expander(macro_name);
   if (!expander) {
-    throw_sema_error_at(macro_call, "expander for macro not found");
+    throw_error_at(macro_call, "expander for macro not found");
   }
 
   for (auto arg: macro_call.arguments) {
@@ -744,7 +795,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
         }
       } else if (!then_type->is_void()) {
         auto final_expr = std::get<Ast_Block>(if_expr.then_block->v).get_final_expr();
-        throw_sema_error_at(final_expr,
+        throw_error_at(final_expr,
           "if expression cannot evaluate to {} without a matching else",
           type_to_string(then_type.get()));
       }
@@ -754,7 +805,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
     pattern(as<Ast_Identifier>(arg)) = [&](auto& ident) {
       Symbol* symbol = scope.lookup_first_name(ident);
       if (!symbol) {
-        throw_sema_error_at(ident, "{} not declared", ident.name);
+        throw_error_at(ident, "{} not declared", ident.name);
       }
       if (symbol->kind == Symbol::FUNCTION) {
         // Auto box functions to rvalue lambdas
@@ -775,7 +826,7 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
         ident.update_const_value(*symbol->const_value->meta.get_const_value());
         return symbol->type; // Globals are constant.
       } else {
-        throw_sema_error_at(ident, "{} cannot be used in this context", ident.name);
+        throw_error_at(ident, "{} cannot be used in this context", ident.name);
       }
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) {
@@ -802,10 +853,10 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
             field_type, field_constraint);
           return field_type;
         } else {
-          return get_field_type(access, resolved_pods);
+          return get_field_type(access);
         }
       } else {
-        throw_sema_error_at(access.object, "is void?");
+        throw_error_at(access.object, "is void?");
       }
     },
     pattern(as<Ast_Array_Literal>(arg)) = [&](auto& array) {
@@ -825,6 +876,8 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
               "element type {} does not match array type of {}");
             return false;
           });
+      } else {
+        throw_error_at(array, "cannot construct empty array");
       }
       return ctx->new_type(array_type);
     },
@@ -874,26 +927,33 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
       return ctx->new_type(tuple_type);
     },
     pattern(as<Ast_Pod_Literal>(arg)) = [&](auto& pod_init) {
-      resolve_type_or_fail(scope, pod_init.pod, "undeclared pod type {}");
+      auto type = scope.resolve_type_from_path(pod_init.pod);
       std::unordered_set<std::string_view> seen_fields;
-      auto& pod_type = std::get<Ast_Pod_Declaration>(pod_init.pod->v);
-      auto& pod_info = this->resolved_pods.at(pod_type.identifier.name);
+      auto& pod_type = match(type->v)(
+        pattern(as<PodType>(arg)) = [](auto& pod_type) -> PodType& { return pod_type; },
+        pattern(as<EnumType>(arg)) = [&](auto& enum_type) -> PodType& {
+          auto& member = enum_type.get_member(pod_init.pod);
+          if (!member.data || !std::holds_alternative<PodType>(member.data->v)) {
+            throw_error_at(pod_init.pod, "not a pod enum member");
+          }
+          return std::get<PodType>(member.data->v);
+        });
       for (auto& init: pod_init.fields) {
         if (seen_fields.contains(init.field.name)) {
-          throw_sema_error_at(init.field, "repeated field in initializer");
+          throw_error_at(init.field, "repeated field in initializer");
         }
-        auto [expected_type, field_index] = pod_info.get_field_or_fail(init.field);
+        auto field_info = pod_type.get_field(init.field);
         auto init_type = analyse_expression(*init.initializer, scope);
         assert_valid_binding({}, AstHelper::extract_location(init.initializer),
-           expected_type, init_type, init.initializer);
+           field_info.type, init_type, init.initializer);
 
-        init.field_index = field_index;
+        init.field_index = field_info.index;
         seen_fields.insert(init.field.name);
       }
-      if (seen_fields.size() != pod_info.fields.size()) {
-        throw_sema_error_at(pod_init, "incomplete pod initialization");
+      if (seen_fields.size() != pod_type.fields.size()) {
+        throw_error_at(pod_init, "incomplete pod initialization");
       }
-      return pod_init.pod;
+      return type;
     },
     pattern(as<Ast_As_Cast>(arg)) = [&](auto& as_cast){
       return analyse_as_cast(as_cast, scope);
@@ -915,14 +975,14 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
         if (!within_macro) {
           auto repetitions = std::get<int32_t>(*const_repetitions);
           if (repetitions < 0) {
-            throw_sema_error_at(array_repeat.repetitions, "cannot have negative repetitions");
+            throw_error_at(array_repeat.repetitions, "cannot have negative repetitions");
           }
           array_type.size = repetitions;
         }
         array_type.element_type = init_type;
         return ctx->new_type(array_type);
       } else {
-        throw_sema_error_at(array_repeat.repetitions, "repetitions must be constant");
+        throw_error_at(array_repeat.repetitions, "repetitions must be constant");
       }
     },
     pattern(as<Ast_Spawn>(arg)) = [&](auto& spawn){
@@ -933,12 +993,32 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
       expr.set_value_type(Expression_Meta::LVALUE);
       return ctx->new_type(cell_type);
     },
+    pattern(as<Ast_Path>(arg)) = [&](auto& path){
+      return match(scope.resolve_path(path))(
+        pattern(as<Type_Ptr>(arg)) = [&](auto ty){
+          if (!ty) {
+            throw_error_at(path, "invalid path");
+          }
+          if (auto enum_type = std::get_if<EnumType>(&ty->v)) {
+            auto& member = enum_type->get_member(path);
+            if (member.data) {
+              throw_error_at(path, "enum member missing initialization");
+            }
+          }
+          return ty;
+        },
+        pattern(as<Expr_Ptr>(arg)) = [](auto constant) { return constant->meta.type; }
+      );
+    },
+    pattern(as<Ast_Switch_Expr>(arg)) = [&](auto& switch_expr) {
+      return analyse_switch_expr(switch_expr, scope);
+    },
     pattern(anyof(as<Ast_Macro_Identifier>(_), as<Ast_Specialized_Identifier>(_))) = [&]{
-      throw_sema_error_at(expr, "this is not valid here!");
+      throw_error_at(expr, "this is not valid here!");
       return Type_Ptr(nullptr);
     },
     pattern(_) = [&]{
-      throw_sema_error_at(expr, "fix me! unknown expression type!");
+      throw_error_at(expr, "fix me! unknown expression type!");
       return Type_Ptr(nullptr);
     }
   );
@@ -947,7 +1027,6 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
 }
 
 Type_Ptr Semantics::analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope) {
-  using namespace mpark::patterns;
   resolve_type_or_fail(scope, as_cast.type, "undeclared cast target {}");
   auto source_type = analyse_expression(*as_cast.object, scope);
   if (is_tvar(source_type)) {
@@ -958,6 +1037,130 @@ Type_Ptr Semantics::analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope) {
     validate_type_cast(source_type, as_cast);
   }
   return as_cast.type;
+}
+
+Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& scope) {
+  // TODO: returing values in bodys (covering all cases), duplicate checking.
+  using namespace mpark::patterns;
+  auto switched_type = analyse_expression(*switch_expr.switched, scope);
+  if (is_tvar(switched_type)) {
+    auto switch_constraint = SwitchableConstraint::get(*ctx, switch_expr.switched);
+    infer->add_constraint(AstHelper::extract_location(switch_expr.switched),
+      switched_type, switch_constraint);
+  } else {
+    assert_has_switchable_type(switch_expr.switched);
+  }
+
+  std::map<uint64_t, Expr_Ptr> covered_cases;
+  auto add_covered_case = [&](Expr_Ptr matched, uint64_t matched_value) {
+    auto [existing_match, new_case] = covered_cases.insert({matched_value, matched});
+    if (!new_case) {
+      auto previous_case_location = AstHelper::extract_location(existing_match->second);
+      throw_error_at(matched, "duplicate switch case (previously matched on line {})",
+        previous_case_location.start_line + 1);
+    }
+  };
+
+  SwitchCase* default_switch_case = nullptr;
+  Type_Ptr switch_return;
+  Type_Ptr assumed_switched_type;
+  for (auto& switch_case: switch_expr.cases) {
+    if (!switch_case.is_default_case) {
+      auto match_type = match(switch_case.match->v)(
+        pattern(as<Ast_Path>(arg)) = [&](auto& enum_path){
+          auto [enum_type, member_info] = AstHelper::path_as_enum_member(enum_path, scope);
+          if (switch_case.bindings) {
+            if (!member_info->data) {
+              throw_error_at(switch_case.match, "enum member does not have data to bind");
+            }
+            switch_case.body.scope.set_parent(scope);
+            check_bindings(
+              *switch_case.bindings, switch_case.match, member_info->data, switch_case.body.scope);
+          }
+          add_covered_case(switch_case.match, member_info->ordinal);
+          return enum_type->get_self().class_ptr();
+        },
+        pattern(_) = [&]{
+          if (switch_case.bindings) {
+            throw_error_at(switch_case.match, "type does not support bindings");
+          }
+          auto match_type = analyse_expression(*switch_case.match, scope);
+          AstHelper::constant_expr_eval(*switch_case.match);
+          if (!switch_case.match->meta.is_const()) {
+            throw_error_at(switch_case.match, "not a constant expression");
+          } else {
+            std::visit([&](auto matched_value){
+              using T = std::decay_t<decltype(matched_value)>;
+              if constexpr (std::is_integral_v<T>) {
+                add_covered_case(switch_case.match, matched_value);
+              } else {
+                // Invalid (will error later)
+              }
+            }, switch_case.match->meta.const_value);
+          }
+          return match_type;
+        }
+      );
+      // the matched types have to match the switched typed (so if valid this holds)
+      assumed_switched_type = match_type;
+      // Case type
+      infer->match_or_constrain_types_at(switch_case.match,
+        match_type, switched_type, "case type {} does not match switched type {}");
+    } else {
+      if (!default_switch_case) {
+        default_switch_case = &switch_case;
+      } else {
+        // TODO: Better error
+        throw_error_at(switch_expr.switched, "multiple default cases provided");
+      }
+    }
+
+    // Case body type
+    auto body_type = analyse_block(switch_case.body, scope);
+    if (!switch_return) {
+      switch_return = body_type;
+    } else {
+      infer->match_or_constrain_types_at(switch_case.body,
+        body_type, switch_return, "all switch cases must have the same type");
+    }
+  }
+
+  // Check if switch is exhaustive
+  // How to handle -> error? or warn and make sure void switch?
+  switch_expr.default_case = default_switch_case;
+  switch_expr.exhaustive = default_switch_case != nullptr;
+  if (!switch_expr.exhaustive && !assumed_switched_type) {
+    throw_error_at(switch_expr.switched, "empty switch");
+  }
+  if (!switch_expr.exhaustive)
+  match(assumed_switched_type->v)(
+    pattern(as<EnumType>(arg)) = [&](auto& enum_type) {
+      if (enum_type.members.size() != covered_cases.size()) {
+        throw_error_at(switch_expr.switched, "not all enum members covered in switch");
+      }
+      switch_expr.exhaustive = true;
+    },
+    pattern(as<PrimativeType>(arg)) = [&](auto& primative) {
+      // TODO:
+      // Assume needs default? -- only makes for char to be exhaustive (super rare)
+    },
+    pattern(_) = [&]{
+      assert(false && "switched type non enum or primative");
+    }
+  );
+
+  if (!switch_return) {
+    return Type::void_ty();
+  }
+
+  if (!switch_expr.exhaustive) {
+    infer->match_or_constrain_types_at(
+      switch_expr.switched, switch_return, Type::void_ty(),
+      "non-exhaustive switch cannot evaluate to {}");
+    return Type::void_ty();
+  }
+
+  return switch_return;
 }
 
 static bool match_special_constraint_at(SourceLocation loc,
@@ -1013,7 +1216,7 @@ Type_Ptr Semantics::analyse_unary_expression(Ast_Unary_Operation& unary, Scope& 
     default: break;
   }
 
-  throw_sema_error_at(unary, "invalid unary operation for {}",
+  throw_error_at(unary, "invalid unary operation for {}",
     type_to_string(operand_type.get()));
 }
 
@@ -1066,7 +1269,7 @@ Type_Ptr Semantics::analyse_binary_expression(Ast_Binary_Operation& binop, Scope
       };
     },
     pattern(_) = [&]{
-      throw_sema_error_at(binop, "invalid operation for {}",
+      throw_error_at(binop, "invalid operation for {}",
         type_to_string(left_type.get()));
       return Type_Ptr(nullptr);
     }
@@ -1085,7 +1288,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
   auto look_up_function = [&](auto& ident) {
     Symbol* called_function = scope.lookup_first_name(ident);
     if (!called_function) {
-      throw_sema_error_at(ident,
+      throw_error_at(ident,
         "attempting to call undefined function \"{}\"", ident.name);
     }
     callee_type = called_function->type;
@@ -1100,14 +1303,19 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
       look_up_function(specialized);
       if (auto generic_func = std::get_if<Ast_Function_Declaration>(&callee_type->v)) {
         if (specialized.specializations.size() > generic_func->type_parameters.size()) {
-          throw_sema_error_at(specialized, "too many specializations for generic function");
+          throw_error_at(specialized, "too many specializations for generic function");
         }
       } else {
-        throw_sema_error_at(specialized, "not a generic function");
+        throw_error_at(specialized, "not a generic function");
       }
       for (auto& spec: specialized.specializations) {
         resolve_type_or_fail(scope, spec, "undeclared specialization type");
       }
+    },
+    pattern(as<Ast_Path>(arg)) = [&](auto& enum_path) {
+      // FIXME: Needs work if paths to functions ever added
+      auto [enum_type, _] = AstHelper::path_as_enum_member(enum_path, scope);
+      callee_type = enum_type->get_self().class_ptr();
     },
     pattern(_) = [&]{
       callee_type = analyse_expression(*call.callee, scope);
@@ -1135,7 +1343,7 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
       }
 
       if (expected_arg_count != call.arguments.size()) {
-        throw_sema_error_at(call.callee, "{} expects {} arguments not {}",
+        throw_error_at(call.callee, "{} expects {} arguments not {}",
           function_name, expected_arg_count, call.arguments.size());
       }
 
@@ -1181,8 +1389,25 @@ Type_Ptr Semantics::analyse_call(Ast_Call& call, Scope& scope) {
       // FINALLY we've checked everything in the call!
       return function_type.return_type;
     },
+    pattern(as<EnumType>(arg)) = [&](auto& enum_type){
+      auto& enum_path = std::get<Ast_Path>(call.callee->v);
+      auto& member = enum_type.get_member(enum_path);
+      if (!member.data || !std::holds_alternative<TupleType>(member.data->v)) {
+        throw_error_at(call.callee, "not a tuple enum member");
+      }
+      auto& tuple_type = std::get<TupleType>(member.data->v);
+      if (tuple_type.element_types.size() != call.arguments.size()) {
+        throw_error_at(call, "incorrect number of elements for enum tuple");
+      }
+      for (size_t idx = 0; idx < tuple_type.element_types.size(); ++idx) {
+        auto& element = call.arguments.at(idx);
+        (void) analyse_expression(*element, scope);
+        assert_valid_binding({}, tuple_type.element_types.at(idx), element);
+      }
+      return call.callee->meta.type = enum_type.get_self().class_ptr();
+    },
     pattern(_) = [&]() -> Type_Ptr {
-      throw_sema_error_at(call.callee, NOT_CALLABLE,
+      throw_error_at(call.callee, NOT_CALLABLE,
         type_to_string(callee_type.get()));
       return nullptr;
     }

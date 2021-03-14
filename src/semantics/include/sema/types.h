@@ -8,9 +8,8 @@
 #include "ast/types.h"
 #include "ast/ast_builder.h"
 
-#include "sema/pod_info.h"
 #include "sema/type_infer.h"
-#include "sema/sema_errors.h"
+#include "errors/compiler_errors.h"
 
 // The resolved type + a the type's identifier in the source (for error messages)
 using TypeResolution = std::pair<Type_Ptr, std::optional<Ast_Identifier>>;
@@ -41,31 +40,28 @@ T min_type(T a, T b) {
 
 TypeResolution resolve_type(Scope& scope, Type_Ptr type);
 
-Type_Ptr get_field_type(
-  Ast_Field_Access& access,
-  ResolvedPodInfoMap const & pod_info);
+Type_Ptr get_field_type(Ast_Field_Access& access);
+
+Type_Ptr get_field_type(TypeFieldConstraint& field_constraint);
 
 Type_Ptr get_field_type(
-  TypeFieldConstraint& field_constraint,
-  ResolvedPodInfoMap const & pod_info);
-
-Type_Ptr get_field_type(
-  Ast_Pod_Bind& pod_bind,
-  Expr_Ptr init,
-  Type_Ptr init_type,
-  ResolvedPodInfoMap const & pod_info);
+  Ast_Pod_Bind& pod_bind, Expr_Ptr init, Type_Ptr init_type);
 
 Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access);
 
 bool validate_type_cast(Type_Ptr type, Ast_As_Cast& as_cast);
 
+bool is_switchable_type(Type_Ptr type);
+
+void assert_has_switchable_type(Expr_Ptr expr);
+
 template<typename T>
-static void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
+void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
   auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);
   if (resolved_type) {
     to_resolve = resolved_type;
   } else if (type_slot) {
-    throw_sema_error_at(*type_slot, error_format);
+    throw_error_at(*type_slot, error_format);
   } else {
     IMPOSSIBLE();
   }

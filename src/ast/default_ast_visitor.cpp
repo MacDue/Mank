@@ -231,15 +231,34 @@ void BaseAstVisitor::operator()(Ast_Array_Repeat& array_repeat) {
   after(array_repeat);
 }
 
-void BaseAstVisitor::operator()(Ast_Spawn& spawn){
+void BaseAstVisitor::operator()(Ast_Spawn& spawn) {
   before(spawn);
   visit(spawn);
   std::visit(recur, spawn.initializer->v);
   after(spawn);
 }
 
-void BaseAstVisitor::operator()(Ast_Specialized_Identifier& special_ident){
+void BaseAstVisitor::operator()(Ast_Specialized_Identifier& special_ident) {
   before(special_ident);
   visit(special_ident);
   after(special_ident);
+}
+
+void BaseAstVisitor::operator()(Ast_Path& path) {
+  before(path);
+  visit(path);
+  after(path);
+}
+
+void BaseAstVisitor::operator()(Ast_Switch_Expr& switch_expr) {
+  before(switch_expr);
+  visit(switch_expr);
+  std::visit(recur, switch_expr.switched->v);
+  for (auto& switch_case: switch_expr.cases) {
+    if (!switch_case.is_default_case) {
+      std::visit(recur, switch_case.match->v);
+    }
+    recur(switch_case.body);
+  }
+  after(switch_expr);
 }

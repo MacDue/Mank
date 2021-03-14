@@ -29,7 +29,7 @@ struct Lexer {
 
   /* Loading sources */
   void load_file(std::string const & file_path);
-  void set_input_to_string(std::string source);
+  void set_input_to_string(std::string source, std::string name = "");
 
   /* Token actions */
   Token& peek_next_token();

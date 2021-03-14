@@ -537,7 +537,7 @@ TEST_CASE("Pods", "[Parser]") {
   )");
 
   NEW_FILE(expected_pods);
-  expected_pods.pods.emplace_back(
+  expected_pods.items.emplace_back(
     f.make_pod("Apple",
       f.make_argument(
         f.make_unchecked_type("i32"), "a"),
@@ -545,9 +545,9 @@ TEST_CASE("Pods", "[Parser]") {
         f.make_unchecked_type("f64"), "b"),
       f.make_argument(
         f.make_unchecked_type("bool"), "c")));
-  expected_pods.pods.emplace_back(
+  expected_pods.items.emplace_back(
     f.make_pod("Empty"));
-  expected_pods.pods.emplace_back(
+  expected_pods.items.emplace_back(
     f.make_pod("One",
       f.make_argument(f.make_unchecked_type("bool"), "a")));
 

@@ -5,7 +5,7 @@
 #include "parser/parser.h"
 #include "parser/token_helpers.h"
 
-#include "sema/sema_errors.h"
+#include "errors/compiler_errors.h"
 
 Ast_File Parser::parse_from_file(std::string file_path) {
   Lexer lexer;
@@ -55,7 +55,9 @@ Ast_File Parser::parse_file() {
     ) {
       parsed_file.functions.emplace_back(this->parse_function());
     } else if (next_token.type == TokenType::POD) {
-      parsed_file.pods.emplace_back(this->parse_pod());
+      parsed_file.items.emplace_back(this->parse_pod());
+    } else if (next_token.type == TokenType::ENUM) {
+      parsed_file.items.emplace_back(this->parse_enum());
     } else if (next_token.type == TokenType::CONST) {
       parsed_file.global_consts.emplace_back(this->parse_const_decl());
     } else {
@@ -65,7 +67,7 @@ Ast_File Parser::parse_file() {
   return parsed_file;
 }
 
-Type_Ptr Parser::parse_pod() {
+Item_Ptr Parser::parse_pod() {
   /*
     pod = "pod", identifier, [braced_parameter_list] ;
   */
@@ -78,7 +80,58 @@ Type_Ptr Parser::parse_pod() {
   parsed_pod.identifier = *pod_name;
   parsed_pod.fields = this->parse_arguments(
     TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
-  return ctx->new_type(parsed_pod);
+  return ctx->new_item(parsed_pod);
+}
+
+Item_Ptr Parser::parse_enum() {
+  /*
+    (basic enum -- will extend later)
+    enum = "enum", identifier, "{", [enum_members], "}" ;
+    enum_members = identifier, {",", identifier} ;
+  */
+  Ast_Enum_Declaration parsed_enum;
+  expect(TokenType::ENUM);
+  auto enum_name = this->parse_identifier();
+  if (!enum_name) {
+    throw_error_here("expected enum name");
+  }
+  parsed_enum.identifier = *enum_name;
+
+  // parsing members
+  expect(TokenType::LEFT_BRACE);
+  while (!peek(TokenType::RIGHT_BRACE)) {
+    Ast_Enum_Declaration::Member enum_member;
+    auto tag = this->parse_identifier();
+    if (!tag) {
+      throw_error_here("expected enum member name");
+    }
+    enum_member.tag = *tag;
+    switch (lexer.peek_next_token().type) {
+      case TokenType::LEFT_BRACE: {
+        Ast_Enum_Declaration::Member::PodData pod_data;
+        pod_data.fields = this->parse_arguments(
+          TokenType::LEFT_BRACE, TokenType::RIGHT_BRACE);
+        enum_member.data = pod_data;
+        break; // TODO: tuple enum
+      }
+      case TokenType::LEFT_PAREN: {
+        Ast_Enum_Declaration::Member::TupleData tuple_data;
+        tuple_data.elements = this->parse_type_list(
+          TokenType::LEFT_PAREN, TokenType::RIGHT_PAREN);
+        enum_member.data = tuple_data;
+        break; // TODO: pod enum
+      }
+      default: break; // fallthrough
+    }
+
+    parsed_enum.members.push_back(enum_member);
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(TokenType::RIGHT_BRACE);
+
+  return ctx->new_item(parsed_enum);
 }
 
 Type_Ptr Parser::parse_function() {
@@ -255,7 +308,7 @@ Stmt_Ptr Parser::parse_statement() {
       } else {
         // This is kinda a odd case... Since the code only becomes invalid
         // after we parse more context.
-        throw_sema_error_at(expr, "expression is not an identifier");
+        throw_error_at(expr, "expression is not an identifier");
       }
       var_decl.type = this->parse_type();
       // If there's no type it should be infered
@@ -350,9 +403,9 @@ Stmt_Ptr Parser::parse_for_loop() {
 
     expect(TokenType::IN);
 
-    for_loop.start_range = this->parse_expression(true);
+    for_loop.start_range = this->parse_expression(Parser::NO_STRUCTS);
     expect(TokenType::DOUBLE_DOT);
-    for_loop.end_range = this->parse_expression(true);
+    for_loop.end_range = this->parse_expression(Parser::NO_STRUCTS);
 
     for_loop.body = PARSE_LOOP_BODY();
 
@@ -372,7 +425,7 @@ Stmt_Ptr Parser::parse_loop() {
 Stmt_Ptr Parser::parse_while_loop() {
   expect(TokenType::WHILE);
   Ast_While_Loop parsed_while;
-  parsed_while.cond = this->parse_expression(true);
+  parsed_while.cond = this->parse_expression(Parser::NO_STRUCTS);
   parsed_while.body = PARSE_LOOP_BODY();
   return ctx->new_stmt(parsed_while);
 }
@@ -505,7 +558,7 @@ Stmt_Ptr Parser::parse_const_decl() {
 
 /* Expressions */
 
-Expr_Ptr Parser::parse_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_expression(Parser::ExprFlags flags) {
   /*
     (* this ebnf is abridged to avoid describing precedence which is easier done with a table *)
     expression = literal
@@ -518,17 +571,17 @@ Expr_Ptr Parser::parse_expression(bool brace_delimited) {
                | parenthesised_expression ;
   */
   auto expr_start = this->current_location();
-  auto expr = this->parse_binary_expression(brace_delimited);
+  auto expr = this->parse_binary_expression(flags);
   return mark_ast_location(expr_start, expr);
 }
 
-Expr_Ptr Parser::parse_postfix_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_postfix_expression(Parser::ExprFlags flags) {
   auto postfix_start = this->current_location();
-  auto expr = this->parse_primary_expression(brace_delimited);
+  auto expr = this->parse_primary_expression(flags);
   while (true) {
     mark_ast_location(postfix_start, expr);
 
-    if (peek(TokenType::LEFT_PAREN)) {
+    if (!flags.paren_delimited && peek(TokenType::LEFT_PAREN)) {
       expr = this->parse_call(std::move(expr));
     } else if (peek(TokenType::DOT)) {
       expr = this->parse_field_access(std::move(expr));
@@ -591,11 +644,15 @@ Expr_Ptr Parser::parse_index_access(Expr_Ptr object) {
   return ctx->new_expr(parsed_index);
 }
 
-Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_primary_expression(Parser::ExprFlags flags) {
   if (peek(TokenType::LITERAL) || peek(TokenType::TRUE) || peek(TokenType::FALSE)) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
     auto ident = *this->parse_identifier();
+    // ABSOLUTE PURE UTTER TRASH. I HAVE NO IDEA HOW TO FIX SOMETHING SO BROKEN.
+    // There is no hope for this code.
+    std::optional<Ast_Specialized_Identifier> special_ident;
+    std::optional<Ast_Path> ident_path;
     // FIXME! This is just hacked in.
     // Works fine for current macro impl though.
     if (this->consume(TokenType::EXCLAMATION_MARK)) {
@@ -603,10 +660,7 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
       *static_cast<Ast_Identifier*>(macro_ident.get_raw_self()) = ident;
       return ctx->new_expr(macro_ident);
     }
-
-    std::optional<Ast_Specialized_Identifier> special_ident;
-    // @([types])
-    if (this->consume(TokenType::AT)) {
+    if (this->consume(TokenType::AT)) { // @([types])
       Ast_Specialized_Identifier s_ident;
       *static_cast<Ast_Identifier*>(s_ident.get_raw_self()) = ident;
       s_ident.specializations = this->parse_type_list(
@@ -614,14 +668,39 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
       special_ident = s_ident;
     }
 
-    if (!brace_delimited && peek(TokenType::LEFT_BRACE)) {
+    if (this->peek(TokenType::DOUBLE_COLON)) {
+      // TODO: Replace Ast_Identifiers in most places with Ast_Path
+      //  -> (then maybe remove Ast_Identifier expressions)
+      // FIXME: Ignore specializations for now
+      // (should be okay since they'd only be needed for enum pod lits anyway)
+      Ast_Path path;
+      path.path.push_back(ident);
+      while (this->consume(TokenType::DOUBLE_COLON)) {
+        auto path_section = this->parse_identifier();
+        if (!path_section) { throw_error_here("expected path section"); }
+        path.path.push_back(*path_section);
+      }
+      mark_ast_location(path.path.at(0).location, path);
+      ident_path = path;
+    }
+
+    if (!flags.brace_delimited && peek(TokenType::LEFT_BRACE)) {
       // Only valid in non-brace limited places (could be wrapped in parens)
       // e.g. not valid if cond or for loop ranges
-      return this->parse_pod_literal(ident,
+      Ast_Path pod_path;
+      if (ident_path) {
+        pod_path = *ident_path;
+      } else {
+        pod_path.path = { ident };
+      }
+      return this->parse_pod_literal(pod_path,
           special_ident ? special_ident->specializations : std::vector<Type_Ptr>{});
     }
 
-    if (special_ident) {
+    // FUCK THIS SHIT
+    if (ident_path) {
+      return ctx->new_expr(*ident_path);
+    } if (special_ident) {
       return ctx->new_expr(*special_ident);
     } else {
       return ctx->new_expr(ident);
@@ -640,13 +719,15 @@ Expr_Ptr Parser::parse_primary_expression(bool brace_delimited) {
     Ast_Spawn spawn;
     spawn.initializer = this->parse_expression();
     return ctx->new_expr(spawn);
+  } else if (peek(TokenType::SWITCH)) {
+    return this->parse_switch();
   } else {
     throw_error_here("no primary expressions start with \"{}\"");
   }
 }
 
 Expr_Ptr Parser::parse_pod_literal(
-  Ast_Identifier pod_name, std::vector<Type_Ptr> specializations
+  Ast_Path pod_name, std::vector<Type_Ptr> specializations
 ) {
   /*
     pod_literal = identifier "{" pod_field_initializer {"," pod_field_initializer} "}" ;
@@ -654,7 +735,7 @@ Expr_Ptr Parser::parse_pod_literal(
   */
   Ast_Pod_Literal parsed_pod;
   parsed_pod.specializations = specializations;
-  parsed_pod.pod = ctx->new_type(UncheckedType(pod_name));
+  parsed_pod.pod = pod_name;
   expect(TokenType::LEFT_BRACE);
   while (!peek(TokenType::RIGHT_BRACE)) {
     expect(TokenType::DOT);
@@ -719,7 +800,7 @@ Expr_Ptr Parser::parse_if() {
   */
   Ast_If_Expr parsed_if;
   if (consume(TokenType::IF)) {
-    auto condition = this->parse_expression(true);
+    auto condition = this->parse_expression(Parser::NO_STRUCTS);
     if (!condition) {
       throw_error_here("unexpected \"{}\", expecting a condition expression");
     }
@@ -857,12 +938,12 @@ static Expr_Ptr fix_precedence_and_association(
     });
 }
 
-Expr_Ptr Parser::parse_binary_expression(bool brace_delimited) {
+Expr_Ptr Parser::parse_binary_expression(Parser::ExprFlags flags) {
   /*
     binary_operation = expression, operation, expression ;
     operation = (* use your imagination *) ;
   */
-  auto lhs = this->parse_unary(brace_delimited);
+  auto lhs = this->parse_unary(flags);
   if (consume(TokenType::AS)) {
     // FIXME: Hack special case: "as" cast
     Ast_As_Cast parsed_as_cast;
@@ -876,13 +957,13 @@ Expr_Ptr Parser::parse_binary_expression(bool brace_delimited) {
   auto bin_op = this->lexer.peek_next_token().type;
   if (is_binary_op(bin_op)) {
     lexer.consume_token();
-    auto rhs = this->parse_expression(brace_delimited);
+    auto rhs = this->parse_expression(flags);
     lhs = fix_precedence_and_association(*ctx, lhs, rhs, static_cast<Ast_Operator>(bin_op));
   }
   return lhs;
 }
 
-Expr_Ptr Parser::parse_unary(bool brace_delimited) {
+Expr_Ptr Parser::parse_unary(Parser::ExprFlags flags) {
   /*
     unary_operation = operation, expression ;
   */
@@ -893,13 +974,13 @@ Expr_Ptr Parser::parse_unary(bool brace_delimited) {
     unary_op = TokenType::LOGICAL_NOT;
   }
   if (!is_unary_op(unary_op)) {
-    return this->parse_postfix_expression(brace_delimited);
+    return this->parse_postfix_expression(flags);
   }
   Ast_Unary_Operation parsed_unary;
   parsed_unary.operation = static_cast<Ast_Operator>(unary_op);
   this->lexer.consume_token();
   // For nested unary expressions e.g. -------------10 (if you want that?)
-  parsed_unary.operand = this->parse_unary(brace_delimited);
+  parsed_unary.operand = this->parse_unary(flags);
   auto unary = ctx->new_expr(parsed_unary);
   return mark_ast_location(unary_start, unary);
 }
@@ -975,6 +1056,34 @@ Expr_Ptr Parser::parse_lambda() {
   return ctx->new_expr(parsed_lambda);
 }
 
+Expr_Ptr Parser::parse_switch() {
+  Ast_Switch_Expr parsed_switch;
+  expect(TokenType::SWITCH);
+  parsed_switch.switched = this->parse_expression(Parser::NO_STRUCTS);
+  expect(TokenType::LEFT_BRACE);
+  while (!peek(TokenType::RIGHT_BRACE)) {
+    SwitchCase switch_case;
+    if (!(switch_case.is_default_case = consume(TokenType::ELSE))) {
+      switch_case.match = this->parse_expression(Parser::NO_CALLS_OR_STRUCTS);
+      if (!peek(TokenType::FAT_ARROW)) {
+        switch_case.bindings = this->parse_binding();
+      }
+    }
+    expect(TokenType::FAT_ARROW);
+    auto body = this->parse_block();
+    if (!body) {
+      throw_error_here("expected switch body");
+    }
+    switch_case.body = *body;
+    parsed_switch.cases.push_back(switch_case);
+    if (!consume(TokenType::COMMA)) {
+      break;
+    }
+  }
+  expect(TokenType::RIGHT_BRACE);
+  return ctx->new_expr(parsed_switch);
+}
+
 /* Types */
 
 Type_Ptr Parser::parse_type(bool default_tvar) {
@@ -998,18 +1107,24 @@ Type_Ptr Parser::parse_base_type(bool default_tvar) {
     return this->parse_tuple_type();
   }
 
-  // Array/simple types
-  auto type_name = this->parse_identifier();
   Type_Ptr type;
-
-  if (!type_name) {
-    if (default_tvar) {
-      type = ctx->new_tvar();
-    } else {
-      return nullptr;
-    }
+  if (consume(TokenType::BITWISE_OR)) {
+    // Allows typing |\i32->i32|[] for a vector of lambdas and stuff
+    // TODO: Change to parse_type()? Would allow for more odd refs...
+    type = this->parse_base_type();
+    expect(TokenType::BITWISE_OR);
   } else {
-    type = ctx->new_type(UncheckedType(*type_name));
+    // Array/simple types
+    auto type_name = this->parse_identifier();
+    if (!type_name) {
+      if (default_tvar) {
+        type = ctx->new_tvar();
+      } else {
+        return nullptr;
+      }
+    } else {
+      type = ctx->new_type(UncheckedType(*type_name));
+    }
   }
 
   if (peek(TokenType::LEFT_SQUARE_BRACKET)) {

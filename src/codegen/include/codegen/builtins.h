@@ -21,7 +21,6 @@ namespace Builtin {
   }
 
   namespace Vector {
-
     enum Offsets: int {
       // These are negative offsets from the data pointer
       TYPE_SIZE = -3,
@@ -29,6 +28,13 @@ namespace Builtin {
       LENGTH    = -1,
       // The data pointer
       DATA      = 0,
+    };
+  }
+
+  namespace Enum {
+    enum Offsets: uint {
+      TAG  = 0,
+      DATA = 1,
     };
   }
 }

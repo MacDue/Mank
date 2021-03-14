@@ -2,9 +2,9 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "sema/macros.h"
-#include "sema/sema_errors.h"
 
 #include "ast/ast_builder.h"
+#include "errors/compiler_errors.h"
 
 namespace Macros {
 
@@ -23,14 +23,14 @@ Ast_Expression_Type builtin_print(
 
   auto arg_count = print_call.arguments.size();
   if (arg_count < 1) {
-    throw_sema_error_at(print_call, "print macro needs at least one argument");
+    throw_error_at(print_call, "print macro needs at least one argument");
   }
 
   // "Hello {}!\n Lol!"
   auto first_arg = print_call.arguments.at(0);
   auto format_template = std::get_if<Ast_Literal>(&first_arg->v);
   if (!format_template || format_template->literal_type != PrimativeType::STRING) {
-    throw_sema_error_at(first_arg, "must be a constant string literal");
+    throw_error_at(first_arg, "must be a constant string literal");
   }
   // remove outer "s
   auto raw_template = std::string_view(format_template->value)
@@ -77,7 +77,7 @@ Ast_Expression_Type builtin_print(
   }
 
   if (holes_count != arg_count - 1) {
-    throw_sema_error_at(print_call, "number of holes does not match number of arguments");
+    throw_error_at(print_call, "number of holes does not match number of arguments");
   }
 
   for (size_t hole = 0; hole < holes_count; hole++) {

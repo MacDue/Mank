@@ -49,6 +49,10 @@ private:
       std::string(last_token.raw_token), args...);
   }
 
+  /* Items */
+  Item_Ptr parse_pod();
+  Item_Ptr parse_enum();
+
   /* Types */
   Type_Ptr parse_type(bool default_tvar = false);
   Type_Ptr parse_base_type(bool default_tvar = false);
@@ -56,7 +60,6 @@ private:
   Type_Ptr parse_list_type(Type_Ptr base_type);
   std::vector<Type_Ptr> parse_type_list(TokenType left_delim, TokenType right_delim);
   Type_Ptr parse_lambda_type();
-  Type_Ptr parse_pod();
   Type_Ptr parse_tuple_type();
   Type_Ptr parse_function();
 
@@ -84,26 +87,39 @@ private:
   Ast_Tuple_Binds parse_tuple_binds();
   Stmt_Ptr parse_structural_binding();
 
+  struct ExprFlags {
+    bool brace_delimited:1 = false,
+         paren_delimited:1 = false;
+    ExprFlags(bool brace_delimited = false, bool paren_delimited = false)
+      : brace_delimited{brace_delimited}, paren_delimited{paren_delimited} {};
+  };
+
+  inline static const ExprFlags
+    NO_STRUCTS = ExprFlags(true, false),
+    NO_CALLS   = ExprFlags(false, true),
+    NO_CALLS_OR_STRUCTS = ExprFlags(true, true);
+
   /* Expressions */
   std::vector<Expr_Ptr> parse_expression_list(
     TokenType left_delim = TokenType::LEFT_PAREN,
     TokenType right_delim = TokenType::RIGHT_PAREN);
-  Expr_Ptr parse_expression(bool brace_delimited = false);
-  Expr_Ptr parse_postfix_expression(bool brace_delimited);
+  Expr_Ptr parse_expression(ExprFlags flags = ExprFlags());
+  Expr_Ptr parse_postfix_expression(ExprFlags flags);
   Expr_Ptr parse_call(Expr_Ptr target);
   Expr_Ptr parse_field_access(Expr_Ptr object);
   Expr_Ptr parse_index_access(Expr_Ptr object);
-  Expr_Ptr parse_primary_expression(bool brace_delimited);
+  Expr_Ptr parse_primary_expression(ExprFlags flags);
   Expr_Ptr parse_parenthesised_expression();
   Expr_Ptr parse_if();
-  Expr_Ptr parse_binary_expression(bool brace_delimited);
-  Expr_Ptr parse_unary(bool brace_delimited);
+  Expr_Ptr parse_binary_expression(ExprFlags flags);
+  Expr_Ptr parse_unary(ExprFlags flags);
   Expr_Ptr parse_literal();
   Expr_Ptr parse_array_literal();
   Expr_Ptr parse_lambda();
   Expr_Ptr parse_tuple_literal(Expr_Ptr first_element);
   Expr_Ptr parse_pod_literal(
-    Ast_Identifier pod_name, std::vector<Type_Ptr> specializations = {});
+    Ast_Path pod_name, std::vector<Type_Ptr> specializations = {});
+  Expr_Ptr parse_switch();
 
   /* Simple helpers */
   bool consume(TokenType token_type);

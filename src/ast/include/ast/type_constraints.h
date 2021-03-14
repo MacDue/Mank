@@ -69,3 +69,10 @@ DEF_TYPE(LValueConstraint) {
 
   static Type_Ptr get(AstContext& ctx, Expr_Ptr expected_lvalue);
 };
+
+DEF_TYPE(SwitchableConstraint) {
+  Type_Ptr type;
+  Expr_Ptr switched;
+
+  static Type_Ptr get(AstContext& ctx, Expr_Ptr switched);
+};

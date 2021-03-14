@@ -107,6 +107,12 @@ DEF_EXPR(Ast_Identifier) {
   }
 };
 
+// foo::bar::baz
+DEF_EXPR(Ast_Path) {
+  bool leading_colons = false;
+  std::vector<Ast_Identifier> path;
+};
+
 struct Ast_Argument {
   Type_Ptr type;
   Ast_Identifier name;

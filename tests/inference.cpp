@@ -220,8 +220,7 @@ TEST_CASE("Field constraints", "[Infer]") {
     auto& bar_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(2)->v);
 
     // my_foo is a Foo
-    REQUIRE("Foo" ==
-      std::get<Ast_Pod_Declaration>(my_foo_decl.type->v).identifier.name);
+    REQUIRE("Foo" == std::get<PodType>(my_foo_decl.type->v).identifier.name);
 
     // bar is an int
     REQUIRE(match_types(bar_decl.type, PrimativeType::get(PrimativeType::INTEGER)));
@@ -254,8 +253,7 @@ TEST_CASE("Field constraints", "[Infer]") {
     auto& my_foo_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(1)->v);
     auto& baz_decl = std::get<Ast_Variable_Declaration>(proc_test.body.statements.at(2)->v);
 
-    REQUIRE("Foo" ==
-      std::get<Ast_Pod_Declaration>(my_foo_decl.type->v).identifier.name);
+    REQUIRE("Foo" == std::get<PodType>(my_foo_decl.type->v).identifier.name);
 
     REQUIRE(match_types(baz_decl.type, PrimativeType::get(PrimativeType::INTEGER)));
   }

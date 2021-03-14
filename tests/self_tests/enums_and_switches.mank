@@ -1,0 +1,144 @@
+test switching_on_lvalue_integer_default_case {
+  x := 1212;
+  switch x {
+    1 + 2 * 43 - 1 => {
+      # Constant expr match
+      assert!(false, "not reached");
+    },
+    2123 => {
+      assert!(false, "not reached");
+    },
+    else => {
+      return; # should return here so not to hit default case
+    }
+  }
+  assert!(false, "not reached (should have hit default case)");
+}
+
+test switching_on_lvalue_integer_matched {
+  x := 3132;
+  switch x {
+    783 * 2 * (1 + 1) => {
+      # Match!
+      return;
+    },
+    821 => {
+      assert!(false, "not reached");
+    },
+    else => {
+      assert!(false, "not reached");
+    }
+  }
+  assert!(false, "not reached (should have matched)");
+}
+
+test switching_on_rvalue_integer {
+  switch 32 {
+    2 << 4 => {
+      return;
+    },
+    else => {
+      assert!(false, "not reached");
+    }
+  }
+  assert!(false, "not reached (should have matched)");
+}
+
+enum CLikeEnum {
+  First,
+  Second,
+  Third,
+  Fourth
+}
+
+test switch_with_c_like_enum_exhaustive {
+  val := CLikeEnum::Third;
+  switch val {
+    CLikeEnum::First => {
+      assert!(false, "not reached");
+    },
+    CLikeEnum::Second => {
+      assert!(false, "not reached");
+    },
+    CLikeEnum::Third => {
+      return;
+    },
+    CLikeEnum::Fourth => {
+      assert!(false, "not reached");
+    }
+  }
+  assert!(false, "not reached (should have matched)");
+}
+
+test switch_with_c_like_enum_with_default {
+  val := CLikeEnum::Fourth;
+  switch val {
+    CLikeEnum::Third => {
+      assert!(false, "not reached");
+    },
+    CLikeEnum::Second => {
+      assert!(false, "not reached");
+    },
+    else => {
+      return;
+    }
+  }
+  assert!(false, "not reached (should have matched)")
+}
+
+enum ADTEnum {
+  TupleEnum(i32, bool),
+  PodEnum{x: i32, y: i32},
+  EmptyEnum
+}
+
+test switch_on_adt_enum_without_binds {
+  val := ADTEnum::EmptyEnum;
+  switch val {
+    ADTEnum::TupleEnum => {
+      assert!(false, "not reached");
+    },
+    ADTEnum::PodEnum => {
+      assert!(false, "not reached");
+    },
+    ADTEnum::EmptyEnum => {
+      return;
+    }
+  }
+  assert!(false, "not reached (should have matched)");
+}
+
+test switch_on_adt_enum_with_binds {
+  val := ADTEnum::TupleEnum(42, true);
+  switch val {
+    ADTEnum::TupleEnum(a, b) => {
+      assert!(a == 42);
+      assert!(b);
+      return;
+    },
+    ADTEnum::PodEnum{.x, .y} => {
+      assert!(false, "not reached");
+    },
+    ADTEnum::EmptyEnum => {
+      assert!(false, "not reached");
+    }
+  }
+  assert!(false, "not reached (should have been matched)");
+}
+
+test switch_on_rvalue_adt_enum_with_binds {
+  switch (ADTEnum::PodEnum {.x = -1337, .y = 314}) {
+    ADTEnum::PodEnum{.x, .y} => {
+      assert!(x == -1337);
+      assert!(y == 314);
+      return;
+    },
+    ADTEnum::TupleEnum(a,b) => {
+      assert!(false, "not reached");
+    },
+    ADTEnum::EmptyEnum => {
+      assert!(false, "not reached");
+    }
+  }
+  assert!(false, "not reached (should have been matched)");
+}

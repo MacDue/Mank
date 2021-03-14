@@ -48,7 +48,7 @@ bool match_types(Type_Ptr a, Type_Ptr b,
         [](auto const & a, auto const & b) {
           return a.tag == b.tag;
         },
-      pattern(as<Ast_Pod_Declaration>(arg), as<Ast_Pod_Declaration>(arg)) =
+      pattern(as<PodType>(arg), as<PodType>(arg)) =
         [](auto const & a, auto const & b) {
           return a.identifier.name == b.identifier.name;
         },
@@ -151,20 +151,18 @@ static std::pair<Type_Ptr,int> get_field_type(
   Type_Ptr type,
   Expr_Ptr object,
   Ast_Identifier const & field,
-  Expression_Meta::ValueType& value_type,
-  ResolvedPodInfoMap const & pod_info
+  Expression_Meta::ValueType& value_type
 ) {
   using namespace mpark::patterns;
   if (type) {
     int resolved_field_index = -1;
     auto access_type = match(remove_reference(type)->v)(
-      pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type) {
-        auto [field_type, field_index] =
-          pod_info.at(pod_type.identifier.name).get_field_or_fail(field);
+      pattern(as<PodType>(arg)) = [&](auto& pod_type) {
+        auto field_info = pod_type.get_field(field);
         // Only update value type here (all others are always rvalues)
         value_type = object->meta.value_type;
-        resolved_field_index = field_index;
-        return field_type;
+        resolved_field_index = field_info.index;
+        return field_info.type;
       },
       // FIXME: Hardcoded .length
       pattern(anyof(as<FixedSizeArrayType>(_), as<ListType>(_))) = [&]{
@@ -183,8 +181,13 @@ static std::pair<Type_Ptr,int> get_field_type(
           return cell_type.ref;
         };
       },
+      pattern(as<EnumType>(_)) = [&]{
+        WHEN(field.name == "tag") {
+          return PrimativeType::int_ty();
+        };
+      },
       pattern(as<TypeVar>(_)) = [&]() -> Type_Ptr {
-        throw_sema_error_at(object, TYPE_MUST_BE_KNOWN);
+        throw_error_at(object, TYPE_MUST_BE_KNOWN);
         return nullptr;
       },
       pattern(_) = []() -> Type_Ptr { return nullptr; });
@@ -192,27 +195,20 @@ static std::pair<Type_Ptr,int> get_field_type(
       return std::make_pair(access_type, resolved_field_index);
     }
   }
-  throw_sema_error_at(object, "not a pod type (is {})", type_to_string(type.get()));
+  throw_error_at(object, "not a pod type (is {})", type_to_string(type.get()));
 }
 
-Type_Ptr get_field_type(
-  Ast_Field_Access& access,
-  ResolvedPodInfoMap const & pod_info
-) {
+Type_Ptr get_field_type(Ast_Field_Access& access) {
   auto [access_type, field_index] = get_field_type(
     access.object->meta.type,
     access.object,
     access.field,
-    access.get_meta().value_type,
-    pod_info);
+    access.get_meta().value_type);
   access.field_index = field_index;
   return access_type;
 }
 
-Type_Ptr get_field_type(
-  TypeFieldConstraint& field_constraint,
-  ResolvedPodInfoMap const & pod_info
-) {
+Type_Ptr get_field_type(TypeFieldConstraint& field_constraint) {
   Expression_Meta::ValueType value_type;
   if (auto pior_value_type = field_constraint.get_value_type()) {
     value_type = *pior_value_type;
@@ -221,7 +217,7 @@ Type_Ptr get_field_type(
     field_constraint.type,
     field_constraint.get_object(),
     field_constraint.get_field(),
-    value_type, pod_info);
+    value_type);
   field_constraint.resolve_field_index(field_index);
   // If there was no pior value is this a NOP.
   field_constraint.resolve_value_type(value_type);
@@ -229,18 +225,14 @@ Type_Ptr get_field_type(
 }
 
 Type_Ptr get_field_type(
-  Ast_Pod_Bind& pod_bind,
-  Expr_Ptr init,
-  Type_Ptr init_type,
-  ResolvedPodInfoMap const & pod_info
+  Ast_Pod_Bind& pod_bind, Expr_Ptr init, Type_Ptr init_type
 ) {
   Expression_Meta::ValueType _value_type; // no needed
   auto [access_type, field_index] = get_field_type(
     init_type,
     init,
     pod_bind.field,
-    _value_type,
-    pod_info);
+    _value_type);
   pod_bind.field_index = field_index;
   return access_type;
 }
@@ -265,7 +257,7 @@ Type_Ptr get_element_type(Type_Ptr type, Ast_Index_Access& access) {
       return list_type.element_type;
     },
     pattern(_) = [&]() -> Type_Ptr {
-      throw_sema_error_at(access.object, "not an indexable type (is {})",
+      throw_error_at(access.object, "not an indexable type (is {})",
         type_to_string(type.get()));
       return nullptr;
     }
@@ -280,13 +272,13 @@ void static_check_array_bounds(Ast_Index_Access& index_access, bool allow_missin
     if (!array_type) {
       // Would only be a tvar
       if (allow_missing_types) return;
-      throw_sema_error_at(index_access.object, TYPE_MUST_BE_KNOWN);
+      throw_error_at(index_access.object, TYPE_MUST_BE_KNOWN);
     }
     // assert(array_type && "should be an array type");
     // FIXME: Will break with more integer types
     auto int_index = std::get<int32_t>(*index_value);
     if (int_index < 0 || static_cast<size_t>(int_index) >= array_type->size) {
-      throw_sema_error_at(index_access.index, "out of bounds index");
+      throw_error_at(index_access.index, "out of bounds index");
     }
   }
 }
@@ -331,8 +323,33 @@ bool validate_type_cast(Type_Ptr source_type, Ast_As_Cast& as_cast) {
     pattern(_, _) = []{ return false; });
 
   if (!valid_cast) {
-    throw_sema_error_at(as_cast, "invalid cast from {} to {}",
+    throw_error_at(as_cast, "invalid cast from {} to {}",
       type_to_string(source_type.get()), type_to_string(as_cast.type.get()));
   }
   return valid_cast;
+}
+
+bool is_switchable_type(Type_Ptr type) {
+  using namespace mpark::patterns;
+  return match(remove_reference(type)->v)(
+    pattern(as<EnumType>(_)) = []{
+      return true;
+    },
+    pattern(as<PrimativeType>(arg)) = [](auto& primative){
+      WHEN(primative.is_integer_type()) {
+        return true;
+      };
+    },
+    pattern(_) = [&]{
+      return false;
+    }
+  );
+}
+
+void assert_has_switchable_type(Expr_Ptr expr) {
+  if (!is_switchable_type(expr->meta.type)) {
+    throw_error_at(expr,
+      "not a switchable type (is {}), expected integral type or enum",
+      type_to_string(expr->meta.type.get()));
+  }
 }

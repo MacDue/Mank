@@ -1,8 +1,8 @@
 #include "sema/types.h"
 #include "sema/macros.h"
-#include "sema/sema_errors.h"
 
 #include "ast/ast_builder.h"
+#include "errors/compiler_errors.h"
 
 namespace Macros {
 
@@ -11,7 +11,7 @@ Ast_Expression_Type builtin_bind(
 ) {
   auto arg_count = bind_call.arguments.size();
   if (arg_count <= 0) {
-    throw_sema_error_at(bind_call, "bind needs some arguments");
+    throw_error_at(bind_call, "bind needs some arguments");
   }
 
   LambdaType* lambda_type;
@@ -29,9 +29,9 @@ Ast_Expression_Type builtin_bind(
       if (first_arg) {
         lambda_type = std::get_if<LambdaType>(&arg_type->v);
         if (!lambda_type) {
-          throw_sema_error_at(arg, "cannot bind non-lambda type");
+          throw_error_at(arg, "cannot bind non-lambda type");
         } else if (bound_count > lambda_type->argument_types.size()) {
-          throw_sema_error_at(bind_call, "too many binds for lambda");
+          throw_error_at(bind_call, "too many binds for lambda");
         }
         first_arg = false;
         return nullptr;

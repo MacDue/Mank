@@ -21,7 +21,8 @@ using SpecialConstraints = std::vector<SpecialConstraint>;
 #define TYPE_PROPERTY_CONSTRAINT anyof( \
   as<TypeFieldConstraint>(arg), \
   as<TypeIndexConstraint>(arg), \
-  as<TypeCastConstraint>(arg))
+  as<TypeCastConstraint>(arg),  \
+  as<SwitchableConstraint>(arg))
 
 #define TYPE_LIST anyof( \
   as<FixedSizeArrayType>(arg), \
@@ -105,7 +106,7 @@ bool Infer::substitute(
   };
 
   return match(current_type->v)(
-    pattern(anyof(as<PrimativeType>(_), as<Ast_Pod_Declaration>(_))) = [&]{
+    pattern(anyof(as<PrimativeType>(_), as<PodType>(_), as<EnumType>(_))) = [&]{
       return false;
     },
     pattern(as<LambdaType>(arg)) = [&](auto lambda_type) {
@@ -232,7 +233,7 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
 
   // std::cout << "unify: " << type_to_string(c.t1.get()) << " = " << type_to_string(c.t2.get()) << '\n';
   auto unify_field_constraint = [&](Type_Ptr other_type, TypeFieldConstraint& field_constraint) {
-    auto field_type = get_field_type(field_constraint, resolved_pods);
+    auto field_type = get_field_type(field_constraint);
     Constraint fc{field_type, other_type};
     return try_unify_sub_constraints(c, { fc });
   };
@@ -247,6 +248,13 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
   auto unify_cast_constraint = [&](Type_Ptr other_type, TypeCastConstraint& cast_constraint) {
     (void) other_type;
     validate_type_cast(cast_constraint.type, *cast_constraint.as_cast);
+    return Substitution{};
+  };
+
+  auto unify_switchable_constraint = [&](Type_Ptr other_type, SwitchableConstraint& switch_constraint) {
+    (void) other_type;
+    switch_constraint.switched->meta.type = switch_constraint.type;
+    assert_has_switchable_type(switch_constraint.switched);
     return Substitution{};
   };
 
@@ -283,8 +291,13 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
         return ret;
       };
     },
-    pattern(as<Ast_Pod_Declaration>(arg), as<Ast_Pod_Declaration>(arg)) = [&](auto& p1, auto& p2) {
+    pattern(as<PodType>(arg), as<PodType>(arg)) = [&](auto& p1, auto& p2) {
       WHEN(p1.identifier.name == p2.identifier.name) {
+        return Substitution{};
+      };
+    },
+    pattern(as<EnumType>(arg), as<EnumType>(arg)) = [&](auto& e1, auto& e2) {
+      WHEN(e1.identifier.name == e2.identifier.name) {
         return Substitution{};
       };
     },
@@ -294,6 +307,8 @@ Infer::Substitution Infer::unify_one(Infer::Constraint const & c) {
     pattern(_, as<TypeIndexConstraint>(arg)) = std::bind(unify_index_constraint, c.t1, _1),
     pattern(as<TypeCastConstraint>(arg), _) = std::bind(unify_cast_constraint, c.t2, _1),
     pattern(_, as<TypeCastConstraint>(arg)) = std::bind(unify_cast_constraint, c.t1, _1),
+    pattern(as<SwitchableConstraint>(arg), _) = std::bind(unify_switchable_constraint, c.t2, _1),
+    pattern(_, as<SwitchableConstraint>(arg)) = std::bind(unify_switchable_constraint, c.t1, _1),
     pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) = [&](auto& a1, auto& a2) {
       WHEN(a1.size == a2.size) {
         Constraint ec{a1.element_type, a2.element_type};
@@ -504,7 +519,7 @@ void Infer::assert_lvalue(Expr_Ptr expr, char const* error_template) {
     add_constraint(AstHelper::extract_location(expr), lc, expr->meta.type, error_template);
   } else {
     if (!expr->is_lvalue()) {
-      throw_sema_error_at(expr, error_template);
+      throw_error_at(expr, error_template);
     }
   }
 }

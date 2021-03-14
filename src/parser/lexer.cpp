@@ -1,6 +1,8 @@
 #include <fstream>
 #include <filesystem>
 
+#include <mapbox/eternal.hpp>
+
 #include "parser/lexer.h"
 #include "errors/compiler_errors.h"
 
@@ -35,10 +37,10 @@ void Lexer::load_file(std::string const & file_path) {
   this->source = read_entire_file(file_path);
 }
 
-void Lexer::set_input_to_string(std::string source) {
+void Lexer::set_input_to_string(std::string source, std::string name) {
   this->reset();
   this->source = source;
-  this->source_name = "<string>";
+  this->source_name = name.empty() ? "<string>" : name;
 }
 
 /* Token actions */
@@ -121,56 +123,44 @@ void Lexer::skip_whitespace() {
 
 /* Token parsing */
 
+MAPBOX_ETERNAL_CONSTEXPR const auto KEYWORDS = mapbox::eternal::map<mapbox::eternal::string, TokenType>({
+  { "fun"     , TokenType::FUNCTION  },
+  { "proc"    , TokenType::PROCEDURE },
+  { "domain"  , TokenType::DOMAIN    },
+  { "of"      , TokenType::OF        },
+  { "spawn"   , TokenType::SPAWN     },
+  { "if"      , TokenType::IF        },
+  { "else"    , TokenType::ELSE,     },
+  { "for"     , TokenType::FOR       },
+  { "while"   , TokenType::WHILE     },
+  { "until"   , TokenType::UNTIL     },
+  { "in"      , TokenType::IN        },
+  { "pod"     , TokenType::POD       },
+  { "return"  , TokenType::RETURN    },
+  { "true"    , TokenType::TRUE      },
+  { "false"   , TokenType::FALSE     },
+  { "ref"     , TokenType::REF       },
+  { "bind"    , TokenType::BIND      },
+  { "loop"    , TokenType::LOOP      },
+  { "break"   , TokenType::BREAK     },
+  { "continue", TokenType::CONTINUE  },
+  { "as"      , TokenType::AS        },
+  { "test"    , TokenType::TEST      },
+  { "const"   , TokenType::CONST     },
+  { "enum"    , TokenType::ENUM      },
+  { "switch"  , TokenType::SWITCH    },
+});
+
+constexpr auto MAX_KEYWORD_LEN = 8; // continue
+
 static TokenType ident_to_token(std::string_view ident) {
-  if (ident == "fun") {
-    return TokenType::FUNCTION;
-  } else if (ident == "proc") {
-    return TokenType::PROCEDURE;
-  } else if (ident == "domain") {
-    return TokenType::DOMAIN;
-  } else if (ident == "of") {
-    return TokenType::OF;
-  } else if (ident == "spawn") {
-    return TokenType::SPAWN;
-  } else if (ident == "if") {
-    return TokenType::IF;
-  } else if (ident == "else") {
-    return TokenType::ELSE;
-  } else if (ident == "for") {
-    return TokenType::FOR;
-  } else if (ident == "while") {
-    return TokenType::WHILE;
-  } else if (ident == "until") {
-    return TokenType::UNTIL;
-  } else if (ident == "in") {
-    return TokenType::IN;
-  } else if (ident == "pod") {
-    return TokenType::POD;
-  } else if (ident == "return") {
-    return TokenType::RETURN;
-  } else if (ident == "true") {
-    return TokenType::TRUE;
-  } else if (ident == "false") {
-    return TokenType::FALSE;
-  } else if (ident == "ref") {
-    return TokenType::REF;
-  } else if (ident == "bind") {
-    return TokenType::BIND;
-  } else if (ident == "loop") {
-    return TokenType::LOOP;
-  } else if (ident == "break") {
-    return TokenType::BREAK;
-  } else if (ident == "continue") {
-    return TokenType::CONTINUE;
-  } else if (ident == "as") {
-    return TokenType::AS;
-  } else if (ident == "test") {
-    return TokenType::TEST;
-  } else if (ident == "const") {
-    return TokenType::CONST;
-  } else {
-    return TokenType::IDENT;
+  char lookup[MAX_KEYWORD_LEN + 1] = {'\0'};
+  ident.copy(lookup, MAX_KEYWORD_LEN);
+  auto keyword = KEYWORDS.find(lookup);
+  if (keyword != KEYWORDS.end()) {
+    return keyword->second;
   }
+  return TokenType::IDENT;
 }
 
 void Lexer::next_token() {
@@ -201,6 +191,7 @@ void Lexer::next_token() {
     || match("%=", TokenType::MODULO_EQUAL)
     /* Muti-char (misc) tokens */
     || match("->", TokenType::ARROW)
+    || match("=>", TokenType::FAT_ARROW)
     /* Single-char operators */
     || match("+", TokenType::PLUS)
     || match("-", TokenType::MINUS)
@@ -216,6 +207,7 @@ void Lexer::next_token() {
     || match("¬", TokenType::LOGICAL_NOT)
     /* Basic elements */
     || match("..", TokenType::DOUBLE_DOT)
+    || match("::", TokenType::DOUBLE_COLON)
     || match(",", TokenType::COMMA)
     || match(";", TokenType::SEMICOLON)
     || match(":", TokenType::COLON)
@@ -322,8 +314,8 @@ bool Lexer::match_string_literal() {
     this->last_token.literal_type = PrimativeType::STRING;
 
     int next_char;
-    while ((next_char = this->peek_next_char() != '"')) {
-      if (next_char == EOF) {
+    while ((next_char = this->peek_next_char()) != '"') {
+      if (next_char == EOF || next_char == '\n') {
         // TODO: Unclosed string literal
         this->last_token.type = TokenType::INVALID;
         break;
@@ -332,8 +324,9 @@ bool Lexer::match_string_literal() {
         this->consume_char();
       }
     }
-
-    this->consume_char();
+    if (this->last_token.type != TokenType::INVALID) {
+      this->consume_char();
+    }
     return true;
   } else {
     return false;

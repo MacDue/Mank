@@ -1,8 +1,8 @@
 #include "sema/macros.h"
-#include "sema/sema_errors.h"
 
 #include "parser/lexer.h"
 #include "ast/ast_builder.h"
+#include "errors/compiler_errors.h"
 
 namespace Macros {
 
@@ -14,7 +14,7 @@ Ast_Expression_Type builtin_assert(
   assert(source_file != nullptr);
   auto args_count = assert_call.arguments.size();
   if (args_count < 1 || args_count > 2) {
-    throw_sema_error_at(assert_call, "assert expects one boolean expression");
+    throw_error_at(assert_call, "assert expects one boolean expression");
   }
 
   auto check = assert_call.arguments.at(0);

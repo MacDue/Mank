@@ -5,7 +5,10 @@
 #include <stdexcept>
 #include <formatxx/std_string.h>
 
+#include "ast/util.h"
 #include "compiler_message.h"
+
+#define IMPOSSIBLE() assert(false && "should be unreachable");
 
 class CompilerError: public std::exception {
   CompilerMessage error_message;
@@ -35,4 +38,12 @@ template<typename TPattern, typename... TArgs>
 template<typename TPattern, typename... TArgs>
 [[ noreturn ]] void throw_general_error(TPattern format_pattern, TArgs const & ... args) {
   throw_compile_error(std::nullopt, format_pattern, args...);
+}
+
+template< typename TAst, typename TPattern, typename... TArgs>
+[[ noreturn ]] void throw_error_at(
+  TAst const & ast, TPattern format_pattern, TArgs const & ... args
+) {
+  throw_compile_error(AstHelper::extract_location(ast), format_pattern, args...);
+  IMPOSSIBLE();
 }

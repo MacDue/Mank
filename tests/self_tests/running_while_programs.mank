@@ -1,0 +1,100 @@
+#!copy ../../examples/while_lang.mank
+
+fun run_program_from_string: ProgramState (code: str) {
+  parser := new_parser(code);
+  prog := parser_parse(parser);
+  state := new_program_state();
+  eval_program(prog, state, false)
+}
+
+proc assert_var_equals(state: ProgramState, var: str, expected: i32) {
+  value := as_number(get_var(state, var));
+  assert!(value == expected,
+        "expected " + var + " == " + int_to_string(expected)
+      + ", but is " + int_to_string(value));
+}
+
+test running_while_pow2_program {
+  final_state := run_program_from_string(
+      "x := 1; y := 5;"
+    + "while y > 0 do { x := x + x; y := y - 1; }"
+  );
+  assert_var_equals(final_state, "y", 0);
+  # Program calculates 2^y
+  assert_var_equals(final_state, "x", 32);
+}
+
+test running_simple_while_division_program  {
+  final_state := run_program_from_string(
+      "x := 10; y := 3;" # input x = 10, y = 3
+    + "r := x; d := 0;"
+    + "while y <= r do { d := d + 1; r := r - y }"
+  );
+  assert_var_equals(final_state, "r", 1); # remainder 1
+  assert_var_equals(final_state, "d", 3); # quotient 3
+}
+
+test running_while_square_root_program {
+  final_state := run_program_from_string(
+      "x := 23;" # input x = 23
+    + "z := 0;"
+    + "while (z + 1) * (z + 1) <= x do { z := z + 1 };"
+    + "r := x - z * z"
+  );
+  assert_var_equals(final_state, "z", 4); # sqrt(23) = 4.79583152
+  assert_var_equals(final_state, "r", 7); # 23 - 4^2 = 7
+}
+
+test running_while_fibonacci_program {
+  final_state := run_program_from_string(
+      "x := 5;" # input x = 5 (go to 5th fib number)
+    + "y := 1;"
+    + "z := 0;"
+    + "while x > 0 do {"
+    + "  t := z;"
+    + "  z := y;"
+    + "  y := t + y;"
+    + "  x := x - 1;"
+    + "}"
+  );
+  assert_var_equals(final_state, "x", 0);
+  assert_var_equals(final_state, "y", 8); # 8th fibonacci number
+  assert_var_equals(final_state, "z", 5); # 7th fibonacci number
+}
+
+test running_while_gcd_program {
+  final_state := run_program_from_string(
+      "x := 54; y := 24;" # gcd(54, 26)
+    + "while x != y do {"
+    + "  if x > y then {"
+    + "    x := x - y;"
+    + "  } else {"
+    + "    y := y - x;"
+    + "  }"
+    + "};"
+    + "z := x"
+  );
+  assert_var_equals(final_state, "z", 6) # gcd(54, 26) == 6
+}
+
+test running_while_prime_check_program {
+  prime_prog := (
+      "y := x - 1;"
+    + "z := 1;"
+    + "while y > 1 && z == 1 do {"
+    + "  r := x;"
+    + "  while y <= r do { r := r - y };"
+    + "  if r == 0 then { z := 0; };"
+    + "  y := y - 1;"
+    + "}"
+  );
+
+  not_prime := run_program_from_string(
+    "x := 57;" + prime_prog
+  );
+  assert_var_equals(not_prime, "z", 0); # z == 0 -> not prime
+  prime := run_program_from_string(
+    "x := 97;" + prime_prog
+  );
+  assert_var_equals(prime, "z", 1); # is prime
+}

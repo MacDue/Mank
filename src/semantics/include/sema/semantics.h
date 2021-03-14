@@ -5,7 +5,6 @@
 #include <formatxx/std_string.h>
 
 #include "sema/types.h"
-#include "sema/pod_info.h"
 #include "sema/type_infer.h"
 
 #include "ast/ast.h"
@@ -41,8 +40,6 @@ private:
   std::optional<Infer> infer;
 
   Lexer* source_file = nullptr;
-
-  ResolvedPodInfoMap resolved_pods;
 
   bool build_tests = false;
 
@@ -86,7 +83,8 @@ private:
   Type_Ptr check_constant_initializer(
      Ast_Identifier constant, Ast_Expression& init, Scope& scope);
 
-  void analyse_pod(Ast_Pod_Declaration& pod, Scope& scope);
+  void analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope);
+  void analyse_enum(Ast_Enum_Declaration& enum_type, Scope& scope);
   void analyse_function_header(Ast_Function_Declaration& func);
   void analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scope& scope);
   Type_Ptr analyse_function_body(Ast_Function_Declaration& func);
@@ -99,7 +97,8 @@ private:
     Ast_Tuple_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope);
   void check_pod_bindings(
     Ast_Pod_Binds& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope);
-  void analyse_binding_decl(Ast_Structural_Binding& binding, Scope& scope);
+  void check_bindings(
+    Ast_Binding& bindings, Expr_Ptr init, Type_Ptr init_type, Scope& scope);
 
   Type_Ptr analyse_block(Ast_Block& block, Scope& scope);
   Type_Ptr analyse_expression(Ast_Expression& expr, Scope& scope, bool within_macro = false);
@@ -107,6 +106,7 @@ private:
   Type_Ptr analyse_binary_expression(Ast_Binary_Operation& expr, Scope& scope);
   Type_Ptr analyse_call(Ast_Call& expr, Scope& scope);
   Type_Ptr analyse_as_cast(Ast_As_Cast& as_cast, Scope& scope);
+  Type_Ptr analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& scope);
 
   void expand_macro_expression(Ast_Expression& target, Ast_Call& macro_call, Scope& scope);
 

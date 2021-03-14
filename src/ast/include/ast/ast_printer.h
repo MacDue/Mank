@@ -68,8 +68,12 @@ class AstPrinter {
     void print_args(std::vector<Ast_Argument> const & args);
     void print_types(std::vector<Type_Ptr> const & types);
 
+    void print_enum_members(
+      std::vector<Ast_Enum_Declaration::Member> const & enum_members);
+
     void print_file(Ast_File& file);
     void print_pod(Ast_Pod_Declaration& pod);
+    void print_enum(Ast_Enum_Declaration& enum_decl);
     void print_function(Ast_Function_Declaration& func);
 
     void print_stmt(Ast_Statement& stmt);
@@ -84,9 +88,9 @@ class AstPrinter {
     void print_stmt(Ast_Loop_Control& loop_control);
     void print_stmt(Ast_Constant_Declaration& const_decl);
 
-    void print_binding(Ast_Binding& binding);
-    void print_binding(Ast_Tuple_Binds& tuple_binds);
-    void print_binding(Ast_Pod_Binds& pod_binds);
+    void print_binding(Ast_Binding const & binding);
+    void print_binding(Ast_Tuple_Binds const & tuple_binds);
+    void print_binding(Ast_Pod_Binds const & pod_binds);
 
     void print_const(PrimativeValue const_value);
 
@@ -109,6 +113,10 @@ class AstPrinter {
     void print_expr(Ast_Array_Repeat& array_repeat);
     void print_expr(Ast_Spawn& spawn);
     void print_expr(Ast_Specialized_Identifier& special_ident);
+    void print_expr(Ast_Path& path);
+    void print_expr(Ast_Switch_Expr& switch_expr);
+
+    void print_switch_cases(std::vector<SwitchCase>& cases);
 
     DepthUpdate operator -> () {
       return DepthUpdate(this);

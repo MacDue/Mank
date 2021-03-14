@@ -8,27 +8,45 @@
 // Little hack that allows depth to be incremented/decremented
 // when print functions are called/return (see DepthUpdate)
 #define self (*this)
+ // hack for nest blocks
+#define nest DepthUpdate _du(this);
 
 /* Constructs */
 
+#define FOR_DECL_PRINT(decl, decls, print) {  \
+  for (auto decl: decls) {                    \
+    print;                                    \
+    putf("");                                 \
+  }                                           \
+}
+
 void AstPrinter::print_file(Ast_File& file) {
-  putf("* File with {} global consts, {} pods, and {} functions",
-    file.global_consts.size(), file.pods.size(), file.functions.size());
+  using namespace mpark::patterns;
+  // putf("* File with {} global consts, {} pods, and {} functions",
+  //   file.global_consts.size(), file.pods.size(), file.functions.size());
   if (!hide_lex_details) {
     putf("- Source name: {}", file.filename);
   }
-  for (auto global_const: file.global_consts) {
+
+  FOR_DECL_PRINT(global_const, file.global_consts, ({
     self->print_stmt(*global_const);
+  }))
+
+  for (auto item: file.items) {
+    match(item->v)(
+      pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_decl){
+        self->print_pod(pod_decl);
+      },
+      pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
+        self->print_enum(enum_decl);
+      }
+    );
     putf("");
   }
-  for (auto pod: file.pods) {
-    self->print_pod(*pod);
-    putf("");
-  }
-  for (auto func: file.functions) {
+
+  FOR_DECL_PRINT(func, file.functions, ({
     self->print_function(*func);
-    putf("");
-  }
+  }))
 }
 
 void AstPrinter::print_args(std::vector<Ast_Argument> const & args) {
@@ -51,6 +69,42 @@ void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
     self->print_args(pod.fields);
   } else {
     putf("- No fields");
+  }
+}
+
+
+void AstPrinter::print_enum_members(
+  std::vector<Ast_Enum_Declaration::Member> const & enum_members
+) {
+  using namespace mpark::patterns;
+  for (auto& member: enum_members) {
+    indent(); putf(" {}", member.tag.name);
+    // Nasty nest blocks to fix formatting :(
+    nest {
+      nest {
+        match(member.data)(
+          pattern(some(as<Ast_Enum_Declaration::Member::TupleData>(arg))) = [&](auto& tuple_data) {
+            putf("- Tuple data:");
+            nest { self->print_types(tuple_data.elements); }
+          },
+          pattern(some(as<Ast_Enum_Declaration::Member::PodData>(arg))) = [&](auto& pod_data) {
+            putf("- Pod data:");
+            self->print_args(pod_data.fields);
+          },
+          pattern(_) = []{}
+        );
+      }
+    }
+  }
+}
+
+void AstPrinter::print_enum(Ast_Enum_Declaration& enum_decl) {
+  putf("* Enum {}", enum_decl.identifier.name);
+  if (enum_decl.members.size() > 0) {
+    putf("- Members:");
+    self->print_enum_members(enum_decl.members);
+  } else {
+    putf("- No members");
   }
 }
 
@@ -126,7 +180,7 @@ void AstPrinter::print_stmt(Ast_For_Loop& for_loop) {
 
 #define BINDS_PATTERN anyof(as<Ast_Tuple_Binds>(arg), as<Ast_Pod_Binds>(arg))
 
-void AstPrinter::print_binding(Ast_Tuple_Binds& tuple_binds) {
+void AstPrinter::print_binding(Ast_Tuple_Binds const & tuple_binds) {
   using namespace mpark::patterns;
   putf("* Tuple bindings");
   for (auto& binding: tuple_binds.binds) {
@@ -141,7 +195,7 @@ void AstPrinter::print_binding(Ast_Tuple_Binds& tuple_binds) {
   }
 }
 
-void AstPrinter::print_binding(Ast_Pod_Binds& pod_binds) {
+void AstPrinter::print_binding(Ast_Pod_Binds const & pod_binds) {
   using namespace mpark::patterns;
   putf("* Pod bindings");
   for (auto& binding: pod_binds.binds) {
@@ -161,7 +215,7 @@ void AstPrinter::print_binding(Ast_Pod_Binds& pod_binds) {
   }
 }
 
-void AstPrinter::print_binding(Ast_Binding& binding) {
+void AstPrinter::print_binding(Ast_Binding const & binding) {
   std::visit([&](auto& bindings){
     this->print_binding(bindings);
   }, binding);
@@ -360,7 +414,8 @@ void AstPrinter::print_expr(Ast_Tuple_Literal& tuple) {
 
 void AstPrinter::print_expr(Ast_Pod_Literal& pod) {
   putf("* Pod literal");
-  putf("- Pod: {}", type_to_string(pod.pod));
+  putf("- Pod:");
+  print_expr(pod.pod);
   if (pod.specializations.size() > 0) {
     putf("- Speilizations:");
     self->print_types(pod.specializations);
@@ -398,4 +453,36 @@ void AstPrinter::print_expr(Ast_Specialized_Identifier& special_ident) {
   putf("- {}", special_ident.name);
   putf("- Types:");
   self->print_types(special_ident.specializations);
+}
+
+void AstPrinter::print_expr(Ast_Path& path) {
+  putf("* Path");
+  size_t access_order_no = 0;
+  for (auto& p: path.path) {
+    indent();
+    putf("{}. {}", access_order_no, p.name);
+    ++access_order_no;
+  }
+}
+
+void AstPrinter::print_switch_cases(std::vector<SwitchCase>& cases) {
+  for (auto& switch_case: cases) {
+    if (!switch_case.is_default_case) {
+      putf("- Case:");
+      self->print_expr(*switch_case.match);
+    } else {
+      putf("- Default case:");
+    }
+    if (switch_case.bindings) {
+      putf("- Bindings:");
+      self->print_binding(*switch_case.bindings);
+    }
+    putf("- Body:");
+    self->print_expr(switch_case.body);
+  }
+}
+
+void AstPrinter::print_expr(Ast_Switch_Expr& switch_expr) {
+  putf("* Switch expr");
+  self->print_switch_cases(switch_expr.cases);
 }

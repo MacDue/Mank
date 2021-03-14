@@ -6,12 +6,6 @@
 #include "ast/scope.h"
 #include "ast/construct.h"
 
-DEF_TYPE(LambdaType) {
-  std::vector<Type_Ptr> argument_types;
-  Type_Ptr return_type;
-  SpAstPtr<Ast_Expression, Ast_Lambda> lambda;
-};
-
 using Closure = std::vector<Symbol*>;
 
 struct Ast_Lambda:
@@ -32,4 +26,10 @@ struct Ast_Lambda:
   }
 
   void generate_closure();
+};
+
+DEF_TYPE(LambdaType) {
+  std::vector<Type_Ptr> argument_types;
+  Type_Ptr return_type;
+  SpAstPtr<Ast_Expression, Ast_Lambda> lambda;
 };

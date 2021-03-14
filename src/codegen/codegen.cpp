@@ -1,18 +1,26 @@
 #include <cassert>
 #include <iterator>
 #include <algorithm>
+#include <functional>
 
 #include <mpark/patterns.hpp>
 #include <formatxx/std_string.h>
 
 #include "sema/types.h"
 #include "ast/ast_builder.h"
+#include "ast/expr_helpers.h"
 #include "parser/token_helpers.h"
+#include "errors/compiler_errors.h"
 
 #include "llvm_codegen.h"
 #include "codegen/codegen.h"
 #include "codegen/builtins.h"
 #include "codegen/mangle.h"
+
+// #include <llvm/Support/TargetSelect.h>
+// #include <llvm/Support/TargetSelect.h>
+// #include <llvm/Target/TargetOptions.h>
+// #include <llvm/Support/TargetRegistry.h>
 
 CodeGen::CodeGen(Ast_File& file_ast)
   : impl{std::make_unique<LLVMCodeGen>(file_ast)} {}
@@ -20,6 +28,7 @@ CodeGen::CodeGen(Ast_File& file_ast)
 LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
   : file_ast{file_ast}, mank_ctx{file_ast.ctx}, ast_builder{file_ast}
 {
+  // llvm::InitializeNativeTarget();
   this->create_module();
 
   for (auto global_const: file_ast.global_consts) {
@@ -30,15 +39,45 @@ LLVMCodeGen::LLVMCodeGen(Ast_File& file_ast)
     this->codegen_function_body(*func);
   }
 
+#ifdef MANK_CODEGEN_PRINT_IR
+  // Lazy hack I use for my CLI tools
   llvm_module->print(llvm::outs(), nullptr);
   llvm::outs() << ";--fin\n";
+#endif
 }
 
 void LLVMCodeGen::create_module() {
   this->llvm_module = std::make_unique<llvm::Module>(
     file_ast.filename, llvm_context);
-  /* TODO: set machine target */
+
+  // auto target_triple = llvm::sys::getDefaultTargetTriple();
+
+  // std::string target_error;
+  // auto target = llvm::TargetRegistry::lookupTarget(target_triple, target_error);
+  // if (!target) {
+  //   throw_general_error("LLVM error: failed to setup module target: " + target_error);
+  // }
+
+  // auto cpu_type = "generic";
+  // auto features = "";
+
+  // llvm::TargetOptions opt; /* empty */
+  // auto relocation_model = llvm::Optional<llvm::Reloc::Model>();
+  // this->target_machine = target->createTargetMachine(
+  //   target_triple, cpu_type, features, opt, relocation_model);
+
+  // // Not stricly needed (something vauge about performace)
+  // this->llvm_module->setDataLayout(target_machine->createDataLayout());
+  // this->llvm_module->setTargetTriple(target_triple);
+
   /* TODO: set up optimizations */
+}
+
+std::string LLVMCodeGen::get_module_as_string() const {
+  std::string module_ir;
+  llvm::raw_string_ostream ss(module_ir);
+  this->llvm_module->print(ss, nullptr);
+  return module_ir;
 }
 
 llvm::GlobalVariable* LLVMCodeGen::create_global(
@@ -363,11 +402,98 @@ llvm::Type* LLVMCodeGen::map_lambda_type_to_llvm(LambdaType const & lambda_type,
     }, "lambda");
 }
 
-llvm::Type* LLVMCodeGen::map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope) {
-  std::vector<llvm::Type*> field_types = map_arg_types_to_llvm(pod_type.fields, scope);
-  return llvm::StructType::create(llvm_context,
-    field_types,
-    pod_type.identifier.name);
+llvm::Type* LLVMCodeGen::map_pod_to_llvm(
+  PodType const & pod_type, Scope& scope, bool unnamed
+) {
+  std::vector<llvm::Type*> field_types;
+  field_types.reserve(pod_type.fields.size());
+  std::transform(
+    pod_type.fields.begin(), pod_type.fields.end(), std::back_inserter(field_types),
+    [&](auto const & field_info){
+      return map_type_to_llvm(field_info.second.type.get(), scope);
+    });
+
+  if (!unnamed) {
+    return llvm::StructType::create(llvm_context,
+      field_types,
+      pod_type.identifier.name);
+  } else {
+    return llvm::StructType::get(llvm_context, field_types);
+  }
+}
+
+llvm::Type* LLVMCodeGen::map_tuple_to_llvm(TupleType const & tuple_type, Scope& scope) {
+  std::vector<llvm::Type*> element_types;
+  std::transform(tuple_type.element_types.begin(), tuple_type.element_types.end(),
+    std::back_inserter(element_types),
+    [&](auto const & element_type){ return map_type_to_llvm(element_type.get(), scope); });
+  return llvm::StructType::get(llvm_context, element_types);
+}
+
+llvm::Type* LLVMCodeGen::map_enum_member_data_to_llvm(
+  EnumType::Member const & member, Scope& scope
+) {
+  using namespace mpark::patterns;
+  llvm::Type* variant_data = nullptr;
+  if (member.data) {
+    variant_data = match(member.data->v)(
+      pattern(as<PodType>(arg)) = [&](auto& pod_type){
+        return map_pod_to_llvm(pod_type, scope, true);
+      },
+      pattern(as<TupleType>(arg)) = [&](auto& tuple_type){
+        return map_tuple_to_llvm(tuple_type, scope);
+      }
+    );
+  }
+  return variant_data;
+}
+
+LLVMCodeGen::EnumTypeLLVM LLVMCodeGen::map_enum_to_llvm(
+  EnumType const & enum_type, Scope& scope
+) {
+  auto get_enum_tag_type = [&](EnumType const & enum_type) {
+    if (!enum_type.is_adt) {
+      auto enum_size = enum_type.members.size();
+      return (
+        enum_size <= 0xff       ? llvm::Type::getInt8Ty (llvm_context) :
+        enum_size <= 0xffff     ? llvm::Type::getInt16Ty(llvm_context) :
+        enum_size <= 0xffffffff ? llvm::Type::getInt32Ty(llvm_context) :
+                                  llvm::Type::getInt64Ty(llvm_context));
+    } else {
+      // Must use a 64bit tag for ADT enums or there will be alignment issues
+      // TODO: Probaly should return a word sized tag? (find out how to get that)
+      return llvm::Type::getInt64Ty(llvm_context);
+    }
+  };
+
+  EnumTypeLLVM llvm_enum_type;
+  llvm_enum_type.tag_type = get_enum_tag_type(enum_type);
+  uint64_t max_data_size = 0;
+  for (auto& [tag, member]: enum_type.members) {
+    std::vector<llvm::Type*> varaint;
+    llvm::Type* variant_data = map_enum_member_data_to_llvm(member, scope);
+    if (variant_data) {
+      uint64_t data_size = llvm_module->getDataLayout().getTypeAllocSize(variant_data);
+      if (data_size > max_data_size) {
+        max_data_size = data_size;
+      }
+      varaint = { llvm_enum_type.tag_type, variant_data };
+    } else {
+      varaint = { llvm_enum_type.tag_type };
+    }
+    auto variant_name = enum_type.identifier.name + "!" + tag;
+    llvm_enum_type.variants.push_back(
+      llvm::StructType::create(llvm_context, varaint, variant_name));
+  }
+
+  std::vector<llvm::Type*> enum_obj = { llvm_enum_type.tag_type };
+  enum_obj.push_back(llvm::ArrayType::get(
+    llvm::Type::getInt8Ty(llvm_context), max_data_size));
+
+  llvm_enum_type.general_type = llvm::StructType::create(
+    llvm_context, enum_obj, enum_type.identifier.name);
+
+  return llvm_enum_type;
 }
 
 #define MANK_VEC_BULTIN "!vec"
@@ -410,6 +536,7 @@ llvm::Type* LLVMCodeGen::get_vector_ty(Scope& scope) {
 }
 
 llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
+  // FIXME: All the scope based meta cache stuff here would break with path name resoluton for types
   using namespace mpark::patterns;
   if (!type) {
     return llvm::Type::getVoidTy(llvm_context);
@@ -421,7 +548,7 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
       }
       return map_primative_to_llvm(primative.tag);
     },
-    pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto const & pod_type) {
+    pattern(as<PodType>(arg)) = [&](auto const & pod_type) {
       Symbol* pod_symbol = scope.lookup_first_name(pod_type.identifier);
       assert(pod_symbol && pod_symbol->kind == Symbol::TYPE);
       if (!pod_symbol->meta) {
@@ -442,17 +569,21 @@ llvm::Type* LLVMCodeGen::map_type_to_llvm(Type const * type, Scope& scope) {
       return map_lambda_type_to_llvm(lambda_type, scope);
     },
     pattern(as<TupleType>(arg)) = [&](auto const & tuple_type) -> llvm::Type* {
-      std::vector<llvm::Type*> element_types;
-      std::transform(tuple_type.element_types.begin(), tuple_type.element_types.end(),
-        std::back_inserter(element_types),
-        [&](auto const & element_type){ return map_type_to_llvm(element_type.get(), scope); });
-      return llvm::StructType::get(llvm_context, element_types);
+      return map_tuple_to_llvm(tuple_type, scope);
     },
     pattern(as<CellType>(arg)) = [&](auto const & cell_type) -> llvm::Type* {
       return map_type_to_llvm(cell_type.ref.get(), scope);
     },
     pattern(as<ListType>(_)) = [&]() -> llvm::Type* {
       return get_vector_ty(scope);
+    },
+    pattern(as<EnumType>(arg)) = [&](auto const & enum_type) -> llvm::Type* {
+      Symbol* enum_symbol = scope.lookup_first_name(enum_type.identifier);
+      if (!enum_symbol->meta) {
+        enum_symbol->meta = std::make_shared<SymbolMetaEnum>(
+          map_enum_to_llvm(enum_type, scope));
+      }
+      return static_cast<SymbolMetaEnum*>(enum_symbol->meta.get())->type.general_type;
     },
     pattern(_) = []() -> llvm::Type* {
       assert(false && "not implemented");
@@ -588,6 +719,14 @@ llvm::AllocaInst* LLVMCodeGen::create_entry_alloca(llvm::Function* func, Symbol*
   return alloca;
 }
 
+llvm::AllocaInst* LLVMCodeGen::stack_allocate(
+  llvm::Function* func, llvm::Value* value, std::string name
+) {
+  llvm::AllocaInst* alloca = create_entry_alloca(func, value->getType(), name);
+  ir_builder.CreateStore(value, alloca);
+  return alloca;
+}
+
 #define FUNCTION_RETURN_LOCAL "!return_value"
 
 void LLVMCodeGen::codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func) {
@@ -701,16 +840,9 @@ void LLVMCodeGen::codegen_tuple_assign(
   }
 }
 
-LLVMCodeGen::ExpressionExtract LLVMCodeGen::get_tuple_extractor(
-  Ast_Expression& tuple, Scope& scope
-) {
-  tuple.fix_tuple_hack();
-  return get_value_extractor(tuple, scope);
-}
-
 void LLVMCodeGen::codegen_statement(Ast_Assign& assign, Scope& scope) {
   if (auto tuple_pattern = std::get_if<Ast_Tuple_Literal>(&assign.target->v)) {
-    auto tuple_extract = get_tuple_extractor(*assign.expression, scope);
+    auto tuple_extract = get_value_extractor(*assign.expression, scope);
     codegen_tuple_assign(*tuple_pattern, tuple_extract, {}, scope);
     return;
   }
@@ -1012,7 +1144,7 @@ void LLVMCodeGen::codegen_pod_bindings(
 
     // FIXME! Can't think of a better way right now :(
     match(agg_type->v)(
-      pattern(as<Ast_Pod_Declaration>(arg)) = [&](auto& pod_type){
+      pattern(as<PodType>(arg)) = [&](auto& pod_type){
         field_type = pod_type.get_field_type(field_bind.field_index);
         field_is_ref = is_reference_type(field_type);
       },
@@ -1060,18 +1192,39 @@ void LLVMCodeGen::codegen_pod_bindings(
   }
 }
 
-void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& scope) {
+void LLVMCodeGen::codegen_bindings(
+  Ast_Binding& binding, ExpressionExtract& agg, Scope& scope
+) {
   using namespace mpark::patterns;
-  match(bindings.bindings)(
-    pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds){
-      auto tuple_extract = get_tuple_extractor(*bindings.initializer, scope);
-      codegen_tuple_bindings(tuple_binds, tuple_extract, {}, scope);
+  match(binding)(
+    pattern(as<Ast_Tuple_Binds>(arg)) = [&](auto& tuple_binds) {
+      codegen_tuple_bindings(tuple_binds, agg, {}, scope);
     },
     pattern(as<Ast_Pod_Binds>(arg)) = [&](auto& pod_binds) {
-      auto pod_extract = get_value_extractor(*bindings.initializer, scope);
-      codegen_pod_bindings(pod_binds, pod_extract, {}, scope);
+      codegen_pod_bindings(pod_binds, agg, {}, scope);
     }
   );
+}
+
+void LLVMCodeGen::codegen_statement(Ast_Structural_Binding& bindings, Scope& scope) {
+  auto binding_extractor = get_value_extractor(*bindings.initializer, scope);
+  codegen_bindings(bindings.bindings, binding_extractor, scope);
+}
+
+llvm::Constant* LLVMCodeGen::codegen_constant_expression(
+  Ast_Expression& const_expr, Scope& scope
+) {
+  // This will need to be changed if we ever get to constant arrays/structs/pods
+  auto primative_type = std::get<PrimativeType>(const_expr.meta.type->v);
+  auto const_init = ast_builder.make_literal(primative_type.tag, "");
+  const_init->meta.const_value = *const_expr.meta.get_const_value();
+
+  if (!primative_type.is_string_type()) {
+    return static_cast<llvm::Constant*>(codegen_expression(*const_init, scope));
+  } else {
+    return create_const_string(
+      std::get<std::string>(const_init->meta.const_value), scope);
+  }
 }
 
 void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope& scope) {
@@ -1082,20 +1235,8 @@ void LLVMCodeGen::codegen_statement(Ast_Constant_Declaration& const_decl, Scope&
     const_decl.constant.name,
     map_type_to_llvm(const_decl.type.get(), scope));
   global->setConstant(true);
-  // This will need to be changed if we ever get to constant arrays/structs/pods
-  auto primative_type = std::get<PrimativeType>(const_decl.type->v);
-  auto const_init = ast_builder.make_literal(primative_type.tag, "");
-  const_init->meta.const_value = *const_decl.const_expression->meta.get_const_value();
-
-  llvm::Constant* global_int = nullptr;
-  if (!primative_type.is_string_type()) {
-    global_int = static_cast<llvm::Constant*>(codegen_expression(*const_init, scope));
-  } else {
-    global_int = create_const_string(
-      std::get<std::string>(const_init->meta.const_value), scope);
-  }
-
-  global->setInitializer(global_int);
+  global->setInitializer(
+    codegen_constant_expression(*const_decl.const_expression, scope));
 }
 
 /* Expressions */
@@ -1127,8 +1268,8 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
       llvm::Value* source_address = address_of(source_object, scope);
       llvm::Value* field_value = ir_builder.CreateGEP(
         source_address, make_idx_list_for_gep(idx_list), access.field.name);
-      auto pod_type = std::get<Ast_Pod_Declaration>(remove_reference(access.object->meta.type)->v);
-      auto type = pod_type.fields.at(idx_list.back()).type;
+      auto pod_type = std::get<PodType>(remove_reference(access.object->meta.type)->v);
+      auto type = pod_type.get_field_type(access.field_index);
       return dereference(field_value, type);
     },
     pattern(as<Ast_Index_Access>(arg)) = [&](auto& index) -> llvm::Value* {
@@ -1147,7 +1288,7 @@ llvm::Value* LLVMCodeGen::address_of(Ast_Expression& expr, Scope& scope) {
     },
     pattern(as<Ast_Call>(arg)) = [&](auto& call) -> llvm::Value* {
       // Must be a reference returned (so that is an address)
-      return codegen_expression(call, scope);
+      return codegen_expression(call, scope, true);
     },
     pattern(anyof(as<Ast_Block>(arg), as<Ast_If_Expr>(arg))) =
     [&](auto& block_expr) -> llvm::Value* {
@@ -1181,7 +1322,11 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Expression& expr, Scope& scope,
   return std::visit([&](auto& expr) {
     using T = std::decay_t<decltype(expr)>;
     // Kinda a hack
-    if constexpr (std::is_same_v<T, Ast_Block> || std::is_same_v<T, Ast_If_Expr>) {
+    if constexpr (
+           std::is_same_v<T, Ast_Block>
+        || std::is_same_v<T, Ast_If_Expr>
+        || std::is_same_v<T, Ast_Call>
+    ) {
       return codegen_expression(expr, scope, as_lvalue);
     }
     return codegen_expression(expr, scope);
@@ -1362,10 +1507,84 @@ llvm::Value* LLVMCodeGen::codegen_builtin_vector_calls(
   );
 }
 
-llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
+LLVMCodeGen::EnumTypeLLVM& LLVMCodeGen::get_llvm_enum_type(EnumType const & enum_type, Scope& scope) {
+  Symbol* enum_sym = scope.lookup_first_name(enum_type.identifier);
+  assert(std::holds_alternative<EnumType>(enum_sym->type->v));
+  if (!enum_sym->meta) {
+    map_type_to_llvm(enum_type.get_self().class_ptr().get(), scope);
+  }
+  return static_cast<SymbolMetaEnum*>(enum_sym->meta.get())->type;
+}
+
+LLVMCodeGen::EnumMemberCodegen LLVMCodeGen::codegen_enum_member(
+  Ast_Path& enum_member, Scope& scope, llvm::Value* enum_alloca
+) {
+  auto [enum_type, member_info] = AstHelper::path_as_enum_member(enum_member, scope);
+  auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
+
+  EnumMemberCodegen enum_member_llvm {
+    .member_ptr = !enum_alloca
+      ? create_entry_alloca(get_current_function(), enum_llvm.general_type, "temp_enum")
+      : enum_alloca
+  };
+
+  // Get pointers to enum tag and contained tuple
+  llvm::Value* enum_tag = ir_builder.CreateConstGEP2_32(
+    enum_llvm.general_type, enum_member_llvm.member_ptr, 0, 0);
+
+  // Fill in enum tag
+  ir_builder.CreateStore(
+    llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal), enum_tag);
+
+  if (member_info->data) {
+    llvm::StructType* enum_variant =
+      static_cast<llvm::StructType*>(enum_llvm.variants.at(member_info->ordinal));
+    llvm::Type* enum_data_type = enum_variant->getElementType(Builtin::Enum::DATA);
+    enum_member_llvm.member_data_ptr = ir_builder.CreateConstGEP2_32(
+       enum_llvm.general_type, enum_member_llvm.member_ptr, 0, 1);
+    enum_member_llvm.member_data_ptr = ir_builder.CreateBitCast(
+      enum_member_llvm.member_data_ptr, enum_data_type->getPointerTo());
+    enum_member_llvm.member_data_ty = enum_data_type;
+  }
+
+  return enum_member_llvm;
+}
+
+llvm::Value* LLVMCodeGen::codegen_enum_tuple_init(Ast_Call& enum_tuple_init, Scope& scope) {
+  // Get enum information and LLVM types
+  auto& member_path = std::get<Ast_Path>(enum_tuple_init.callee->v);
+  auto member_llvm = codegen_enum_member(member_path, scope);
+
+  // Fill in tuple
+  Ast_Expression_List values;
+  values.elements = enum_tuple_init.arguments;
+  initialize_aggregate(member_llvm.member_data_ptr, values, scope, member_llvm.member_data_ty);
+
+  return ir_builder.CreateLoad(member_llvm.member_ptr, "enum_expr");
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(
+  Ast_Call& call, Scope& scope, bool as_lvalue
+) {
+  using namespace mpark::patterns;
   auto callee_type = remove_reference(call.callee->meta.type);
-  LambdaType* lambda_type = std::get_if<LambdaType>(&callee_type->v);
+  LambdaType* lambda_type = nullptr;
   Ast_Function_Declaration* function_type = nullptr;
+
+  llvm::Value* special_case = match(callee_type->v)(
+    pattern(as<LambdaType>(arg)) = [&](auto& lt) -> llvm::Value* {
+      lambda_type = lt.get_raw_self();
+      return nullptr; // Not a special case (handled below)
+    },
+    pattern(as<EnumType>(_)) = [&]{
+      return codegen_enum_tuple_init(call, scope);
+    },
+    // Handle anything else later
+    pattern(_) = []() -> llvm::Value* { return nullptr; }
+  );
+
+  // Return special cases early
+  if (special_case) return special_case;
 
   llvm::Value* callee;
   llvm::Value* env_ptr = nullptr;
@@ -1405,10 +1624,20 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Call& call, Scope& scope) {
     call_args.push_back(env_ptr);
   }
 
-  bool has_return = (lambda_type && lambda_type->return_type.get())
-    || (function_type && !function_type->procedure);
+  Type_Ptr return_type;
+  if (lambda_type) {
+    return_type = lambda_type->return_type;
+  } else {
+    return_type = function_type->return_type;
+  }
 
-  return ir_builder.CreateCall(callee, call_args, has_return ? "call_ret" : "");
+  llvm::Value* ret = ir_builder.CreateCall(
+    callee, call_args, return_type ? "call_ret" : "");
+
+  if (!as_lvalue && is_reference_type(return_type)) {
+    ret = dereference(ret, return_type);
+  }
+  return ret;
 }
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Literal& literal, Scope& scope) {
@@ -1676,7 +1905,7 @@ Ast_Expression& LLVMCodeGen::flatten_nested_pod_accesses(
 
   auto pior_is_reference = [](Ast_Field_Access& pior_access) {
     auto pior_type = remove_reference(pior_access.object->meta.type);
-    auto pior_pod = std::get<Ast_Pod_Declaration>(pior_type->v);
+    auto pior_pod = std::get<PodType>(pior_type->v);
     return is_reference_type(pior_pod.get_field_type(pior_access.field_index));
   };
 
@@ -1707,7 +1936,7 @@ std::vector<llvm::Value*> LLVMCodeGen::make_idx_list_for_gep(
   llvm_idx_list.reserve(idx_list.size() + 1);
   llvm_idx_list.push_back(create_llvm_idx(0)); // First base index for GEP
   std::transform(idx_list.begin(), idx_list.end(), std::back_inserter(llvm_idx_list),
-    std::bind1st(std::mem_fn(&LLVMCodeGen::create_llvm_idx), this));
+    std::bind(&LLVMCodeGen::create_llvm_idx, this, std::placeholders::_1));
 
   return llvm_idx_list;
 }
@@ -1738,6 +1967,10 @@ llvm::Value* LLVMCodeGen::get_special_field_value(
         .get_value({static_cast<uint>(Builtin::Vector::DATA)}, "data");
       return get_vector_length(vec_data);
     },
+    pattern(as<EnumType>(_)) = [&]() -> llvm::Value* {
+      return fix_string_length(
+        get_value_extractor(agg, scope).get_value({Builtin::Enum::TAG}, "tag"));
+    },
     pattern(_) = []() -> llvm::Value* { return nullptr; });
 }
 
@@ -1750,8 +1983,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
     return special_value;
   }
 
-  auto accessed_type = std::get<Ast_Pod_Declaration>(pod_type->v)
-    .get_field_type(access.field_index);
+  auto accessed_type = std::get<PodType>(pod_type->v).get_field_type(access.field_index);
 
   std::vector<uint> idx_list;
   auto& source_object = flatten_nested_pod_accesses(access, idx_list);
@@ -1761,10 +1993,14 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Field_Access& access, Scope& sc
   return dereference(field_value, accessed_type);
 }
 
-void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope) {
+void LLVMCodeGen::initialize_aggregate(
+  llvm::Value* ptr, Ast_Expression_List& values, Scope& scope, llvm::Type* llvm_agg_type
+) {
   using namespace mpark::patterns;
-  auto agg_type = values.get_type();
-  llvm::Type* llvm_agg_type = map_type_to_llvm(agg_type.get(), scope);
+  if (!llvm_agg_type) {
+    auto agg_type = values.get_type();
+    llvm_agg_type = map_type_to_llvm(agg_type.get(), scope);
+  }
   uint gep_idx = 0;
   for (auto el: values.elements) {
     llvm::Value* element_ptr = ir_builder.CreateConstGEP2_32(
@@ -1785,8 +2021,19 @@ void LLVMCodeGen::initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& va
 
 void LLVMCodeGen::initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope) {
   using namespace mpark::patterns;
-  auto pod_type = initializer.pod;
-  llvm::Type* llvm_pod_type = map_type_to_llvm(pod_type.get(), scope);
+  auto pod_type = initializer.get_type();
+  llvm::Type* llvm_pod_type = match(pod_type->v)(
+    pattern(as<PodType>(_)) = [&]{
+      return map_type_to_llvm(pod_type.get(), scope);
+    },
+    pattern(as<EnumType>(arg)) = [&](auto& enum_type){
+      auto enum_member = codegen_enum_member(initializer.pod, scope, ptr);
+      pod_type = enum_type.get_member(initializer.pod).data;
+      ptr = enum_member.member_data_ptr;
+      return enum_member.member_data_ty;
+    }
+  );
+
   for (auto& init: initializer.fields) {
     llvm::Value* field_ptr = ir_builder.CreateConstGEP2_32(
       llvm_pod_type, ptr, 0, init.field_index, "pod_field");
@@ -1800,7 +2047,7 @@ void LLVMCodeGen::initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer,
         initialize_aggregate(field_ptr, nested_agg, scope);
       },
       pattern(_) = [&]{
-        auto field_type = std::get<Ast_Pod_Declaration>(pod_type->v).get_field_type(init.field_index);
+        auto field_type = std::get<PodType>(pod_type->v).get_field_type(init.field_index);
         llvm::Value* value = codegen_bind(*init.initializer, field_type, scope);
         ir_builder.CreateStore(value, field_ptr);
       }
@@ -2072,7 +2319,7 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Lambda& lambda, Scope& scope) {
 
 llvm::Value* LLVMCodeGen::codegen_expression(Ast_Pod_Literal& pod, Scope& scope) {
   llvm::AllocaInst* pod_alloca = create_entry_alloca(
-    get_current_function(), scope, pod.pod.get(), "pod_temp");
+    get_current_function(), scope, pod.get_type().get(), "pod_temp");
   initialize_pod(pod_alloca, pod, scope);
   return ir_builder.CreateLoad(pod_alloca, "pod_expr");
 }
@@ -2208,8 +2455,123 @@ llvm::Value* LLVMCodeGen::codegen_expression(Ast_Spawn& spawn, Scope& scope) {
   return spawn_ptr;
 }
 
+inline llvm::Value* LLVMCodeGen::codegen_expression(Ast_Path& path, Scope& scope) {
+  assert(std::holds_alternative<EnumType>(path.get_type()->v) && "only plain/dataless enum members");
+  return ir_builder.CreateLoad(codegen_enum_member(path, scope).member_ptr, "enum_member");
+}
+
+llvm::Value* LLVMCodeGen::codegen_expression(Ast_Switch_Expr& switch_expr, Scope& scope) {
+  using namespace mpark::patterns;
+  bool void_return = switch_expr.get_type()->is_void();
+
+  llvm::Function* current_function = get_current_function();
+  auto switched_type = remove_reference(switch_expr.switched->meta.type);
+
+  // will be a ptr or value (depending on if switched is lvalue)
+  llvm::Value* enum_data = nullptr;
+
+  llvm::Value* switch_index = match(switched_type->v)(
+    pattern(as<EnumType>(_)) = [&]{
+      auto enum_extractor = get_value_extractor(*switch_expr.switched, scope);
+      enum_data = enum_extractor.get_bind({ Builtin::Enum::DATA }, "enum_data");
+      if (!switch_expr.switched->is_lvalue()) {
+        // AFAIK I have to alloca the enum data before bitcasing it
+        enum_data = stack_allocate(current_function, enum_data, "temp_enum_data");
+      }
+      return enum_extractor.get_value({ Builtin::Enum::TAG }, "enum_tag");
+    },
+    pattern(_) = [&]{
+      return codegen_expression(*switch_expr.switched, scope);
+    });
+
+  // default will be block after the switch (for now -- until implemented)
+  llvm::BasicBlock* switch_end = llvm::BasicBlock::Create(llvm_context, "switch_end");
+  bool generate_unreachable_default = false;
+  llvm::BasicBlock* switch_default = nullptr;
+  if (switch_expr.default_case) {
+    switch_default = llvm::BasicBlock::Create(llvm_context, "switch_default");
+  } else {
+    switch_default = llvm::BasicBlock::Create(
+      llvm_context, "exhaustive_switch_default");
+    generate_unreachable_default = true;
+  }
+
+  auto case_count = switch_expr.cases.size();
+  llvm::SwitchInst* switch_inst = ir_builder.CreateSwitch(
+    switch_index, switch_default,
+    case_count - (switch_expr.default_case ? 1 : 0));
+
+  llvm::PHINode* switch_value = nullptr;
+
+  for (auto& switch_case: switch_expr.cases) {
+    llvm::BasicBlock* case_bb;
+    if (!switch_case.is_default_case) {
+      case_bb = llvm::BasicBlock::Create(
+        llvm_context, "switch_case", current_function);
+    } else {
+      case_bb = switch_default;
+      current_function->getBasicBlockList().push_back(switch_default);
+    }
+
+    ir_builder.SetInsertPoint(case_bb);
+
+    if (!switch_case.is_default_case) {
+      llvm::ConstantInt* case_index;
+      if (auto enum_member = std::get_if<Ast_Path>(&switch_case.match->v)) {
+        // Enums
+        auto [enum_type, member_info] = AstHelper::path_as_enum_member(*enum_member, scope);
+        auto& enum_llvm = get_llvm_enum_type(*enum_type, scope);
+        case_index = llvm::ConstantInt::get(enum_llvm.tag_type, member_info->ordinal);
+
+        // Handle enum data bindings
+        if (switch_case.bindings) {
+          llvm::StructType* member_variant_type =
+            static_cast<llvm::StructType*>(enum_llvm.variants.at(member_info->ordinal));
+          llvm::Value* member_data = ir_builder.CreateBitCast(
+            enum_data, member_variant_type->getElementType(Builtin::Enum::DATA)->getPointerTo());
+          // member data is always a pointer
+          ExpressionExtract enum_data_extractor(this, member_data, true);
+          codegen_bindings(*switch_case.bindings, enum_data_extractor, scope);
+        }
+      } else {
+        case_index = llvm::cast<llvm::ConstantInt>
+          (codegen_constant_expression(*switch_case.match, scope));
+      }
+      switch_inst->addCase(case_index, case_bb);
+    }
+
+    llvm::Value* case_value = codegen_expression(switch_case.body, scope);
+    create_exit_br(switch_end);
+
+    if (case_value && !void_return) {
+      if (!switch_value) {
+        switch_value = llvm::PHINode::Create(
+          map_type_to_llvm(switch_expr.get_type().get(), scope), case_count);
+      }
+      case_bb = ir_builder.GetInsertBlock();
+      switch_value->addIncoming(case_value, case_bb);
+    }
+  }
+
+  if (generate_unreachable_default) {
+    // For exhaustive switches that we know don't need a default
+    current_function->getBasicBlockList().push_back(switch_default);
+    ir_builder.SetInsertPoint(switch_default);
+    ir_builder.CreateUnreachable();
+  }
+
+  current_function->getBasicBlockList().push_back(switch_end);
+  ir_builder.SetInsertPoint(switch_end);
+
+  if (switch_value) {
+    return ir_builder.Insert(switch_value, "switch_value");
+  }
+  return nullptr;
+}
+
 /* JIT tools */
 
+#ifdef MANK_ENABLE_JIT
 llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {
   assert(llvm_module && "module to jit cannot be null!");
   if (!jit_engine) {
@@ -2221,12 +2583,18 @@ llvm::orc::VModuleKey LLVMCodeGen::jit_current_module() {
   llvm_module->setDataLayout(jit_engine->getTargetMachine().createDataLayout());
   return jit_engine->addModule(std::move(llvm_module));
 }
+#endif
 
 void* CodeGen::find_jit_symbol(std::string name) {
   return static_cast<LLVMCodeGen*>(impl.get())->jit_find_symbol(name);
 }
 
+std::string CodeGen::get_generated_code() const {
+  return static_cast<LLVMCodeGen*>(impl.get())->get_module_as_string();
+}
+
 void* LLVMCodeGen::jit_find_symbol(std::string name) {
+#ifdef MANK_ENABLE_JIT
   if (!jit_module_handle) {
     jit_module_handle = jit_current_module();
   }
@@ -2238,11 +2606,17 @@ void* LLVMCodeGen::jit_find_symbol(std::string name) {
   }
 
   return reinterpret_cast<void*>(symbol_adress.get());
+#else
+  assert(false && "mank jit support disabled!");
+  return nullptr;
+#endif
 }
 
 LLVMCodeGen::~LLVMCodeGen() {
   // Not sure it this is needed
+#ifdef MANK_ENABLE_JIT
   if (jit_engine && jit_module_handle) {
     jit_engine->removeModule(*jit_module_handle);
   }
+#endif
 }

@@ -23,7 +23,9 @@
 
 // TODO: Replace with my own JIT
 // TODO: Don't jit here make a friend class
+#ifdef MANK_ENABLE_JIT
 #include "kaleidoscope_jit.h"
+#endif
 #pragma GCC diagnostic pop
 
 #include "ast/ast.h"
@@ -52,6 +54,19 @@ class LLVMCodeGen: public CodeGenerator {
 
     SymbolMetaCompoundType(llvm::Type* type)
       : type{type} {}
+  };
+
+  struct EnumTypeLLVM {
+    llvm::Type* general_type;
+    llvm::IntegerType* tag_type;
+    std::vector<llvm::Type*> variants;
+  };
+
+  struct SymbolMetaEnum: SymbolMeta {
+    EnumTypeLLVM type;
+
+    SymbolMetaEnum(EnumTypeLLVM enum_type)
+      : type{enum_type} {}
   };
 
   struct SymbolMetaBoundsCheck: SymbolMeta {
@@ -95,9 +110,12 @@ class LLVMCodeGen: public CodeGenerator {
   std::unique_ptr<llvm::Module> llvm_module;
 
   /* Codegen state */
+  llvm::TargetMachine* target_machine = nullptr;
 
+#ifdef MANK_ENABLE_JIT
   std::optional<llvm::orc::VModuleKey> jit_module_handle;
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit_engine;
+#endif
 
   struct ClosureInfo {
     Scope* parent;
@@ -132,7 +150,9 @@ class LLVMCodeGen: public CodeGenerator {
 
   void create_exit_br(llvm::BasicBlock* target);
 
+#ifdef MANK_ENABLE_JIT
   llvm::orc::VModuleKey jit_current_module();
+#endif
 
   void create_module();
 
@@ -154,6 +174,8 @@ class LLVMCodeGen: public CodeGenerator {
   llvm::Function* get_bounds_error();
 
   llvm::Type* get_string_ty(Scope& scope);
+
+  EnumTypeLLVM& get_llvm_enum_type(EnumType const & enum_type, Scope& scope);
 
   llvm::Constant* create_const_string_initializer(std::string value);
   llvm::Constant* create_const_string(std::string value, Scope& scope);
@@ -208,8 +230,13 @@ public:
 
   llvm::Type* get_vector_ty(Scope& scope);
 
+  llvm::Type* map_enum_member_data_to_llvm(
+    EnumType::Member const & member, Scope& scope);
+
   llvm::Type* map_lambda_type_to_llvm(LambdaType const & lambda_type, Scope& scope);
-  llvm::Type* map_pod_to_llvm(Ast_Pod_Declaration const & pod_type, Scope& scope);
+  llvm::Type* map_pod_to_llvm(PodType const & pod_type, Scope& scope, bool unnamed = false);
+  EnumTypeLLVM map_enum_to_llvm(EnumType const & enum_type, Scope& scope);
+  llvm::Type* map_tuple_to_llvm(TupleType const & tuple_type, Scope& scope);
   llvm::Type* map_primative_to_llvm(PrimativeType::Tag primative);
   llvm::Type* map_type_to_llvm(Type const * type, Scope& scope);
 
@@ -222,15 +249,16 @@ public:
   llvm::AllocaInst* create_entry_alloca(
     llvm::Function* func, Scope& scope, Type* type, std::string name);
   llvm::AllocaInst* create_entry_alloca(llvm::Function* func, Symbol* symbol);
+  llvm::AllocaInst* stack_allocate(llvm::Function* func, llvm::Value* value, std::string name);
   void codegen_function_body(Ast_Function_Declaration& func, llvm::Function* llvm_func = nullptr);
 
   llvm::Value* create_heap_alloc(
     llvm::Type* type, llvm::Twine const & name, llvm::Value** raw_ptr = nullptr);
 
-  ExpressionExtract get_tuple_extractor(Ast_Expression& tuple, Scope& scope);
-
   void codegen_tuple_assign(
     Ast_Tuple_Literal& tuple_pattern, ExpressionExtract& tuple, std::vector<unsigned> idxs, Scope& scope);
+
+  llvm::Constant* codegen_constant_expression(Ast_Expression& const_expr, Scope& scope);
 
   /* Statements */
   void codegen_statement(Ast_Statement& stmt, Scope& scope);
@@ -261,12 +289,15 @@ public:
   void codegen_pod_bindings(
     Ast_Pod_Binds& pod_binds, ExpressionExtract& pod, std::vector<unsigned> idxs, Scope& scope);
 
+  void codegen_bindings(Ast_Binding& binding, ExpressionExtract& agg, Scope& scope);
+
   void codegen_statement(Ast_Structural_Binding& binding, Scope& scope);
 
   Ast_Expression& flatten_nested_array_indexes(
     Ast_Index_Access& index, Scope& scope, std::vector<llvm::Value*>& idx_list);
 
-  void initialize_aggregate(llvm::Value* ptr, Ast_Expression_List& values, Scope& scope);
+  void initialize_aggregate(
+    llvm::Value* ptr, Ast_Expression_List& values, Scope& scope, llvm::Type* llvm_agg_type = nullptr);
   void initialize_pod(llvm::Value* ptr, Ast_Pod_Literal& initializer, Scope& scope);
 
   llvm::Value* get_vector_length(llvm::Value* data_ptr);
@@ -299,11 +330,23 @@ public:
   llvm::Value* codegen_builtin_vector_calls(
     Ast_Call& call, Ast_Function_Declaration& func_type, Scope& scope);
 
+
+  struct EnumMemberCodegen {
+    llvm::Value* member_ptr;
+    llvm::Value* member_data_ptr = nullptr;
+    llvm::Type* member_data_ty = nullptr;
+  };
+
+  EnumMemberCodegen codegen_enum_member(
+    Ast_Path& enum_member, Scope& scope, llvm::Value* enum_alloca = nullptr);
+
+  llvm::Value* codegen_enum_tuple_init(Ast_Call& enum_tuple, Scope& scope);
+
   /* Expressions */
   llvm::Value* codegen_expression(Ast_Expression& expr, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_Block& block, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_If_Expr& if_stmt, Scope& scope, bool as_lvalue = false);
-  llvm::Value* codegen_expression(Ast_Call& call, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Call& call, Scope& scope, bool as_lvalue = false);
   llvm::Value* codegen_expression(Ast_Literal& literal, Scope& scope);
   llvm::Value* codegen_expression(Ast_Identifier& ident, Scope& scope);
   llvm::Value* codegen_expression(Ast_Unary_Operation& unary, Scope& scope);
@@ -316,6 +359,8 @@ public:
   llvm::Value* codegen_expression(Ast_As_Cast& as_cast, Scope& scope);
   llvm::Value* codegen_expression(Ast_Array_Repeat& array_repeat, Scope& scope);
   llvm::Value* codegen_expression(Ast_Spawn& spawn, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Switch_Expr& switch_expr, Scope& scope);
+  llvm::Value* codegen_expression(Ast_Path& path, Scope& scope);
 
   inline llvm::Value* codegen_expression(Ast_Macro_Identifier& macro, Scope& scope) {
     (void) macro; (void) scope;
@@ -331,6 +376,7 @@ public:
   LLVMCodeGen(Ast_File& file_ast);
   /* JIT tools */
   void* jit_find_symbol(std::string name);
+  std::string get_module_as_string() const;
 
   ~LLVMCodeGen();
 };

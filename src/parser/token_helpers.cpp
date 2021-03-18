@@ -14,6 +14,9 @@ char const * token_type_to_string(TokenType token_type) {
     case TokenType::ASSIGN:       return "\"=\" (assign)";
     case TokenType::COMMA:        return "\",\" (comma)";
     case TokenType::BACKSLASH:    return "\"\\\" (backslash)";
+    case TokenType::AT:           return "\"@\" (at)";
+
+    case TokenType::EXCLAMATION_MARK: return "\"!\" (exclamation mark)";
 
     case TokenType::LEFT_SQUARE_BRACKET:  return "\"[\" (left square bracket)";
     case TokenType::RIGHT_SQUARE_BRACKET: return "\"]\" (right square bracket)";
@@ -65,13 +68,26 @@ char const * token_type_to_string(TokenType token_type) {
     case TokenType::RETURN:     return "return";
     case TokenType::LITERAL:    return "literal";
     case TokenType::IN:         return "in";
+    case TokenType::TRUE:       return "true";
+    case TokenType::FALSE:      return "false";
+    case TokenType::BIND:       return "bind";
+    case TokenType::LOOP:       return "loop";
+    case TokenType::BREAK:      return "break";
+    case TokenType::CONTINUE:   return "continue";
+    case TokenType::AS:         return "as";
+    case TokenType::TEST:       return "test";
+    case TokenType::CONST:      return "const";
+    case TokenType::ENUM:       return "enum";
+    case TokenType::SWITCH:     return "switch";
 
     /* Special */
     case TokenType::REF:        return "ref";
 
     /* Misc */
-    case TokenType::DOUBLE_DOT: return "\"..\" (double dot)";
-    case TokenType::ARROW:      return "\"->\" (arrow)";
+    case TokenType::DOUBLE_DOT:    return "\"..\" (double dot)";
+    case TokenType::ARROW:         return "\"->\" (arrow)";
+    case TokenType::DOUBLE_COLON:  return "\"::\" (double colon)";
+    case TokenType::FAT_ARROW:     return "\"=>\" (fat arrow)";
 
     /* Lexer state */
     case TokenType::LEX_EOF:    return "[Lexer EOF]";

@@ -1,0 +1,18 @@
+fun max: i32 (a: i32, b: i32) {
+  if a > b { a } else { b }
+}
+
+fun mu: i32 (f: \|\i32 -> i32| -> i32, a: \i32 -> i32) {
+  r := vec!([0]);
+  b := \n -> {
+    r[0] = max(n, r[0]);
+    a(n)
+  }
+  _ := f(b);
+  r[0]
+}
+
+proc main {
+  result := mu(\a -> { a(a(10)) }, \n -> { n * n });
+  println!("- : i32 = {result}", int_to_string(result));
+}

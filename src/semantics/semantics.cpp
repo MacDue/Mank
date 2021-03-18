@@ -220,23 +220,69 @@ void Semantics::analyse_constant_decl(Ast_Constant_Declaration& const_decl, Scop
     "constant type {} does not match initializer of {}");
 }
 
-static int pod_is_recursive(PodType& pod, PodType& nested_field) {
+static int type_is_recursive(Type_Ptr type, Type_Ptr nested_type) {
+  using namespace mpark::patterns;
   /*
     0 if not recursive, 1 if directly recursive, indirection steps otherwise
-    Simply counts how many steps into the structure we go till the top level pod is reached.
+    Simply counts how many steps into the structure we go till the top level type is reached.
   */
-  if (&pod == &nested_field) {
+  if (type == nested_type) {
     return 1;
   } else {
-    for (auto& [_,  field]: nested_field.fields) {
-      if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
-        if (auto steps = pod_is_recursive(pod, *pod_field)) {
-          return 1 + steps;
+    auto check_nested = [&](Type_Ptr nested){
+      return match(nested->v)(
+        pattern(anyof(as<PodType>(_),as<TupleType>(_),as<EnumType>(_))) = [&]{
+          if (auto steps = type_is_recursive(type, nested)) {
+            return 1 + steps;
+          }
+          return 0;
+        },
+        pattern(_) = []{ return 0; }
+      );
+    };
+
+    return match(nested_type->v)(
+      pattern(as<PodType>(arg)) = [&](auto& nested_pod) {
+        for (auto& [_,  field]: nested_pod.fields) {
+          if (auto steps = check_nested(field.type)) {
+            return steps;
+          }
         }
-      }
+        return 0;
+      },
+      pattern(as<EnumType>(arg)) = [&](auto& nested_enum) {
+        for (auto& [_, member]: nested_enum.members) {
+          if (member.data) {
+            if (auto steps = check_nested(member.data)) {
+              return steps;
+            }
+          }
+        }
+        return 0;
+      },
+      pattern(as<TupleType>(arg)) = [&](auto& nested_tuple) {
+        for (auto element: nested_tuple.element_types) {
+          if (auto steps = check_nested(element)) {
+            return steps;
+          }
+        }
+        return 0;
+      },
+      pattern(_) = []{ return 0; }
+    );
+  }
+}
+
+static void recursive_type_check(
+  Ast_Identifier const & type_member, Type_Ptr type, Type_Ptr nested, char const * type_name
+) {
+  if (auto steps = type_is_recursive(type,nested)) {
+    if (steps == 1) {
+      throw_error_at(type_member, "directly recursive {}s are not allowed", type_name);
+    } else {
+      throw_error_at(type_member, "recursive cycle detected in {} declaration", type_name);
     }
   }
-  return 0;
 }
 
 static void resolve_pod_field_types(
@@ -253,18 +299,18 @@ static void resolve_pod_field_types(
 }
 
 void Semantics::analyse_pod(Ast_Pod_Declaration& pod_decl, Scope& scope) {
-  auto& pod_type = std::get<PodType>(pod_decl.get_self().class_ptr()->declared_type->v);
-  resolve_pod_field_types(pod_type, pod_decl.fields, scope);
+  auto& pod_type = pod_decl.get_self().class_ptr()->declared_type;
+  resolve_pod_field_types(std::get<PodType>(pod_type->v), pod_decl.fields, scope);
   for (auto& field: pod_decl.fields) {
-    if (auto pod_field = std::get_if<PodType>(&field.type->v)) {
-      if (auto steps = pod_is_recursive(pod_type, *pod_field)) {
-        if (steps == 1) {
-          throw_error_at(field.name, "directly recursive pods are not allowed");
-        } else {
-          throw_error_at(field.name, "recursive cycle detected in pod declaration");
-        }
-        field.type = nullptr; // cycles bad
-      }
+    recursive_type_check(field.name, pod_type, field.type, "pod");
+  }
+}
+
+static void check_enum_is_recursive(EnumType& enum_type) {
+  for (auto& [_, member]: enum_type.members) {
+    if (member.data) {
+      recursive_type_check(member.tag,
+        enum_type.get_self().class_ptr(), member.data, "enum");
     }
   }
 }
@@ -300,6 +346,7 @@ void Semantics::analyse_enum(Ast_Enum_Declaration& enum_decl, Scope& scope) {
     }
     enum_type.add_member(member.tag, enum_ordinal, enum_data);
   }
+  check_enum_is_recursive(enum_type);
 }
 
 void Semantics::analyse_function_header(Ast_Function_Declaration& func) {
@@ -1141,6 +1188,7 @@ Type_Ptr Semantics::analyse_switch_expr(Ast_Switch_Expr& switch_expr, Scope& sco
       switch_expr.exhaustive = true;
     },
     pattern(as<PrimativeType>(arg)) = [&](auto& primative) {
+      (void) primative;
       // TODO:
       // Assume needs default? -- only makes for char to be exhaustive (super rare)
     },

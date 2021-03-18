@@ -52,6 +52,10 @@ bool match_types(Type_Ptr a, Type_Ptr b,
         [](auto const & a, auto const & b) {
           return a.identifier.name == b.identifier.name;
         },
+      pattern(as<EnumType>(arg), as<EnumType>(arg)) =
+        [](auto const & a, auto const & b) {
+          return a.identifier.name == b.identifier.name;
+        },
       pattern(as<FixedSizeArrayType>(arg), as<FixedSizeArrayType>(arg)) =
         [&](auto const & a, auto const & b) {
            // refs can't appear in arrays

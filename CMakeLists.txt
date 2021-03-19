@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wpessimizing-move -Wno-init-list-lifetime -fexceptions")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -export-dynamic")
-
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fexceptions")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 option(ENABLE_UBSAN "Enable undefined behaviour sanitizer" OFF)
@@ -19,12 +19,10 @@ if (ENABLE_UBSAN)
 endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto -fexceptions")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
 endif()
 
-if (WASM_BUILD)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fexceptions")
-else()
+if (NOT WASM_BUILD)
   # The wasm build can't do JIT
   add_compile_definitions(MANK_ENABLE_JIT MANK_CODEGEN_PRINT_IR)
 endif()

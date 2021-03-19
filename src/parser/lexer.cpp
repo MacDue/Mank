@@ -77,14 +77,13 @@ std::string_view Lexer::extract_lines(SourceLocation loc) const {
   auto next_newline = source.find('\n', loc.end_char_idx);
 
   auto line_start = pior_newline == std::string::npos ? 0 : pior_newline + 1;
-  auto line_end = next_newline == std::string::npos ? source.size() - 1 : next_newline;
+  auto line_end = next_newline == std::string::npos ? source.size() : next_newline;
   return extract_string(line_start, line_end);
 }
 
 std::string_view Lexer::extract_source(SourceLocation loc) const {
   return extract_string(loc.start_char_idx, loc.end_char_idx);
 }
-
 
 /* Char actions */
 

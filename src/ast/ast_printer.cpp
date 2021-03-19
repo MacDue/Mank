@@ -39,6 +39,9 @@ void AstPrinter::print_file(Ast_File& file) {
       },
       pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
         self->print_enum(enum_decl);
+      },
+      pattern(as<Ast_Type_Alias>(arg)) = [&](auto& type_alias){
+        self->print_type_alias(type_alias);
       }
     );
     putf("");
@@ -70,6 +73,11 @@ void AstPrinter::print_pod(Ast_Pod_Declaration& pod) {
   } else {
     putf("- No fields");
   }
+}
+
+void AstPrinter::print_type_alias(Ast_Type_Alias& type_alias) {
+  putf("* Type alias");
+  putf("- {} = {}", type_alias.alias.name, type_to_string(type_alias.type));
 }
 
 

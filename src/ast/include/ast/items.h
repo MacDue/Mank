@@ -28,14 +28,15 @@ DEF_ITEM(Ast_Enum_Declaration) {
   std::vector<Member> members;
 };
 
-// DEF_ITEM(Ast_Type_Alias) {
-//   Ast_Identifier alias;
-//   Type_Ptr type;
-// };
+DEF_ITEM(Ast_Type_Alias) {
+  Ast_Identifier alias;
+  Type_Ptr type;
+};
 
 using Ast_Item_Type = std::variant<
   Ast_Pod_Declaration,
-  Ast_Enum_Declaration
+  Ast_Enum_Declaration,
+  Ast_Type_Alias
 >;
 
 class Ast_Item {

@@ -116,24 +116,7 @@ void Semantics::analyse_file(Ast_File& file) {
 
   // FIXME?: Shadowing does not follow declaration order (since)
   // globals -> pods -> functions are processed seperately
-
-  /* Check global constants */
-  {
-    for (auto global_const: file.global_consts) {
-      check_top_level_decl("global constant", Symbol::GLOBAL, global_const->constant,
-        [](Symbol* sym){ return sym->name.get_raw_self(); });
-      auto& sym = file.scope.add(
-        Symbol(global_const->constant, global_const->type, Symbol::GLOBAL));
-      sym.const_value = global_const->const_expression;
-    }
-    for (auto global_const: file.global_consts) {
-      auto sym = file.scope.lookup_first_name(global_const->constant);
-      if (!sym->const_value->meta.is_const()) {
-        analyse_constant_decl(*global_const, file.scope);
-      }
-    }
-    infer->unify_and_apply(); // allow inference between constants
-  }
+  auto forward_symbol = [](Symbol* sym){ return sym->name.get_raw_self(); };
 
   /* Items/declarations */
   {
@@ -152,6 +135,11 @@ void Semantics::analyse_file(Ast_File& file) {
           ctx->new_identified_type<EnumType>(enum_decl);
           global_scope.add(
             Symbol(enum_decl.identifier, item->declared_type, Symbol::TYPE));
+        },
+        pattern(as<Ast_Type_Alias>(arg)) = [&](auto& type_alias) {
+          check_top_level_decl("type",
+            Symbol::TYPE, type_alias.alias, forward_symbol);
+          global_scope.add(Symbol(type_alias.alias, type_alias.type, Symbol::TYPE));
         }
       );
     }
@@ -163,9 +151,35 @@ void Semantics::analyse_file(Ast_File& file) {
         },
         pattern(as<Ast_Enum_Declaration>(arg)) = [&](auto& enum_decl){
           analyse_enum(enum_decl, global_scope);
+        },
+        pattern(as<Ast_Type_Alias>(arg)) = [&](auto& type_alias){
+          // This is not the most efficient but it does the trick.
+          Symbol* symbol = global_scope.lookup_first_name(type_alias.alias);
+          assert(symbol && symbol->kind == Symbol::TYPE);
+          resolve_type_or_fail(global_scope, type_alias.type,
+            "undeclared type in alias {}", std::set{ type_alias.alias });
+          symbol->type = type_alias.type;
         }
       );
     }
+  }
+
+  /* Check global constants */
+  {
+    for (auto global_const: file.global_consts) {
+      check_top_level_decl("global constant",
+        Symbol::GLOBAL, global_const->constant, forward_symbol);
+      auto& sym = file.scope.add(
+        Symbol(global_const->constant, global_const->type, Symbol::GLOBAL));
+      sym.const_value = global_const->const_expression;
+    }
+    for (auto global_const: file.global_consts) {
+      auto sym = file.scope.lookup_first_name(global_const->constant);
+      if (!sym->const_value->meta.is_const()) {
+        analyse_constant_decl(*global_const, file.scope);
+      }
+    }
+    infer->unify_and_apply(); // allow inference between constants
   }
 
   /* Process tests */

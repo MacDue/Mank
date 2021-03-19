@@ -74,6 +74,7 @@ class AstPrinter {
     void print_file(Ast_File& file);
     void print_pod(Ast_Pod_Declaration& pod);
     void print_enum(Ast_Enum_Declaration& enum_decl);
+    void print_type_alias(Ast_Type_Alias& type_alias);
     void print_function(Ast_Function_Declaration& func);
 
     void print_stmt(Ast_Statement& stmt);

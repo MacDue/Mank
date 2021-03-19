@@ -38,7 +38,11 @@ T min_type(T a, T b) {
   );
 }
 
-TypeResolution resolve_type(Scope& scope, Type_Ptr type);
+// Used to resolve type aliases (that could be infinte types)
+using TypeStarts = std::optional<std::set<Ast_Identifier>>;
+
+TypeResolution resolve_type(Scope& scope, Type_Ptr type,
+  TypeStarts starting_points = std::nullopt);
 
 Type_Ptr get_field_type(Ast_Field_Access& access);
 
@@ -56,8 +60,10 @@ bool is_switchable_type(Type_Ptr type);
 void assert_has_switchable_type(Expr_Ptr expr);
 
 template<typename T>
-void resolve_type_or_fail(Scope& scope, Type_Ptr& to_resolve, T error_format) {
-  auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve);
+void resolve_type_or_fail(
+  Scope& scope, Type_Ptr& to_resolve, T error_format, TypeStarts starting_points = std::nullopt
+) {
+  auto [ resolved_type, type_slot ] = resolve_type(scope, to_resolve, starting_points);
   if (resolved_type) {
     to_resolve = resolved_type;
   } else if (type_slot) {

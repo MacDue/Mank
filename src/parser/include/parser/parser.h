@@ -62,6 +62,7 @@ private:
   Type_Ptr parse_lambda_type();
   Type_Ptr parse_tuple_type();
   Type_Ptr parse_function();
+  Item_Ptr parse_type_alias();
 
   /* Constructs */
   std::vector<Ast_Argument> parse_arguments(
@@ -78,7 +79,6 @@ private:
   Stmt_Ptr parse_loop();
   Stmt_Ptr parse_while_loop();
   Stmt_Ptr parse_const_decl();
-
   // void parse_parse_tuple_bindings(bindings&)
   // void parse_pod_bindings(bindings&)
 

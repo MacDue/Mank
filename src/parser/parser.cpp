@@ -60,11 +60,27 @@ Ast_File Parser::parse_file() {
       parsed_file.items.emplace_back(this->parse_enum());
     } else if (next_token.type == TokenType::CONST) {
       parsed_file.global_consts.emplace_back(this->parse_const_decl());
+    } else if (next_token.type == TokenType::TYPEDEF) {
+      parsed_file.items.emplace_back(this->parse_type_alias());
     } else {
       throw_error_here("unexpected \"{}\", expecting a function, procedure, test or pod type");
     }
   }
   return parsed_file;
+}
+
+Item_Ptr Parser::parse_type_alias() {
+  expect(TokenType::TYPEDEF);
+  Ast_Type_Alias type_alias;
+  auto alias_name = this->parse_identifier();
+  if (!alias_name) {
+    throw_error_here("expected type alias name");
+  }
+  type_alias.alias = *alias_name;
+  expect(TokenType::ASSIGN);
+  type_alias.type = this->parse_type();
+  expect(TokenType::SEMICOLON);
+  return ctx->new_item(type_alias);
 }
 
 Item_Ptr Parser::parse_pod() {

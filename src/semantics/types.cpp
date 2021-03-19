@@ -86,30 +86,50 @@ bool match_types(Type_Ptr a, Type_Ptr b,
   return false;
 }
 
-TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
+TypeResolution resolve_type(Scope& scope, Type_Ptr type, TypeStarts starting_points) {
   using namespace mpark::patterns;
   static auto null_symbol = std::optional<Ast_Identifier>{};
 
   return match(type->v)(
-    pattern(as<UncheckedType>(arg)) = [&](auto const & unchecked) {
+    pattern(as<UncheckedType>(arg)) = [&](auto& unchecked) {
       Symbol* symbol = scope.lookup_first_name(unchecked.identifier);
       auto resolved_type = symbol && symbol->kind == Symbol::TYPE
         ? symbol->type : nullptr;
+      if (starting_points) {
+        if (starting_points->contains(unchecked.identifier)) {
+          throw_error_at(unchecked.identifier, "infinite type detected");
+        }
+        if (auto nested_type = std::get_if<UncheckedType>(&resolved_type->v)) {
+          starting_points->insert(unchecked.identifier);
+          /*
+            If think we only need to resolve futher here for the case of
+            type A = i32;
+            type C = A[];
+            where A resolved directly to a unchecked type.
+            If a were a type like \i32 -> i32 it's members would be
+            resolved later.
+          */
+          return resolve_type(scope, resolved_type, starting_points);
+        }
+      }
       return std::make_pair(resolved_type, std::optional{unchecked.identifier});
     },
     pattern(as<FixedSizeArrayType>(arg)) = [&](auto& array_type) {
-      auto [element_type, symbol] = resolve_type(scope, array_type.element_type);
+      auto [element_type, symbol] = resolve_type(
+        scope, array_type.element_type, starting_points);
       array_type.element_type = element_type;
       return std::make_pair(element_type ? type : nullptr, symbol);
     },
     pattern(as<ReferenceType>(arg)) = [&](auto& reference_type) {
-      auto [referenced_type, symbol] = resolve_type(scope, reference_type.references);
+      auto [referenced_type, symbol] = resolve_type(
+        scope, reference_type.references, starting_points);
       reference_type.references = referenced_type;
       return std::make_pair(referenced_type ? type : nullptr, symbol);
     },
     pattern(as<LambdaType>(arg)) = [&](auto& lambda_type) {
       if (lambda_type.return_type) { // hack solution to returing nothing
-        auto [return_type, return_symbol] = resolve_type(scope, lambda_type.return_type);
+        auto [return_type, return_symbol] = resolve_type(
+          scope, lambda_type.return_type, starting_points);
         lambda_type.return_type = return_type;
 
         if (!return_type) {
@@ -118,7 +138,8 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
       }
 
       for (auto& arg_type: lambda_type.argument_types) {
-        auto [resolved_arg_type, arg_symbol] = resolve_type(scope, arg_type);
+        auto [resolved_arg_type, arg_symbol] = resolve_type(
+          scope, arg_type, starting_points);
         arg_type = resolved_arg_type;
         if (!arg_type) {
           return std::make_pair(Type_Ptr(nullptr), arg_symbol);
@@ -129,7 +150,8 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
     },
     pattern(as<TupleType>(arg)) = [&](auto& tuple_type) {
       for (auto& el_type: tuple_type.element_types) {
-        auto [resolved_el_type, el_symbol] = resolve_type(scope, el_type);
+        auto [resolved_el_type, el_symbol] = resolve_type(
+          scope, el_type, starting_points);
         el_type = resolved_el_type;
         if (!el_type) {
           return std::make_pair(Type_Ptr(nullptr), el_symbol);
@@ -138,7 +160,8 @@ TypeResolution resolve_type(Scope& scope, Type_Ptr type) {
       return std::make_pair(type, null_symbol);
     },
     pattern(as<ListType>(arg)) = [&](auto& list_type) {
-      auto [base_type, symbol] = resolve_type(scope, list_type.element_type);
+      auto [base_type, symbol] = resolve_type(
+        scope, list_type.element_type, starting_points);
       list_type.element_type = base_type;
       return std::make_pair(base_type ? type : nullptr, symbol);
     },

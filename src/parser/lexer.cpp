@@ -148,6 +148,7 @@ MAPBOX_ETERNAL_CONSTEXPR const auto KEYWORDS = mapbox::eternal::map<mapbox::eter
   { "const"   , TokenType::CONST     },
   { "enum"    , TokenType::ENUM      },
   { "switch"  , TokenType::SWITCH    },
+  { "typedef" , TokenType::TYPEDEF   },
 });
 
 constexpr auto MAX_KEYWORD_LEN = 8; // continue

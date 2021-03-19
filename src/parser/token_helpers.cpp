@@ -79,6 +79,7 @@ char const * token_type_to_string(TokenType token_type) {
     case TokenType::CONST:      return "const";
     case TokenType::ENUM:       return "enum";
     case TokenType::SWITCH:     return "switch";
+    case TokenType::TYPEDEF:    return "typedef";
 
     /* Special */
     case TokenType::REF:        return "ref";

@@ -63,7 +63,7 @@ Ast_File Parser::parse_file() {
     } else if (next_token.type == TokenType::TYPEDEF) {
       parsed_file.items.emplace_back(this->parse_type_alias());
     } else {
-      throw_error_here("unexpected \"{}\", expecting a function, procedure, test or pod type");
+      throw_error_here("unexpected \"{}\", expecting a function, procedure, test, const or type");
     }
   }
   return parsed_file;

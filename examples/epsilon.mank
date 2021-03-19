@@ -1,0 +1,55 @@
+typedef Cantor = \i32 -> bool;
+
+# Martin Escardo's epsilon -- in Mank
+
+fun epsilon: Cantor (p: \Cantor -> bool) {
+  branch := \x, l, r -> {
+    \n -> {
+      if n == 0 {
+        x()
+      } else if n % 2 == 1 {
+        l()((n-1) / 2)
+      } else {
+        r()((n-2) / 2)
+      }
+    }
+  }
+
+  # Values are wrapped in lambdas to simulate lazy evaluation
+  x := \ -> {
+    exists(\l -> { exists(\r -> { p(branch(\ -> {true}, \ -> {l},\ -> {r}))})})
+  }
+  l := \ -> {
+    epsilon(\l -> { exists(\r -> { p(branch(x, \ -> {l}, \ -> {r})) }) })
+  }
+  r := \ -> {
+    epsilon(\r -> { p(branch(x, l, \ -> {r})) })
+  }
+  branch(x, l, r)
+}
+
+fun exists: bool (p: \Cantor -> bool) {
+  p(epsilon(p))
+}
+
+proc main {
+  # casts to i32 needed in body after calling a as I don't implement
+  # the comparison operators on bools
+  # Also a must be annotated with Cantor
+  # (seems like this is just a bit much for my inference)
+  f := epsilon(\a: Cantor -> { (a(10) as i32) != (a(20) as i32) });
+  print_f(f, 0, 30);
+}
+
+# Boring helper
+
+proc print_f(f: Cantor, from: i32, upto: i32) {
+  putchar('[');
+  for i in from .. upto {
+    if i != 0 {
+      putchar(',');
+    }
+    print(if f(i) { "True" } else { "False" });
+  }
+  println("]");
+}

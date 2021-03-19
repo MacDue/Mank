@@ -1,10 +1,11 @@
 typedef Nat = i32;
+typedef PureFunction = \Nat -> Nat;
 
 fun max: Nat (a: Nat, b: Nat) {
   if a > b { a } else { b }
 }
 
-fun mu: Nat (f: \|\Nat -> Nat| -> Nat, a: \Nat -> Nat) {
+fun mu: Nat (f: \PureFunction -> Nat, a: PureFunction) {
   r := vec!([0]);
   b := \n -> {
     r[0] = max(n, r[0]);

@@ -747,6 +747,62 @@ TEST_CASE("Pod declarations", "[Sema]") {
 
     REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("duplicate pod field"));
   }
+
+  SECTION("Directly recursive pods are invalid") {
+    auto code = Parser::parse_from_string(R"(
+      pod Test {
+        foo: Test,
+        a: i32
+      }
+    )");
+
+    REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("recursive pods are not allowed"));
+  }
+
+  SECTION("Indirectly recursive pods are invalid") {
+    SECTION("Tuples") {
+      auto code = Parser::parse_from_string(R"(
+        pod Test {
+          foo: (i32, Test),
+          a: str
+        }
+      )");
+
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cycle detected in pod"));
+    }
+
+    SECTION("Enums - tuple member") {
+      auto code = Parser::parse_from_string(R"(
+        enum Foo {
+          Baz(Test),
+          Jaz
+        }
+
+        pod Test {
+          id: i32,
+          foo: Foo
+        }
+      )");
+
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cycle detected in pod"));
+    }
+
+    SECTION("Enums - pod member") {
+      auto code = Parser::parse_from_string(R"(
+        enum Foo {
+          LOL,
+          WazWaz {yaba: Test}
+        }
+
+        pod Test {
+          foo: Foo,
+          speed: f64
+        }
+      )");
+
+      REQUIRE_THROWS_WITH(sema.analyse_file(code), Contains("cycle detected in pod"));
+    }
+  }
 }
 
 TEST_CASE("Pod types and field access semantics", "[Sema]") {

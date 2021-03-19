@@ -1,8 +1,10 @@
-fun max: i32 (a: i32, b: i32) {
+typedef Nat = i32;
+
+fun max: Nat (a: Nat, b: Nat) {
   if a > b { a } else { b }
 }
 
-fun mu: i32 (f: \|\i32 -> i32| -> i32, a: \i32 -> i32) {
+fun mu: Nat (f: \|\Nat -> Nat| -> Nat, a: \Nat -> Nat) {
   r := vec!([0]);
   b := \n -> {
     r[0] = max(n, r[0]);
@@ -14,5 +16,5 @@ fun mu: i32 (f: \|\i32 -> i32| -> i32, a: \i32 -> i32) {
 
 proc main {
   result := mu(\a -> { a(a(10)) }, \n -> { n * n });
-  println!("- : i32 = {result}", int_to_string(result));
+  println!("- : Nat = {result}", int_to_string(result));
 }

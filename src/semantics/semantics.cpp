@@ -105,7 +105,11 @@ void Semantics::analyse_file(Ast_File& file) {
           }
         }
         // If there's not a pior ident then it must be something else...
-        throw_error_at(ident, "redeclaration of {} (previously on line {})",
+        bool has_pior_location = !pior_ident->location.is_empty();
+        throw_error_at(ident,
+          has_pior_location
+          ? "redeclaration of {} (previously on line {})"
+          : "redeclaration of built-in {}",
           decl_name, pior_ident->location.start_line + 1);
       } else {
         // FIXME: a symbol of a different kind that shadows still overwrites the other

@@ -691,9 +691,11 @@ Expr_Ptr Parser::parse_primary_expression(Parser::ExprFlags flags) {
       // (should be okay since they'd only be needed for enum pod lits anyway)
       Ast_Path path;
       path.path.push_back(ident);
+      path.location = ident.location;
       while (this->consume(TokenType::DOUBLE_COLON)) {
         auto path_section = this->parse_identifier();
         if (!path_section) { throw_error_here("expected path section"); }
+        path.location = join_source_locations(path.location, path_section->location);
         path.path.push_back(*path_section);
       }
       mark_ast_location(path.path.at(0).location, path);
@@ -707,6 +709,7 @@ Expr_Ptr Parser::parse_primary_expression(Parser::ExprFlags flags) {
       if (ident_path) {
         pod_path = *ident_path;
       } else {
+        pod_path.location = ident.location;
         pod_path.path = { ident };
       }
       return this->parse_pod_literal(pod_path,

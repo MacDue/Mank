@@ -993,6 +993,9 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
     },
     pattern(as<Ast_Pod_Literal>(arg)) = [&](auto& pod_init) {
       auto type = scope.resolve_type_from_path(pod_init.pod);
+      if (!type) {
+        throw_error_at(pod_init.pod, "failed to resolve pod type");
+      }
       std::unordered_set<std::string_view> seen_fields;
       auto& pod_type = match(type->v)(
         pattern(as<PodType>(arg)) = [](auto& pod_type) -> PodType& { return pod_type; },
@@ -1002,6 +1005,11 @@ Type_Ptr Semantics::analyse_expression(Ast_Expression& expr, Scope& scope, bool 
             throw_error_at(pod_init.pod, "not a pod enum member");
           }
           return std::get<PodType>(member.data->v);
+        },
+        pattern(_) = [&]() -> PodType& {
+          throw_error_at(pod_init.pod, "not a pod type");
+          // Just to silence warning, this line is invalid & unreachable
+          return std::get<PodType>(type->v);
         });
       for (auto& init: pod_init.fields) {
         if (seen_fields.contains(init.field.name)) {

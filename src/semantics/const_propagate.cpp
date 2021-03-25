@@ -215,9 +215,22 @@ static inline std::string strip_seperators(std::string int_or_float_literal) {
 void ConstantVisitor::visit(Ast_Literal& literal) {
   auto& value = literal.value;
   switch (literal.literal_type) {
-    case PrimativeType::INTEGER:
-      literal.update_const_value(std::stoi(strip_seperators(value)));
+    case PrimativeType::INTEGER: {
+      auto stripped_value = strip_seperators(value);
+      int integer_value;
+      // Sadly std::stoi does not support string view
+      if (boost::istarts_with(stripped_value, "0x")) {
+        integer_value = std::stoi(stripped_value, nullptr, 16);
+      } else if (boost::istarts_with(stripped_value, "0o")) {
+        stripped_value = stripped_value.substr(2);
+        integer_value = std::stoi(stripped_value, nullptr, 8);
+      } else {
+        // default = base 10
+        integer_value = std::stoi(stripped_value);
+      }
+      literal.update_const_value(integer_value);
       break;
+    }
     case PrimativeType::FLOAT64:
       literal.update_const_value(std::stod(strip_seperators(value)));
       break;

@@ -61,10 +61,12 @@ private:
   void save_position();
   void restore_position();
 
+  typedef int (*IsDigit)(int);
+
   /* Matchers */
   bool match(std::string_view value);
   bool match(std::string_view value, TokenType type);
-  bool match_digits(int& start, int& end);
+  bool match_digits(int& start, int& end, IsDigit is_digit = isdigit);
   bool match_numeric_literal();
   bool match_string_literal();
   bool match_char_literal();

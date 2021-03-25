@@ -272,9 +272,9 @@ bool Lexer::match(std::string_view value, TokenType type) {
   return false;
 }
 
-bool Lexer::match_digits(int& start, int& end) {
+bool Lexer::match_digits(int& start, int& end, IsDigit is_digit) {
   start = this->current.char_idx;
-  if (!isdigit(this->peek_next_char())) {
+  if (!is_digit(this->peek_next_char())) {
     return false;
   }
   auto throw_double_seperator = [&]{
@@ -312,7 +312,7 @@ bool Lexer::match_digits(int& start, int& end) {
         throw_double_seperator();
         return false;
       }
-    } else if (isdigit(next_char)) {
+    } else if (is_digit(next_char)) {
       last_was_digit_separator = false;
       return true;
     }
@@ -338,15 +338,43 @@ bool Lexer::match_numeric_literal() {
     Numeric literal: [0-9]+(\.[0-9]+)?
     TODO float literals like .3 (currently will be parsed as DOT 3)
       -- maybe handle in parser
+      -- silly and complex now -- only document simple impl
+          -- but now does exponents, hex, and octals, and numeric seperators
   */
   int leading_digits_start, leading_digits_end;
-  if (match_digits(leading_digits_start, leading_digits_end)) {
+  auto digit_matcher = isdigit;
+  bool octal_or_hex = false;
+
+  if (match("0x") || match("0X")) {
+    digit_matcher = isxdigit;
+    octal_or_hex = true;
+  } else if (match("0o") || match("0O")) {
+    digit_matcher = [](int c) noexcept -> int  { return c >= '0' && c <= '7'; };
+    octal_or_hex = true;
+  }
+
+  if (match_digits(leading_digits_start, leading_digits_end, digit_matcher)) {
     this->last_token.type = TokenType::LITERAL;
-    if (match(".")) {
+    bool seen_exponent = false;
+    auto revert_exponent_match = this->current;
+    if (!octal_or_hex && (match(".") || (seen_exponent = match("e")))) {
       this->last_token.literal_type = PrimativeType::FLOAT64;
       int decimal_digits_start, decimal_digits_end;
+      if (!seen_exponent) {
+        seen_exponent = match("e");
+      }
       if (match_digits(decimal_digits_start, decimal_digits_end)) {
-        /* Nothing needs to happen */
+        if (!seen_exponent) {
+          revert_exponent_match = this->current;
+          if (match("e")) {
+            int not_important;
+            if (!match_digits(not_important, decimal_digits_end)) {
+              this->current = revert_exponent_match;
+            }
+          }
+        }
+      } else if (seen_exponent) {
+        this->current = revert_exponent_match;
       }
       this->last_token.literal_type = PrimativeType::FLOAT64;
     } else {

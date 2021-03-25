@@ -277,10 +277,59 @@ bool Lexer::match_digits(int& start, int& end) {
   if (!isdigit(this->peek_next_char())) {
     return false;
   }
-  while (isdigit(this->peek_next_char())) {
+  auto throw_double_seperator = [&]{
+    /*
+      This is the only place in the lexer that needs to throw an error
+      early. Leaving it later (aka) saying this is not a numeric literal
+      leads to confused lexing and or poor errors.
+    */
+    auto error_location = this->last_token.location;
+    //          v end (+ 2)
+    // <digit>''<digit>
+    //        ^^ current location
+    //        | start (-1)
+    error_location.start_column   = this->current.column - 1;
+    error_location.start_char_idx = this->current.char_idx - 1;
+    error_location.end_line       = error_location.start_line;
+    error_location.end_column     = error_location.start_column + 2;
+    error_location.end_char_idx   = error_location.start_char_idx + 2;
+    throw_compile_error(error_location, "double digit separator");
+  };
+
+  // More complex parsing to allow:
+  // 1'000'000 (separators to aid readability)
+  // This is rather wonky and could probably be done in a nicer way.
+  bool last_was_digit_separator = false;
+  auto is_valid_digit_or_separator = [&]{
+    auto next_char = this->peek_next_char();
+    if (next_char == '\'') {
+      if (!last_was_digit_separator) {
+        // Two separators in a row is not valid:
+        // e.g. 0''0
+        last_was_digit_separator = true;
+        return true;
+      } else {
+        throw_double_seperator();
+        return false;
+      }
+    } else if (isdigit(next_char)) {
+      last_was_digit_separator = false;
+      return true;
+    }
+    return false;
+  };
+
+  auto revert_consume = this->current;
+  while (is_valid_digit_or_separator()) {
+    revert_consume = this->current;
     this->consume_char();
   }
   end = this->current.char_idx;
+
+  // Logically it could be the start of a char token
+  if (last_was_digit_separator) {
+    this->current = revert_consume;
+  }
   return true;
 }
 

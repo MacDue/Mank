@@ -2,6 +2,7 @@
 #include <type_traits>
 
 #include <mpark/patterns.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "ast/ast.h"
 #include "sema/types.h"
@@ -206,17 +207,22 @@ static std::string parse_string_literal(std::string_view literal) {
   return result;
 }
 
+static inline std::string strip_seperators(std::string int_or_float_literal) {
+  boost::erase_all(int_or_float_literal, "'");
+  return int_or_float_literal;
+}
+
 void ConstantVisitor::visit(Ast_Literal& literal) {
   auto& value = literal.value;
   switch (literal.literal_type) {
     case PrimativeType::INTEGER:
-      literal.update_const_value(std::stoi(value));
+      literal.update_const_value(std::stoi(strip_seperators(value)));
       break;
     case PrimativeType::FLOAT64:
-      literal.update_const_value(std::stod(value));
+      literal.update_const_value(std::stod(strip_seperators(value)));
       break;
     case PrimativeType::FLOAT32:
-      literal.update_const_value(std::stof(value));
+      literal.update_const_value(std::stof(strip_seperators(value)));
       break;
     case PrimativeType::BOOL:
       literal.update_const_value(value == "true" ? true : false);

@@ -166,6 +166,9 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
     std::make_pair("3.14", PrimativeType::FLOAT64),
     // Note the literals are not parsed yet (that is done later)
     std::make_pair("999999999999999999999999", PrimativeType::INTEGER),
+    std::make_pair("1'000'000", PrimativeType::INTEGER),
+    std::make_pair("1'0'0'0'0", PrimativeType::INTEGER),
+    std::make_pair("6'6.1'000", PrimativeType::FLOAT64)
   };
 
   for (auto [numeric_literal, expected_literal_type]: valid_numerical_literals_and_expected_type) {
@@ -176,6 +179,15 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
     REQUIRE(token.raw_token == numeric_literal);
     expect_eof(lexer);
   }
+}
+
+TEST_CASE("Invalid numeric separators", "[Lexer]") {
+  Lexer lexer;
+  // Test two silly cases with digits now
+  lexer.set_input_to_string("10''00");
+  REQUIRE_THROWS_WITH(lexer.peek_next_token(), "double digit separator");
+  // lexer.set_input_to_string("9999'");
+  // REQUIRE_THROWS_WITH(lexer.peek_next_token(), "trailing digit separator");
 }
 
 TEST_CASE("Lexing simple function header", "[Lexer]") {

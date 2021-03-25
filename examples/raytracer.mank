@@ -2,7 +2,7 @@
 # Made nice and manky!
 
 const MAX_RAY_DEPTH := 10;
-const INF := 10000000000.0;
+const INF := 10'000'000'000.0;
 const M_PI := 3.141592653589793;
 
 fun trace: Vec3f (

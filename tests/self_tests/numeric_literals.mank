@@ -1,0 +1,26 @@
+test hex_integer_literals {
+  assert!(0xff == 255);
+  assert!(0xFF == 255);
+  assert!(0xDEAD == 57005);
+  assert!(0X1f3a == 7994);
+}
+
+test octal_integer_literals {
+  assert!(0o32 == 26);
+  assert!(0O666 == 438);
+  assert!(0o0 == 0)
+}
+
+test exponent_floating_point_literals {
+  assert!(1e3 == 1000.);
+  assert!(1.e3 == 1000.);
+  assert!(1.3e3 == 1300.);
+}
+
+test numeric_seperators {
+  assert!(1'000'000 == 1000000);
+  assert!(0xD'E'A'D == 0xDEAD);
+  assert!(1'0e3 == 10000.0);
+}
+
+

@@ -168,7 +168,13 @@ TEST_CASE("Lex numerical literals", "[Lexer]") {
     std::make_pair("999999999999999999999999", PrimativeType::INTEGER),
     std::make_pair("1'000'000", PrimativeType::INTEGER),
     std::make_pair("1'0'0'0'0", PrimativeType::INTEGER),
-    std::make_pair("6'6.1'000", PrimativeType::FLOAT64)
+    std::make_pair("6'6.1'000", PrimativeType::FLOAT64),
+    std::make_pair("1e3", PrimativeType::FLOAT64),
+    std::make_pair("1.e3", PrimativeType::FLOAT64),
+    std::make_pair("3'99e3", PrimativeType::FLOAT64),
+    std::make_pair("3.14e51", PrimativeType::FLOAT64),
+    std::make_pair("0xffff", PrimativeType::INTEGER),
+    std::make_pair("0o731", PrimativeType::INTEGER)
   };
 
   for (auto [numeric_literal, expected_literal_type]: valid_numerical_literals_and_expected_type) {

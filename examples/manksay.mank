@@ -33,9 +33,8 @@ fun wrap_text: str[] (s: str, max_width: i32) {
     }
   });
   current_line := "";
-  first_word := true;
-
   blanks_in_row := 0;
+  first_word := true;
   last_was_newline := false;
 
   for i in 0 .. words.length {
@@ -74,7 +73,8 @@ fun wrap_text: str[] (s: str, max_width: i32) {
 
     blanks_in_row = 0;
     last_was_newline = false;
-    if current_line.length + word.length > max_width {
+    # FIXME: This is kinda wasteful
+    if utf8_str_len(current_line + word) > max_width {
       push_back(lines, current_line);
       current_line = "";
       first_word = true;
@@ -124,12 +124,21 @@ fun split_str: str[] (s: str, is_delim: \char -> SplitAction) {
 fun max_line_len: i32 (lines: str[]) {
   max_len := 0;
   for i in 0 .. lines.length {
-    len := lines[i].length;
+    len := utf8_str_len(lines[i]);
     if len > max_len {
       max_len = len;
     }
   }
   max_len
+}
+
+fun utf8_str_len: i32 (s: str) {
+  # This still can't handle double-width(?) unicode characters
+  len := 0;
+  for i in 0 .. s.length {
+    len += ((s[i] & 0xc0 as char) != 0x80 as char) as i32;
+  }
+  len
 }
 
 fun repeat_char: str (s: char, count: i32) {
@@ -160,7 +169,7 @@ fun box_lines: str[] (lines: str[]) {
       };
       push_back(boxed, {
         start_char as str + " "
-          + line + repeat_char(' ', max_width - line.length) + " "
+          + line + repeat_char(' ', max_width - utf8_str_len(line)) + " "
           + end_char as str
       });
     }
@@ -181,7 +190,11 @@ proc mank_say(s: str) {
     +  "                |      \n"
   );
 
-  mesage := box_lines(wrap_text(s, MAX_BOX_WIDTH));
+  wrapped := wrap_text(s, MAX_BOX_WIDTH);
+  if wrapped.length == 0 {
+    push_back(wrapped, "");
+  }
+  mesage := box_lines(wrapped);
   for i in 0 .. mesage.length {
     println(mesage[i]);
   }

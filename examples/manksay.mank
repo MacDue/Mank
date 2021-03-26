@@ -1,0 +1,210 @@
+#  ___________
+# < Mank say! >
+#  -----------
+#      \
+#       \      _^_ _^_
+#        \    | x   x |
+#         \  (|  ___  |)
+#             | /   \ |
+#             |_______|
+#                 |
+
+# A fun little terminal app like cowsay
+
+# Things that'd make this code eaiser:
+# - For each loops
+# - Capture by reference for lambdas
+# - for i in <max> abbreviation
+
+const MAX_BOX_WIDTH := 40;
+const BLANKS_NEWLINE_THRES := 8;
+
+fun wrap_text: str[] (s: str, max_width: i32) {
+  # Greedy text wrapping
+  lines := new_vec@(str)();
+  words := split_str(s, \c -> {
+    # These are a little silly (think of a cleaner way -- too sleepy now)
+    if c == ' ' || c == '\r' {
+      SplitAction::CONSUME
+    } else if c == '\n' || c == '\t' {
+      SplitAction::KEEP
+    } else {
+      SplitAction::NOT_DELIM
+    }
+  });
+  current_line := "";
+  first_word := true;
+
+  blanks_in_row := 0;
+  last_was_newline := false;
+
+  for i in 0 .. words.length {
+    word := words[i];
+    tab := false;
+    if word.length == 0 || { tab = word[0] == '\t'; tab } {
+      blanks_in_row += 1 * if tab { 8 } else { 1 };
+      continue;
+    }
+
+    # Hacky newline adding -- makes a cleaner looking output (more like cowsay)
+    add_newline := {
+      if word[0] == '\n' {
+        if !last_was_newline {
+          last_was_newline = true;
+          false
+        } else {
+          true
+        }
+      } else if last_was_newline && blanks_in_row >= BLANKS_NEWLINE_THRES {
+        last_was_newline = false;
+        true
+      } else {
+        false
+      }
+    };
+
+    if add_newline {
+      push_back(lines, current_line);
+      push_back(lines, "");
+      current_line = "";
+      first_word = true;
+    }
+
+    if word[0] == '\n' { continue; }
+
+    blanks_in_row = 0;
+    last_was_newline = false;
+    if current_line.length + word.length > max_width {
+      push_back(lines, current_line);
+      current_line = "";
+      first_word = true;
+    }
+
+    padding := if (!first_word) { " " } else { "" };
+    current_line += padding + word;
+    first_word = false;
+  }
+
+  if current_line.length > 0 {
+    push_back(lines, current_line);
+  }
+  lines
+}
+
+# Bit of a hack
+enum SplitAction {
+  CONSUME,
+  KEEP,
+  NOT_DELIM
+}
+
+fun split_str: str[] (s: str, is_delim: \char -> SplitAction) {
+  # Naive string split (seems to conform to Python's)
+  out := new_vec@(str)();
+  current := "";
+  for i in 0 .. s.length {
+    c := s[i];
+    delim_action := is_delim(c);
+    if delim_action.tag == SplitAction::NOT_DELIM.tag {
+      current += c as str;
+    } else {
+      push_back(out, current);
+      current = "";
+      if delim_action.tag == SplitAction::KEEP.tag {
+        push_back(out, c as str);
+      }
+    }
+    if i == s.length - 1 {
+      push_back(out, current);
+    }
+  }
+  out
+}
+
+fun max_line_len: i32 (lines: str[]) {
+  max_len := 0;
+  for i in 0 .. lines.length {
+    len := lines[i].length;
+    if len > max_len {
+      max_len = len;
+    }
+  }
+  max_len
+}
+
+fun repeat_char: str (s: char, count: i32) {
+  # Not great
+  out := "";
+  for i in 0 .. count {
+    out += s as str;
+  }
+  out
+}
+
+fun box_lines: str[] (lines: str[]) {
+  boxed := new_vec@(str)();
+  max_width := max_line_len(lines);
+  top := " " + repeat_char('_', max_width + 2) + " ";
+  push_back(boxed, top);
+  if lines.length == 1 {
+    push_back(boxed, "< " + lines[0] + " >");
+  } else {
+    for i in 0 .. lines.length {
+      line := lines[i];
+      bind (start_char, end_char) = if i == 0 {
+        ('/', '\\')
+      } else if i == lines.length - 1 {
+        ('\\', '/')
+      } else {
+        ('|', '|')
+      };
+      push_back(boxed, {
+        start_char as str + " "
+          + line + repeat_char(' ', max_width - line.length) + " "
+          + end_char as str
+      });
+    }
+  }
+  bottom := " " + repeat_char('-', max_width + 2) + " ";
+  push_back(boxed, bottom);
+  boxed
+}
+
+proc mank_say(s: str) {
+  mr_mank := (
+      "     \\                \n"
+    + "      \\      _^_ _^_  \n"
+    + "       \\    | x   x | \n"
+    + "        \\  (|  ___  |) \n"
+    +  "            | /   \\ |  \n"
+    +  "            |_______|  \n"
+    +  "                |      \n"
+  );
+
+  mesage := box_lines(wrap_text(s, MAX_BOX_WIDTH));
+  for i in 0 .. mesage.length {
+    println(mesage[i]);
+  }
+  println(mr_mank);
+}
+
+proc main (args: str[]) {
+  mank_say(
+    if args.length < 2 {
+      read_raw_input()
+    } else {
+      args[1]
+    })
+}
+
+fun read_raw_input: str {
+  raw_inpit := "";
+  loop {
+    c := getchar();
+    if c == -1 {
+      break;
+    }
+    raw_inpit += c as str;
+  }
+  raw_inpit
+}

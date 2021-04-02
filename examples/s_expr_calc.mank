@@ -1,0 +1,77 @@
+# (+ 1 2 3 (* 2 3 2 1))
+
+enum SExpr {
+  Add(SExpr[]),
+  Mult(SExpr[]),
+  Number(i32),
+  Null
+}
+
+fun parse_sexpr: (SExpr, i32) (pos: i32, s: str) {
+  if s[pos] == '(' {
+    pos += 1;
+    operands := new_vec@(SExpr)();
+    sexpr := if s[pos] == '+' {
+      SExpr::Add(operands)
+    } else if s[pos] == '*' {
+      SExpr::Mult(operands)
+    } else {
+      fail("Only addtion and multipcation supported");
+      SExpr::Null
+    }
+    pos += 1;
+    while s[pos] != ')' {
+      bind (operand, next_pos) = parse_sexpr(pos, s);
+      push_back(operands, operand);
+      pos = next_pos;
+    }
+    (sexpr, pos + 1)
+  } else if s[pos] == ' ' {
+    parse_sexpr(pos + 1, s)
+  } else {
+    bind (number, ok) = parse_int(s[pos] as str);
+    assert!(ok, "expected a digit");
+    (SExpr::Number(number), pos + 1)
+  }
+}
+
+fun reduce: i32 (unit: i32, operands: SExpr[], operation: \i32, SExpr -> i32) {
+  result := unit;
+  for i in 0 .. operands.length {
+    result = operation(result, operands[i]);
+  }
+  result
+}
+
+fun eval_sexpr: i32 (sexpr: SExpr) {
+  switch sexpr {
+    SExpr::Add(operands) => {
+      reduce(0, operands, \current, next -> {
+        current + eval_sexpr(next)
+      })
+    },
+    SExpr::Mult(operands) => {
+      reduce(1, operands, \current, next -> {
+        current * eval_sexpr(next)
+      })
+    },
+    SExpr::Number(value) => {
+      value
+    },
+    else => {
+      fail("Invalid sexpr");
+      -1
+    }
+  }
+}
+
+proc main (args: str[])  {
+  # Input from stdin or args
+  source := if args.length >= 2 {
+    args[1]
+  } else {
+    prompt(">")
+  }
+  bind (sexpr, _) = parse_sexpr(0, source);
+  println!("= {}", int_to_string(eval_sexpr(sexpr)));
+}

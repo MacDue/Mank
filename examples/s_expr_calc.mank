@@ -1,77 +1,166 @@
 # (+ 1 2 3 (* 2 3 2 1))
 
+# Type inference
+# ADT enums
+# Vectors
+# Tuples
+
+# S-expression calculator
+
+# We start with the definition of a type to represent an S-expression
+# This is a tagged union (or ADT) enum
+# Each enumeration is associated some data
+# (the operands in case of Add and Mult, and the value for Number)
 enum SExpr {
   Add(SExpr[]),
   Mult(SExpr[]),
-  Number(i32),
-  Null
+  Number(i32)
 }
 
 fun parse_sexpr: (SExpr, i32) (pos: i32, s: str) {
-  if s[pos] == '(' {
-    pos += 1;
+  # S-expression parsing (for simplicty we assume no parse errors)
+
+  current_char := s[pos];
+  # Simple helper (lambda) to increment the position
+  # and return the next character along with the new position
+  next := \pos -> { pos += 1; (s[pos], pos) };
+
+  # Main parsing:
+  if current_char == '(' {
+    # Found an open parentheses, must be the start of an S-expression
+    # Create the vector of operands (which themselves are S-expressions)
     operands := new_vec@(SExpr)();
-    sexpr := if s[pos] == '+' {
+
+    # Move to the next character
+    # This sets of values of `current_char' and `pos'
+    # to the first and second elements of the tupe returned by next
+    # This is referred to as a (tuple) destructuring assignment
+    (current_char, pos) = next(pos);
+
+    # The current char should now be the operation
+    # Create the SExpr node depending on what operation was found
+    # Note that the value of sexpr comes from the if
+    # (like shown before in Rust)
+    sexpr := if current_char == '+' {
       SExpr::Add(operands)
-    } else if s[pos] == '*' {
-      SExpr::Mult(operands)
     } else {
-      fail("Only addtion and multipcation supported");
-      SExpr::Null
-    }
-    pos += 1;
-    while s[pos] != ')' {
+      # Assume that it was a multiplication (for simplicity)
+      SExpr::Mult(operands)
+    };
+
+    # Now parse the operands of the S-expression
+    (current_char, pos) = next(pos);
+    while current_char != ')' {
+      # Bind works similar to the destructuring assignment
+      # but it introduces new variables
+      # in this case the child S-expression (operand)
+      # and the position to continue parsing from (next_pos)
       bind (operand, next_pos) = parse_sexpr(pos, s);
+      # We now append the operand to our list of operands
+      # then move to the first character after the operand
       push_back(operands, operand);
-      pos = next_pos;
+      (current_char, pos) = (s[next_pos], next_pos);
     }
+
+    # The value of this branch is now a tuple of the parsed S-expression
+    # along with the first postion after it
     (sexpr, pos + 1)
-  } else if s[pos] == ' ' {
+  } else if current_char == ' ' {
+    # Whitespace skip over it (not very efficient)
     parse_sexpr(pos + 1, s)
   } else {
-    bind (number, ok) = parse_int(s[pos] as str);
-    assert!(ok, "expected a digit");
-    (SExpr::Number(number), pos + 1)
+    # Must be a number
+    # parse_int_at (not shown) takes a string and a position in that
+    # string, then returns a tuple of the number parsed from that
+    # position, and the next postion after it
+    bind (number, next_pos) = parse_int_at(pos, s);
+    # Now like before this branch takes the value
+    # of the tuple (and next postion)
+    (SExpr::Number(number), next_pos)
   }
 }
 
 fun reduce: i32 (unit: i32, operands: SExpr[], operation: \i32, SExpr -> i32) {
+  # This implements a simple reduce() function from SExprs to integers
+  # It takes in the unit along with the operation and applies it over the vector
   result := unit;
   for i in 0 .. operands.length {
+    # You can see that this function takes a lambda for the operation
+    # This lambda takes the current value, the next s-expression,
+    # and returns the next value
     result = operation(result, operands[i]);
   }
   result
 }
 
 fun eval_sexpr: i32 (sexpr: SExpr) {
+  # S-expression evaluation (compared to parsing this is trivial)
+  # We first switch on the s-expression to find out what it contains
+
+  # In each case you can then use a "structural binding" to access
+  # the data it contains
+  # (for this example just operands or value
+  # -- but you can have arbitrarily nested bindings for more compex structures)
   switch sexpr {
     SExpr::Add(operands) => {
+      # Simply add up the value of all the operands
       reduce(0, operands, \current, next -> {
         current + eval_sexpr(next)
       })
     },
     SExpr::Mult(operands) => {
+      # Same again with multiplication (now with unit 1)
       reduce(1, operands, \current, next -> {
         current * eval_sexpr(next)
       })
     },
     SExpr::Number(value) => {
+      # For numbers just return the value
       value
-    },
-    else => {
-      fail("Invalid sexpr");
-      -1
     }
   }
 }
 
 proc main (args: str[])  {
-  # Input from stdin or args
+  # Read in an S-expression to evaluate
   source := if args.length >= 2 {
+    # First command line argument (args[0] is the program name)
     args[1]
   } else {
+    # Or prompt the user to enter one
     prompt(">")
   }
+  # Parse the s-expression (from position 0)
   bind (sexpr, _) = parse_sexpr(0, source);
+  # Evaluate and print the result
+  # (using the formatted print macro)
   println!("= {}", int_to_string(eval_sexpr(sexpr)));
+}
+
+# Uninteresting integer parsing:
+
+fun parse_int_at: (i32, i32) (pos: i32, s: str) {
+  value := 0;
+  is_neg := false;
+  i := pos;
+  while i < s.length {
+    c := s[i];
+    if i == 0 {
+      if (c == '+') {
+        # do nothing
+        continue;
+      } else if (c == '-') {
+        is_neg = true;
+        continue;
+      }
+    }
+    if c >= '0' && c <= '9' {
+      value *= 10;
+      value += (c - '0') as i32;
+    } else {
+      break;
+    }
+    i += 1;
+  }
+  return (if is_neg { -value } else { value }, i);
 }

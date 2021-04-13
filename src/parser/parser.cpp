@@ -665,7 +665,6 @@ Expr_Ptr Parser::parse_primary_expression(Parser::ExprFlags flags) {
     return this->parse_literal();
   } else if (peek(TokenType::IDENT)) {
     auto ident = *this->parse_identifier();
-    // ABSOLUTE PURE UTTER TRASH. I HAVE NO IDEA HOW TO FIX SOMETHING SO BROKEN.
     // There is no hope for this code.
     std::optional<Ast_Specialized_Identifier> special_ident;
     std::optional<Ast_Path> ident_path;
@@ -716,7 +715,7 @@ Expr_Ptr Parser::parse_primary_expression(Parser::ExprFlags flags) {
           special_ident ? special_ident->specializations : std::vector<Type_Ptr>{});
     }
 
-    // FUCK THIS SHIT
+    // Insert EXPLETIVE here
     if (ident_path) {
       return ctx->new_expr(*ident_path);
     } if (special_ident) {
